@@ -13,7 +13,10 @@
     "react": "^18.3.1",
 "react-dom": "^18.3.1",
     "framer-motion": "^11.0.0",
-    "lucide-react": "^0.395.0"
+    "lucide-react": "^0.395.0",
+    "@solana/web3.js": "^1.95.3",
+    "@solana/spl-token": "^0.3.8"    
+
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -25,7 +28,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
-    "typescript": "~5.9.3",
+    "typescript": "^5.5.0",
     "typescript-eslint": "^8.46.3",
     "vite": "^7.2.2"
   }

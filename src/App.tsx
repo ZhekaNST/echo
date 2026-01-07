@@ -1,21 +1,22 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { 
-  CreditCard, 
+import {  
   Bot, 
   Wallet, 
   Play, 
   Heart, 
-  ShieldCheck, 
   X, 
   Sparkles, 
   Plus, 
-  Send, 
-  TimerReset, 
   Twitter, 
   User,
   Paperclip
 } from "lucide-react";
+
+import { Connection, PublicKey, clusterApiUrl, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { getAssociatedTokenAddress } from "@solana/spl-token";
+
+
 
 
 const LS = {
@@ -43,9 +44,7 @@ function saveLS(key: string, value: any) {
 
 
 
-// --- Solana Pay (Phantom) constants (Devnet demo) ---
-// TODO: replace with your Devnet wallet address before going live
-const SOLANA_RECIPIENT = "Dbd1TfYS18q1QfPFsYJw6xBPqvsyxDUzXSSWPRPQd5JZ"; // e.g., your Phantom public key
+
 const SOLANA_NETWORK = "mainnet-beta" as const;
 // ⚠️ TODO: сюда вставь mint USDC для нужной сети (devnet/mainnet)
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
@@ -206,8 +205,7 @@ function pushExplore(
   push(qs ? `/explore?${qs}` : "/explore");
 }
 
-// --- Types & demo data ---
-type AgentEngineProvider = "platform" | "creator_backend";
+
 type Agent = {
   id: string;
   name: string;
@@ -547,81 +545,60 @@ const [activeView, setActiveView] = useState<"home" | "learn">("home");
     };
   }, []);
   
-    // --- Load USDC balance whenever wallet changes ---
-    useEffect(() => {
-      if (!walletPk) {
-        setUsdcBalance(null);
+   // --- Load USDC & SOL balance whenever wallet changes ---
+useEffect(() => {
+  if (!walletPk) {
+    setUsdcBalance(null);
+    setSolBalance(null);
+    return;
+  }
+
+  let cancelled = false;
+
+  async function loadBalances() {
+    try {
+      setUsdcLoading(true);
+
+      const connection = new Connection(clusterApiUrl(SOLANA_NETWORK), "confirmed");
+      const owner = new PublicKey(walletPk);
+      const mint = new PublicKey(USDC_MINT);
+
+      // --- USDC ---
+      try {
+        const ata = await getAssociatedTokenAddress(mint, owner);
+        const accountInfo = await connection.getTokenAccountBalance(ata);
+        const uiAmount = accountInfo.value.uiAmount ?? 0;
+        if (!cancelled) setUsdcBalance(uiAmount);
+      } catch (e) {
+        if (!cancelled) setUsdcBalance(0);
+      }
+
+      // --- SOL ---
+      try {
+        const lamports = await connection.getBalance(owner);
+        const sol = lamports / LAMPORTS_PER_SOL;
+        if (!cancelled) setSolBalance(sol);
+      } catch (e) {
+        if (!cancelled) setSolBalance(null);
+      }
+    } catch (e) {
+      if (!cancelled) {
+        setUsdcBalance(0);
         setSolBalance(null);
-        return;
       }
-  
-      let cancelled = false;
-  
-      async function loadBalances() {
-        try {
-          setUsdcLoading(true);
-  
-          const web3 = await import("https://esm.sh/@solana/web3.js@1.95.3");
-          const splToken = await import("https://esm.sh/@solana/spl-token@0.3.8");
-  
-          const { PublicKey, Connection, clusterApiUrl, LAMPORTS_PER_SOL } = web3 as any;
-          const { getAssociatedTokenAddress } = splToken as any;
-  
-          const connection = new Connection(
-            clusterApiUrl(SOLANA_NETWORK),
-            "confirmed"
-          );
-  
-          const owner = new PublicKey(walletPk);
-          const mint = new PublicKey(USDC_MINT); // тот же mint, что и в оплате
-  
-          // --- USDC ---
-          try {
-            const ata = await getAssociatedTokenAddress(mint, owner);
-            const accountInfo = await connection.getTokenAccountBalance(ata);
-            const uiAmount = accountInfo.value.uiAmount ?? 0;
-            if (!cancelled) {
-              setUsdcBalance(uiAmount);
-            }
-          } catch (e) {
-            console.warn("No USDC account or failed to load USDC", e);
-            if (!cancelled) {
-              setUsdcBalance(0);
-            }
-          }
-  
-          // --- SOL ---
-          try {
-            const lamports = await connection.getBalance(owner);
-            const sol = lamports / LAMPORTS_PER_SOL;
-            if (!cancelled) {
-              setSolBalance(sol);
-            }
-          } catch (e) {
-            console.warn("Failed to load SOL balance", e);
-            if (!cancelled) {
-              setSolBalance(null);
-            }
-          }
-        } catch (e) {
-          console.error("Failed to load balances", e);
-          if (!cancelled) {
-            setUsdcBalance(0);
-            setSolBalance(null);
-          }
-        } finally {
-          if (!cancelled) {
-            setUsdcLoading(false);
-          }
-        }
-      }
-  
-      loadBalances();
-  
-      return () => {
-        cancelled = true;
-      };
-    }, [walletPk]);  
+    } finally {
+      if (!cancelled) setUsdcLoading(false);
+    }
+  }
+
+  loadBalances();
+
+  return () => {
+    cancelled = true;
+  };
+}, [walletPk]);
+
+
   
 
     const [agents, setAgents] = useState<Agent[]>(() =>
