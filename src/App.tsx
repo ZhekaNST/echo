@@ -13,9 +13,12 @@ import {
   Paperclip
 } from "lucide-react";
 
-import { Connection, PublicKey, clusterApiUrl, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { getAssociatedTokenAddress } from "@solana/spl-token";
-
+import { Connection, PublicKey, clusterApiUrl, LAMPORTS_PER_SOL,Transaction} from "@solana/web3.js";
+import {
+  getAssociatedTokenAddress,
+  createTransferInstruction,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 
 
 
@@ -560,7 +563,8 @@ useEffect(() => {
       setUsdcLoading(true);
 
       const connection = new Connection(clusterApiUrl(SOLANA_NETWORK), "confirmed");
-      const owner = new PublicKey(walletPk);
+      if (!walletPk) return; // или обработка выше
+const owner = new PublicKey(walletPk);
       const mint = new PublicKey(USDC_MINT);
 
       // --- USDC ---
@@ -1272,8 +1276,8 @@ if (route.startsWith("/learn")) {
     const id = search?.get("id") || selected?.id || INITIAL_AGENTS[0].id;
     const agent = agents.find((a) => a.id === id) || selected || null;
   
-    const isCreator =
-      !!agent && !!address && agent.creator && agent.creator === address;
+    const isCreator = !!agent && !!walletPk && agent.creatorWallet === walletPk;
+
   
     return (
       <ChatView
@@ -3110,19 +3114,11 @@ function PhantomPayButton({
       await provider.connect();
 
       // web3 + spl-token через esm.sh (чистый фронтенд)
-      const web3 = await import("https://esm.sh/@solana/web3.js@1.95.3");
-      const splToken = await import("https://esm.sh/@solana/spl-token@0.3.8");
       if (!recipient) {
         alert("This agent has no payout wallet configured. Payment is disabled.");
         return;
       }
 
-      const { PublicKey, Transaction, Connection, clusterApiUrl } = web3 as any;
-      const {
-        getAssociatedTokenAddress,
-        createTransferInstruction,
-        TOKEN_PROGRAM_ID,
-      } = splToken as any;
 
       const connection = new Connection(
         clusterApiUrl(SOLANA_NETWORK),
@@ -5341,11 +5337,15 @@ function AgentDetailView({
       e.preventDefault();
       if (!reviewText.trim()) return;
   
-      onAddReview(agent.id, {
+      const agentId = agent?.id;
+      if (!agentId) return;
+      
+      onAddReview(agentId, {
         rating: reviewRating,
         text: reviewText,
         user: reviewName,
       });
+       
   
       setReviewText("");
       // имя и рейтинг можно не сбрасывать, чтобы юзер мог писать несколько отзывов подряд
