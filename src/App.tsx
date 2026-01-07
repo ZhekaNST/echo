@@ -1352,9 +1352,9 @@ const canPublish =
                 <label className="text-sm text-white/70">Name</label>
                 <Input
                   value={newAgent.name}
-                  onChange={e =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setNewAgent(a => ({ ...a, name: e.target.value }))
-                  }
+                  }                  
                   className="bg-white/5 border-white/10"
                   placeholder="AI Crypto Analyst"
                 />
@@ -1362,9 +1362,9 @@ const canPublish =
                 <label className="text-sm text-white/70">Tagline</label>
                 <Input
                   value={newAgent.tagline}
-                  onChange={e =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setNewAgent(a => ({ ...a, tagline: e.target.value }))
-                  }
+                  }                  
                   className="bg-white/5 border-white/10"
                   placeholder="On-chain metrics &amp; narratives"
                 />
@@ -1374,9 +1374,9 @@ const canPublish =
                 </label>
                 <Input
                   value={newAgent.avatar}
-                  onChange={e =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setNewAgent(a => ({ ...a, avatar: e.target.value }))
-                  }
+                  }                  
                   className="bg-white/5 border-white/10"
                   placeholder="📈 or https://..."
                 />
@@ -1401,12 +1401,12 @@ const canPublish =
                   min={0.05}
                   disabled={autoPrice}
                   value={newAgent.priceUSDC}
-                  onChange={e =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setNewAgent(a => ({
                       ...a,
                       priceUSDC: Number(e.target.value),
                     }))
-                  }
+                  }                  
                   className="bg-white/5 border-white/10"
                 />
 
@@ -1418,7 +1418,7 @@ const canPublish =
                   min={1}
                   placeholder="e.g. 40"
                   value={newAgent.maxMessagesPerSession ?? ""}
-                  onChange={e =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setNewAgent(a => ({
                       ...a,
                       maxMessagesPerSession:
@@ -1436,7 +1436,7 @@ const canPublish =
                   min={1}
                   placeholder="e.g. 60"
                   value={newAgent.maxDurationMinutes ?? ""}
-                  onChange={e =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setNewAgent(a => ({
                       ...a,
                       maxDurationMinutes:
@@ -1545,16 +1545,16 @@ const canPublish =
     </div>
 
     <Textarea
-      rows={4}
-      value={newAgent.promptPreview}
-      onChange={e =>
-        setNewAgent(a => ({
-          ...a,
-          promptPreview: e.target.value,
-        }))
-      }
-      className="bg-white/5 border-white/10"
-    />
+  rows={4}
+  value={newAgent.promptPreview}
+  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+    setNewAgent(a => ({
+      ...a,
+      promptPreview: e.target.value,
+    }))
+  }
+  className="bg-white/5 border-white/10"
+/>
   </div>
 )}
 
@@ -1585,7 +1585,7 @@ const canPublish =
   <Input
     placeholder="https://api.backend.com/run"
     value={newAgent.engineApiUrl || ""}
-    onChange={(e) => {
+    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
       setNewAgent((a) => ({ ...a, engineApiUrl: e.target.value }));
       setEndpointTestStatus("idle");
       setEndpointTestMsg("");
@@ -1650,7 +1650,7 @@ const canPublish =
       <Input
         placeholder="my-secret-token"
         value={newAgent.authToken || ""}
-        onChange={(e) =>
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
           setNewAgent((a) => ({
             ...a,
             authToken: e.target.value || null,
@@ -1682,7 +1682,7 @@ const canPublish =
           <Input
             placeholder="https://your-backend.com/rag"
             value={newAgent.ragEndpointUrl || ""}
-            onChange={(e) =>
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
               setNewAgent((a) => ({
                 ...a,
                 ragEndpointUrl: e.target.value,
@@ -1695,7 +1695,7 @@ const canPublish =
             rows={2}
             placeholder="Describe what docs are connected (FAQ, docs, KB, etc.)"
             value={newAgent.ragDescription || ""}
-            onChange={(e) =>
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
               setNewAgent((a) => ({
                 ...a,
                 ragDescription: e.target.value,
@@ -1716,7 +1716,7 @@ const canPublish =
             rows={4}
             placeholder="e.g. on-chain fetcher, pricing API, CRM, analytics…"
             value={newAgent.toolsDescription || ""}
-            onChange={(e) =>
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
               setNewAgent((a) => ({
                 ...a,
                 toolsDescription: e.target.value,
@@ -2562,12 +2562,15 @@ return (
         <section className="border-t border-white/10">
           <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
             <div className="flex-1 flex gap-3">
-              <Input
-                placeholder="Search agents (crypto, design, mentor...)"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="bg-white/5 border-white/10"
-              />
+            <Input
+  placeholder="Search agents (crypto, design, mentor...)"
+  value={query}
+  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+    setQuery(e.target.value)
+  }
+  className="bg-white/5 border-white/10"
+/>
+
 
               {/* Sort selector */}
               <div className="relative">
@@ -4583,13 +4586,16 @@ setLoading(true);
       : "Type your message…"
   }
   value={input}
-  onChange={(e) => setInput(e.target.value)}
-  onKeyDown={(e) => {
+  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+    setInput(e.target.value)
+  }
+  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") send();
   }}
   className="bg-white/5 border-white/10 flex-1"
   disabled={(!isCreator && sessionBlocked) || loading}
 />
+
 
             <Button
               onClick={() => send()}
@@ -5727,7 +5733,7 @@ function AgentDetailView({
                   </label>
                   <Input
                     value={reviewName}
-                    onChange={(e) => setReviewName(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReviewName(e.target.value)}
                     placeholder="Your name or nickname"
                     className="bg-white/5 border-white/10 text-xs"
                   />
@@ -5764,7 +5770,7 @@ function AgentDetailView({
                   <Textarea
                     rows={3}
                     value={reviewText}
-                    onChange={(e) => setReviewText(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReviewText(e.target.value)}
                     placeholder="What did you like or dislike?"
                     className="bg-white/5 border-white/10 text-xs"
                   />
