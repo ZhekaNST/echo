@@ -3692,17 +3692,21 @@ function MarketplaceRail({
           {/* arrows */}
           <div className="hidden md:flex items-center gap-2 self-center">
           <button
+  type="button"
+  onClick={() => scrollRow("left")}
   className="
     h-10 w-10 rounded-full
     border border-white/20 bg-black/60
     flex items-center justify-center
     text-white text-xl
     leading-none
+    hover:bg-white/10 transition
     relative
   "
 >
   <span className="relative left-[0.5px]">‹</span>
 </button>
+
 
 
 
@@ -4017,40 +4021,50 @@ function ChatView({
   }, [messages]);
 
   useEffect(() => {
-    function handleGlobalKeydown(e: KeyboardEvent) {
-      // если уже печатают в другом инпуте/textarea — не лезем
-      const target = e.target as HTMLElement;
-      const tag = target.tagName.toLowerCase();
+    const handler = (e: KeyboardEvent) => {
+      // 1) если уже печатают в input/textarea/contenteditable — не лезем
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
       const isTypingElement =
         tag === "input" ||
         tag === "textarea" ||
-        (target as HTMLElement).isContentEditable;
+        (target && (target as any).isContentEditable);
   
       if (isTypingElement) return;
   
-      // если зажаты ctrl/cmd/alt — не трогаем
+      // 2) если зажаты модификаторы — не трогаем
       if (e.metaKey || e.ctrlKey || e.altKey) return;
   
-      if (!inputRef.current) return;
+      // 3) если инпут ещё не смонтирован — выходим
+      const el = inputRef.current;
+      if (!el) return;
   
-      // фокусируем строку ввода
-      inputRef.current.focus();
+      // 4) если инпут заблокирован — тоже выходим
+      if (el.disabled) return;
   
-      // если это печатаемый символ (один знак), добавляем его в инпут
+      // 5) фокусируем
+      el.focus();
+  
+      // 6) печатаемый символ — добавляем в state (управляемый инпут!)
       if (e.key.length === 1 && !e.repeat) {
-        const current = inputRef.current.value;
-        const next = current + e.key;
-        inputRef.current.value = next;
-        setInput(next);
         e.preventDefault();
-      }
-    }
+        setInput((prev) => prev + e.key);
   
-    window.addEventListener("keydown", handleGlobalKeydown);
-    return () => {
-      window.removeEventListener("keydown", handleGlobalKeydown);
+        // optional: курсор в конец (иногда полезно)
+        requestAnimationFrame(() => {
+          const node = inputRef.current;
+          if (!node) return;
+          const len = node.value.length;
+          node.setSelectionRange(len, len);
+        });
+      }
     };
+  
+    // CAPTURE => ловим даже если кто-то stopPropagation в bubble phase
+    document.addEventListener("keydown", handler, { capture: true });
+    return () => document.removeEventListener("keydown", handler, { capture: true } as any);
   }, []);
+  
 
   
   // 🔹 helper — сохранить массив сообщений и в state, и в localStorage
@@ -4347,7 +4361,7 @@ setLoading(true);
                   <span className="text-sm font-medium">
                     {selectedAgent.name}
                   </span>
-                  <span className="text[11px] text-white/50 line-clamp-1">
+                  <span className="text-[11px] text-white/50 line-clamp-1">
                     {selectedAgent.tagline}
                   </span>
                 </div>
@@ -5269,6 +5283,10 @@ function AgentDetailView({
   reviews: Record<string, AgentReview[]>;
   onAddReview: (agentId: string, data: { rating: number; text: string; user?: string }) => void;
 }) {
+
+  const [reviewName, setReviewName] = useState("");
+  const [reviewRating, setReviewRating] = useState<number>(5);
+  const [reviewText, setReviewText] = useState("");
   const creatorAgents = useMemo(() => {
     if (!agent) return [];
   
@@ -5323,11 +5341,6 @@ function AgentDetailView({
 
     // --- Reviews for this agent ---
     const agentReviews = reviews[agent.id] || [];
-
-    const [reviewName, setReviewName] = useState("");
-    const [reviewRating, setReviewRating] = useState<number>(5);
-    const [reviewText, setReviewText] = useState("");
-  
     const averageRating =
       agentReviews.length > 0
         ? agentReviews.reduce((s, r) => s + r.rating, 0) / agentReviews.length
