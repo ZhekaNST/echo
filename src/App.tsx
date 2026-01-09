@@ -219,10 +219,12 @@ type Agent = {
   likes: number;
   sessions: number;
   promptPreview: string;
+  description?: string; // full description shown on agent page
   createdAt: number; // timestamp (Date.now())
 lastActiveAt?: number;      // последнее взаимодействие (chat/open/like)
 sessions24h?: number;       // демо-счётчик
 likes24h?: number;          // демо-счётчик
+
 
   // creator / payments
   creator?: string;
@@ -1077,7 +1079,8 @@ push("/");
       name: "",
       priceUSDC: 0.2,
       tagline: "",
-      avatar: "🤖",
+description: "",
+avatar: "🤖",
       categories: [],
       likes: 0,
       sessions: 0,
@@ -1113,7 +1116,8 @@ setCreating(true);
       name: "",
       priceUSDC: 0.2,
       tagline: "",
-      avatar: "🤖",
+description: "",
+avatar: "🤖",
       categories: [],
       likes: 0,
       sessions: 0,
@@ -1369,6 +1373,19 @@ const canPublish =
                   placeholder="On-chain metrics &amp; narratives"
                 />
 
+{/* Description */}
+<div className="space-y-2">
+  <label className="text-sm text-white/70">Description</label>
+  <Textarea
+    value={newAgent.description || ""}
+    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+      setNewAgent(a => ({ ...a, description: e.target.value }))
+    }
+    rows={5}
+    placeholder="Explain what this agent does, who it's for, examples, limitations, etc."
+    className="bg-white/5 border-white/10 text-sm"
+  />
+</div>
                 <label className="text-sm text-white/70">
                   Avatar (emoji or URL)
                 </label>
@@ -4025,9 +4042,13 @@ function ChatView({
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // 1) если уже печатают в input/textarea/contenteditable — не лезем
+      // 0) IME/composition (китайский/японский ввод) — не трогаем
+      if ((e as any).isComposing) return;
+  
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
+  
+      // 1) если уже печатают в input/textarea/contenteditable — не лезем
       const isTypingElement =
         tag === "input" ||
         tag === "textarea" ||
@@ -4035,38 +4056,74 @@ function ChatView({
   
       if (isTypingElement) return;
   
-      // 2) если зажаты модификаторы — не трогаем
+      // 2) модификаторы — не трогаем (Cmd/Ctrl/Alt)
       if (e.metaKey || e.ctrlKey || e.altKey) return;
   
-      // 3) если инпут ещё не смонтирован — выходим
+      // 3) не перехватываем Escape (пусть закрывает модалки и т.д.)
+      if (e.key === "Escape") return;
+  
       const el = inputRef.current;
       if (!el) return;
-  
-      // 4) если инпут заблокирован — тоже выходим
       if (el.disabled) return;
   
-      // 5) фокусируем
+      // 4) всегда фокусим чат-инпут
       el.focus();
   
-      // 6) печатаемый символ — добавляем в state (управляемый инпут!)
+      // 5) печатаемые символы — добавляем (управляемый инпут)
       if (e.key.length === 1 && !e.repeat) {
         e.preventDefault();
-        setInput((prev) => prev + e.key);
   
-        // optional: курсор в конец (иногда полезно)
-        requestAnimationFrame(() => {
-          const node = inputRef.current;
-          if (!node) return;
-          const len = node.value.length;
-          node.setSelectionRange(len, len);
+        setInput((prev) => {
+          const next = prev + e.key;
+  
+          // курсор в конец после обновления
+          requestAnimationFrame(() => {
+            const node = inputRef.current;
+            if (!node) return;
+            const len = next.length;
+            try {
+              node.setSelectionRange(len, len);
+            } catch {}
+          });
+  
+          return next;
         });
+  
+        return;
       }
+  
+      // 6) Backspace — тоже эмулируем, иначе “на любую кнопку” ощущается сломанным
+      if (e.key === "Backspace" && !e.repeat) {
+        e.preventDefault();
+  
+        setInput((prev) => {
+          const next = prev.slice(0, -1);
+  
+          requestAnimationFrame(() => {
+            const node = inputRef.current;
+            if (!node) return;
+            const len = next.length;
+            try {
+              node.setSelectionRange(len, len);
+            } catch {}
+          });
+  
+          return next;
+        });
+  
+        return;
+      }
+  
+      // 7) Остальные клавиши (Enter/Tab/стрелки/F1...) —
+      // не предотвращаем дефолт, просто фокус уже поставили.
     };
   
-    // CAPTURE => ловим даже если кто-то stopPropagation в bubble phase
     document.addEventListener("keydown", handler, { capture: true });
-    return () => document.removeEventListener("keydown", handler, { capture: true } as any);
+    return () => {
+      document.removeEventListener("keydown", handler, { capture: true } as any);
+    };
   }, []);
+  
   
 
   
@@ -5472,6 +5529,22 @@ function AgentDetailView({
               </div>
             </CardContent>
           </Card>
+          {/* Description */}
+{agent.description && agent.description.trim() !== "" && (
+  <Card className="bg-white/[.03] border-white/10 mt-4">
+    <CardHeader>
+      <CardTitle className="text-sm">Description</CardTitle>
+      <CardDescription className="text-xs text-white/60">
+        What this agent does and how to use it.
+      </CardDescription>
+    </CardHeader>
+    <CardContent>
+      <div className="text-sm whitespace-pre-wrap text-white/80">
+        {agent.description}
+      </div>
+    </CardContent>
+  </Card>
+)}
           {agent.engineProvider === "creator_backend" && (
   <Card className="bg-white/[.03] border-white/10 mt-4">
     <CardHeader>
