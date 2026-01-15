@@ -95,6 +95,7 @@ export default defineConfig({
   },
   define: {
     "globalThis.Buffer": "Buffer",
+    global: "globalThis",
   },
   optimizeDeps: {
     esbuildOptions: {

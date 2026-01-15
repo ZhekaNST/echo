@@ -1,3 +1,13 @@
+// Buffer polyfill for Solana libraries - MUST be before any Solana imports
+import { Buffer } from "buffer";
+if (typeof globalThis.Buffer === "undefined") {
+  globalThis.Buffer = Buffer;
+}
+// Also set on window for compatibility
+if (typeof window !== "undefined" && typeof (window as any).Buffer === "undefined") {
+  (window as any).Buffer = Buffer;
+}
+
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import {  
@@ -700,7 +710,7 @@ useEffect(() => {
   const [exploreTab, setExploreTab] = useState<ExploreTab>("all");
   const [selected, setSelected] = useState<Agent | null>(null);
   // Modal state machine - controls banners and payment flow
-  const [modalState, setModalState] = useState<"idle" | "ready_to_pay" | "missing_payout_wallet" | "demo_free" | "creator_free" | "paid" | "error">("idle");
+  const [modalState, setModalState] = useState<"idle" | "ready" | "processing" | "paid" | "error" | "missing_payout_wallet" | "demo_free" | "creator_free">("idle");
 
   // ✅ Reset trending counters every 24 hours (moved here after agents state)
   useEffect(() => {
@@ -1144,7 +1154,7 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
       setModalState("missing_payout_wallet");
     } else {
       // Agent is ready to accept payment
-      setModalState("ready_to_pay");
+      setModalState("ready");
     }
     
     push("/");
@@ -2994,6 +3004,19 @@ return (
                   Start Chat
                 </Button>
               </div>
+            ) : modalState === "processing" ? (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-blue-400/40 bg-blue-500/10 p-3 text-blue-200 text-sm">
+                  Processing payment... Please confirm in Phantom wallet.
+                </div>
+                <Button
+                  variant="secondary"
+                  className="w-full bg-white/10 hover:bg-white/20"
+                  disabled
+                >
+                  Processing...
+                </Button>
+              </div>
             ) : modalState === "error" ? (
               <div className="space-y-3">
                 <div className="rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-red-200 text-sm">
@@ -3002,16 +3025,18 @@ return (
                 <Button
                   variant="secondary"
                   className="w-full bg-white/10 hover:bg-white/20"
-                  onClick={() => setModalState("ready_to_pay")}
+                  onClick={() => setModalState("ready")}
                 >
                   Try Again
                 </Button>
               </div>
-            ) : modalState === "ready_to_pay" ? (
+            ) : modalState === "ready" ? (
               <div className="space-y-3">
                 <PhantomPayButton
                   amountUsdc={selected.priceUSDC}
                   recipient={selected.creatorWallet}
+                  onProcessing={() => setModalState("processing")}
+                  onError={() => setModalState("error")}
                   onSuccess={async (sig: string) => {
                     if (!selected || !walletPk) return;
 
@@ -3043,11 +3068,13 @@ return (
                 </div>
               </div>
             ) : (
-              // Fallback for "idle" or unknown state - show ready to pay
+              // Fallback for "idle" or unknown state - show ready
               <div className="space-y-3">
                 <PhantomPayButton
                   amountUsdc={selected.priceUSDC}
                   recipient={selected.creatorWallet}
+                  onProcessing={() => setModalState("processing")}
+                  onError={() => setModalState("error")}
                   onSuccess={async (sig: string) => {
                     if (!selected || !walletPk) return;
 
@@ -3257,22 +3284,35 @@ function PhantomPayButton({
   amountUsdc = 0.5,          // СКОЛЬКО USDC списываем
   recipient,
   onSuccess,
+  onProcessing,
+  onError,
   className = "",
 }: {
   amountUsdc?: number;       // в нормальных единицах, типа 0.30
   recipient?: string;        // кому платим (creatorWallet)
   onSuccess?: (sig: string) => void;
+  onProcessing?: () => void;
+  onError?: () => void;
   className?: string;
 }) {
   const [loading, setLoading] = useState(false);
 
   async function handlePay() {
+    // Ensure we're in browser
+    if (typeof window === "undefined") {
+      alert("This feature requires a browser environment.");
+      return;
+    }
+
     try {
       setLoading(true);
+      onProcessing && onProcessing();
+
       const anyWin = window as any;
       const provider = anyWin?.solana;
       if (!provider || !provider.isPhantom) {
         alert("Phantom wallet not found. Please install Phantom.");
+        onError && onError();
         return;
       }
 
@@ -3282,9 +3322,9 @@ function PhantomPayButton({
       // web3 + spl-token через esm.sh (чистый фронтенд)
       if (!recipient) {
         alert("This agent has no payout wallet configured. Payment is disabled.");
+        onError && onError();
         return;
       }
-
 
       const connection = new Connection(
         clusterApiUrl(SOLANA_NETWORK),
@@ -3316,8 +3356,9 @@ function PhantomPayButton({
       tx.feePayer = fromPubkey;
       tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-      const signed = await provider.signTransaction(tx);
-      const sig = await connection.sendRawTransaction(signed.serialize());
+      // Use signAndSendTransaction for better UX (Phantom handles both signing and sending)
+      const { signature } = await provider.signAndSendTransaction(tx);
+      const sig = signature;
       
       // Wait for confirmation with timeout
       try {
@@ -3335,11 +3376,16 @@ function PhantomPayButton({
       onSuccess && onSuccess(sig);
     } catch (e: any) {
       console.error("Payment error:", e);
+      onError && onError();
+      
       const errorMsg = e?.message || "Unknown error";
-      if (errorMsg.includes("User rejected")) {
-        alert("Payment cancelled by user");
+      if (errorMsg.includes("User rejected") || errorMsg.includes("User cancelled")) {
+        // User cancelled - don't show error alert, just reset state
+        return;
       } else if (errorMsg.includes("insufficient funds") || errorMsg.includes("0x1")) {
         alert("Insufficient USDC balance. Please check your wallet.");
+      } else if (errorMsg.includes("Buffer is not defined")) {
+        alert("Buffer polyfill error. Please refresh the page.");
       } else {
         alert(`USDC payment failed: ${errorMsg}`);
       }
