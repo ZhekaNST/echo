@@ -167,8 +167,9 @@ const CardTitle = ({ className = "", children }: any) => <div className={cx("tex
 const CardDescription = ({ className = "", children }: any) => <div className={cx("text-sm text-white/60", className)}>{children}</div>;
 const CardContent = ({ className = "", children }: any) => <div className={cx("p-4", className)}>{children}</div>;
 const CardFooter = ({ className = "", children }: any) => <div className={cx("p-4 border-t border-white/10", className)}>{children}</div>;
-const Input = ({ className = "", ...props }: any) =>
-  <input className={cx("h-10 w-full px-3 rounded-md bg-white/5 border border-white/10 text-sm", className)} {...props} />;
+const Input = React.forwardRef<HTMLInputElement, any>(({ className = "", ...props }, ref) =>
+  <input ref={ref} className={cx("h-10 w-full px-3 rounded-md bg-white/5 border border-white/10 text-sm", className)} {...props} />);
+Input.displayName = "Input";
   const Textarea = ({ className = "", ...props }: any) =>
   <textarea className={cx("w-full px-3 py-2 rounded-md bg-white/5 border border-white/10 text-sm", className)} {...props} />;
 const Badge = ({ className = "", children }: any) => <span className={cx("inline-flex items-center rounded-md px-2 py-1 text-xs border border-white/10 bg-white/10", className)}>{children}</span>;
@@ -2813,7 +2814,10 @@ return (
                               ? "text-rose-300 border-rose-400/40 bg-rose-500/15"
                               : ""
                           )}
-                          onClick={() => handleLike(a.id)}
+                          onClick={(e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            handleLike(a.id);
+                          }}
                           aria-pressed={!!liked[a.id]}
                         >
                           <Heart
@@ -5768,7 +5772,10 @@ function AgentDetailView({
                       ? "text-rose-300 border border-rose-400/30 bg-rose-500/10"
                       : ""
                   )}
-                  onClick={() => onLike(agent.id)}
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    onLike(agent.id);
+                  }}
                 >
                   <Heart
                     className={cx(
