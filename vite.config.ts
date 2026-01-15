@@ -88,4 +88,19 @@ function apiRoutes() {
 
 export default defineConfig({
   plugins: [apiRoutes()],
+  resolve: {
+    alias: {
+      buffer: "buffer",
+    },
+  },
+  define: {
+    "globalThis.Buffer": "Buffer",
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      define: {
+        global: "globalThis",
+      },
+    },
+  },
 });

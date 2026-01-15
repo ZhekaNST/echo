@@ -699,8 +699,8 @@ useEffect(() => {
   const [sortBy, setSortBy] = useState<SortBy>('recommended');
   const [exploreTab, setExploreTab] = useState<ExploreTab>("all");
   const [selected, setSelected] = useState<Agent | null>(null);
-  // Modal state machine: "idle" | "paying" | "paid" | "demo_free" | "creator_free"
-  const [modalState, setModalState] = useState<"idle" | "paying" | "paid" | "demo_free" | "creator_free">("idle");
+  // Modal state machine - controls banners and payment flow
+  const [modalState, setModalState] = useState<"idle" | "ready_to_pay" | "missing_payout_wallet" | "demo_free" | "creator_free" | "paid" | "error">("idle");
 
   // ✅ Reset trending counters every 24 hours (moved here after agents state)
   useEffect(() => {
@@ -1135,14 +1135,16 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
     // 3) Otherwise → open payment modal on home page with initial state
     setSelected(agent);
     
-    // Determine initial modal state
+    // Determine initial modal state based on current agent properties
     const isDemo = !agent.creator && !agent.creatorWallet;
     if (isDemo) {
       setModalState("demo_free");
-    } else if (connected && agent.creator && address === agent.creator) {
-      setModalState("creator_free");
+    } else if (!agent.creatorWallet) {
+      // Agent is payable but has no payout wallet configured
+      setModalState("missing_payout_wallet");
     } else {
-      setModalState("idle");
+      // Agent is ready to accept payment
+      setModalState("ready_to_pay");
     }
     
     push("/");
@@ -2964,6 +2966,21 @@ return (
                   Start Chat
                 </Button>
               </div>
+            ) : modalState === "missing_payout_wallet" ? (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-red-200 text-sm">
+                  This agent has no payout wallet linked. The creator must
+                  connect a Phantom wallet before this agent can accept
+                  payments.
+                </div>
+                <Button
+                  variant="secondary"
+                  className="w-full bg-white/10 hover:bg-white/20"
+                  disabled
+                >
+                  Payment Unavailable
+                </Button>
+              </div>
             ) : modalState === "paid" ? (
               <div className="space-y-3">
                 <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-emerald-300 text-sm">
@@ -2977,15 +2994,20 @@ return (
                   Start Chat
                 </Button>
               </div>
-            ) : !selected.creatorWallet ? (
+            ) : modalState === "error" ? (
               <div className="space-y-3">
                 <div className="rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-red-200 text-sm">
-                  This agent has no payout wallet linked. The creator must
-                  connect a Phantom wallet before this agent can accept
-                  payments.
+                  Payment failed. Please try again.
                 </div>
+                <Button
+                  variant="secondary"
+                  className="w-full bg-white/10 hover:bg-white/20"
+                  onClick={() => setModalState("ready_to_pay")}
+                >
+                  Try Again
+                </Button>
               </div>
-            ) : (
+            ) : modalState === "ready_to_pay" ? (
               <div className="space-y-3">
                 <PhantomPayButton
                   amountUsdc={selected.priceUSDC}
@@ -3002,6 +3024,7 @@ return (
                     );
 
                     if (!verification.valid) {
+                      setModalState("error");
                       alert(
                         "Payment verification failed: " + (verification.reason || "Unknown error")
                       );
@@ -3009,6 +3032,40 @@ return (
                     }
 
                     // ✅ Payment verified — save session
+                    saveSession(selected, sig);
+                    setModalState("paid");
+                  }}
+                  className="w-full"
+                />
+
+                <div className="text-xs text-white/50">
+                  USDC transfer on Solana.
+                </div>
+              </div>
+            ) : (
+              // Fallback for "idle" or unknown state - show ready to pay
+              <div className="space-y-3">
+                <PhantomPayButton
+                  amountUsdc={selected.priceUSDC}
+                  recipient={selected.creatorWallet}
+                  onSuccess={async (sig: string) => {
+                    if (!selected || !walletPk) return;
+
+                    const verification = await verifyPaymentOnChain(
+                      sig,
+                      selected.creatorWallet!,
+                      selected.priceUSDC,
+                      walletPk
+                    );
+
+                    if (!verification.valid) {
+                      setModalState("error");
+                      alert(
+                        "Payment verification failed: " + (verification.reason || "Unknown error")
+                      );
+                      return;
+                    }
+
                     saveSession(selected, sig);
                     setModalState("paid");
                   }}
