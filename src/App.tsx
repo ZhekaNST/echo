@@ -699,7 +699,8 @@ useEffect(() => {
   const [sortBy, setSortBy] = useState<SortBy>('recommended');
   const [exploreTab, setExploreTab] = useState<ExploreTab>("all");
   const [selected, setSelected] = useState<Agent | null>(null);
-  const [paid, setPaid] = useState(false);
+  // Modal state machine: "idle" | "paying" | "paid" | "demo_free" | "creator_free"
+  const [modalState, setModalState] = useState<"idle" | "paying" | "paid" | "demo_free" | "creator_free">("idle");
 
   // ✅ Reset trending counters every 24 hours (moved here after agents state)
   useEffect(() => {
@@ -725,7 +726,6 @@ useEffect(() => {
     if (typeof window === "undefined") return;
   
     const savedAgentId = localStorage.getItem("selectedAgentId");
-    const paidSession = localStorage.getItem("paidSession");
   
     if (savedAgentId) {
       const agent = agents.find(a => a.id === savedAgentId);
@@ -733,11 +733,13 @@ useEffect(() => {
         setSelected(agent);
       }
     }
-  
-    if (paidSession === "true") {
-      setPaid(true);
-    }
+    // Removed paidSession localStorage check - use active session instead
   }, [agents]);
+
+  // Reset modal state when selected agent changes
+  useEffect(() => {
+    setModalState("idle");
+  }, [selected?.id]);
   
   // достаточно ли USDC для оплаты выбранного агента
   const notEnoughUsdc =
@@ -1086,9 +1088,9 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
       )
     );
     
-
-    // на всякий случай отмечаем как оплаченного
-    setPaid(true);
+    // Reset modal state when navigating to chat
+    setModalState("idle");
+    setSelected(null);
 
     // уходим на чат с этим агентом
     push(`/chat?id=${encodeURIComponent(selected.id)}`);
@@ -1100,51 +1102,56 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
   }
 
   function openPay(agent: Agent) {
-      // 🔐 сохраняем выбранного агента
-  localStorage.setItem("selectedAgentId", agent.id);
+    // 🔐 сохраняем выбранного агента
+    localStorage.setItem("selectedAgentId", agent.id);
 
-  if (connected && agent.creator && address === agent.creator) {
-    localStorage.setItem("paidSession", "true");
-   
-    setPurchases((prev) => [
-      {
-        id: crypto.randomUUID(),
-        agentId: agent.id,
-        priceUSDC: agent.priceUSDC,
-        ts: Date.now(),
-      },
-      ...prev,
-    ]);
+    // 1) Creator → free, go directly to chat
+    if (connected && agent.creator && address === agent.creator) {
+      setPurchases((prev) => [
+        {
+          id: crypto.randomUUID(),
+          agentId: agent.id,
+          priceUSDC: agent.priceUSDC,
+          ts: Date.now(),
+        },
+        ...prev,
+      ]);
+      
+      setSelected(agent);
+      push(`/chat?id=${encodeURIComponent(agent.id)}`);
+      return;
+    }
   
-    setSelected(agent);
-    setPaid(true);
-    push(`/chat?id=${encodeURIComponent(agent.id)}`);
-    return;
-  }
-  
-    // 2) если есть активная оплаченная сессия — тоже сразу в чат
+    // 2) If active session exists → go directly to chat (resume), skip modal
     const activeSession =
       typeof window !== "undefined" ? getActiveSession(agent.id) : null;
 
-      if (activeSession) {
-        localStorage.setItem("paidSession", "true");
-      
-        setSelected(agent);
-        setPaid(true);
-        push(`/chat?id=${encodeURIComponent(agent.id)}`);
-        return;
-      }
-      
-
-        // 3) иначе открываем модалку оплаты на главной
-        localStorage.setItem("paidSession", "false");
-
-setSelected(agent);
-setPaid(false);
-push("/");
-
-      }    
-  function closePay() { setSelected(null); }
+    if (activeSession) {
+      setSelected(agent);
+      push(`/chat?id=${encodeURIComponent(agent.id)}`);
+      return;
+    }
+    
+    // 3) Otherwise → open payment modal on home page with initial state
+    setSelected(agent);
+    
+    // Determine initial modal state
+    const isDemo = !agent.creator && !agent.creatorWallet;
+    if (isDemo) {
+      setModalState("demo_free");
+    } else if (connected && agent.creator && address === agent.creator) {
+      setModalState("creator_free");
+    } else {
+      setModalState("idle");
+    }
+    
+    push("/");
+  }    
+    
+  function closePay() {
+    setSelected(null);
+    setModalState("idle");
+  }
 
   // like handler with guard (toggle like/unlike, one like per agent per user)
   function handleLike(id: string) {
@@ -1161,10 +1168,6 @@ push("/");
     });
   }
   
-  // Демонстрационный агент: старые, захардкоженные в INITIAL_AGENTS
-  const isDemoAgent =
-    !!selected && !selected.creator && !selected.creatorWallet;
-
   function startCreate() {
     // режим "создания" — сбрасываем форму
     setEditingAgentId(null);
@@ -1276,7 +1279,7 @@ avatar: "🤖",
 
     setAgents(prev => [agent, ...prev]);
     setSelected(agent);
-    setPaid(true); // creators use their own agents for free
+    setModalState("idle"); // Reset modal state
     setCreating(false);
     push(`/chat?id=${encodeURIComponent(agent.id)}`);
   }
@@ -2935,7 +2938,7 @@ return (
               <Button onClick={() => handleConnect()} className="w-full gap-2">
                 <Wallet className="h-4 w-4" /> Connect Wallet to Proceed
               </Button>
-            ) : selected?.creator && address === selected?.creator ? (
+            ) : modalState === "creator_free" ? (
               <div className="space-y-3">
                 <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-cyan-300 text-sm">
                   You're the creator of this agent. Your sessions are free.
@@ -2948,65 +2951,20 @@ return (
                   Start Chat
                 </Button>
               </div>
-            ) : !paid ? (
+            ) : modalState === "demo_free" ? (
               <div className="space-y-3">
-                {isDemoAgent ? (
-                  <>
-                    <div className="rounded-lg border border-cyan-400/40 bg-cyan-500/10 p-3 text-cyan-100 text-sm">
-                      This is a demo agent. Sessions are free for everyone.
-                    </div>
-                    <Button
-                      variant="secondary"
-                      className="w-full bg-white/10 hover:bg-white/20"
-                      onClick={() => startChat()}
-                    >
-                      Start Chat
-                    </Button>
-                  </>
-                ) : !selected.creatorWallet ? (
-                  <div className="rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-red-200 text-sm">
-                    This agent has no payout wallet linked. The creator must
-                    connect a Phantom wallet before this agent can accept
-                    payments.
-                  </div>
-                ) : (
-                  
-                  <>
-                    <PhantomPayButton
-                      amountUsdc={selected.priceUSDC}
-                      recipient={selected.creatorWallet}
-                      onSuccess={async (sig: string) => {
-                        if (!selected || !walletPk) return;
-
-                        // ✅ Verify payment on-chain (no external server needed)
-                        const verification = await verifyPaymentOnChain(
-                          sig,
-                          selected.creatorWallet!,
-                          selected.priceUSDC,
-                          walletPk
-                        );
-
-                        if (!verification.valid) {
-                          alert(
-                            "Payment verification failed: " + (verification.reason || "Unknown error")
-                          );
-                          return;
-                        }
-
-                        // ✅ Payment verified — save session
-                        saveSession(selected, sig);
-                        setPaid(true);
-                      }}
-                      className="w-full"
-                    />
-
-                    <div className="text-xs text-white/50">
-                      USDC transfer on Solana.
-                    </div>
-                  </>
-                )}
+                <div className="rounded-lg border border-cyan-400/40 bg-cyan-500/10 p-3 text-cyan-100 text-sm">
+                  This is a demo agent. Sessions are free for everyone.
+                </div>
+                <Button
+                  variant="secondary"
+                  className="w-full bg-white/10 hover:bg-white/20"
+                  onClick={() => startChat()}
+                >
+                  Start Chat
+                </Button>
               </div>
-            ) : (
+            ) : modalState === "paid" ? (
               <div className="space-y-3">
                 <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-emerald-300 text-sm">
                   Payment confirmed. Session unlocked.
@@ -3018,6 +2976,48 @@ return (
                 >
                   Start Chat
                 </Button>
+              </div>
+            ) : !selected.creatorWallet ? (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-red-200 text-sm">
+                  This agent has no payout wallet linked. The creator must
+                  connect a Phantom wallet before this agent can accept
+                  payments.
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <PhantomPayButton
+                  amountUsdc={selected.priceUSDC}
+                  recipient={selected.creatorWallet}
+                  onSuccess={async (sig: string) => {
+                    if (!selected || !walletPk) return;
+
+                    // ✅ Verify payment on-chain (no external server needed)
+                    const verification = await verifyPaymentOnChain(
+                      sig,
+                      selected.creatorWallet!,
+                      selected.priceUSDC,
+                      walletPk
+                    );
+
+                    if (!verification.valid) {
+                      alert(
+                        "Payment verification failed: " + (verification.reason || "Unknown error")
+                      );
+                      return;
+                    }
+
+                    // ✅ Payment verified — save session
+                    saveSession(selected, sig);
+                    setModalState("paid");
+                  }}
+                  className="w-full"
+                />
+
+                <div className="text-xs text-white/50">
+                  USDC transfer on Solana.
+                </div>
               </div>
             )}
 
