@@ -13,7 +13,7 @@ import {
   Paperclip
 } from "lucide-react";
 
-import { Connection, PublicKey, clusterApiUrl, LAMPORTS_PER_SOL,Transaction} from "@solana/web3.js";
+import { Connection, PublicKey, clusterApiUrl, LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
 import {
   getAssociatedTokenAddress,
   createTransferInstruction,
@@ -42,7 +42,12 @@ function loadLS<T>(key: string, fallback: T): T {
 function saveLS(key: string, value: any) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
+  } catch (e) {
+    // Log in development to help debug quota exceeded errors
+    if (import.meta.env.DEV) {
+      console.warn("Failed to save to localStorage:", e);
+    }
+  }
 }
 
 
@@ -332,6 +337,87 @@ function clearSession(agentId: string) {
   } catch {}
 }
 
+// ✅ Verify payment transaction on-chain (replaces broken external server)
+async function verifyPaymentOnChain(
+  signature: string,
+  expectedRecipient: string,
+  expectedAmount: number,
+  buyerPubkey: string
+): Promise<{ valid: boolean; reason?: string }> {
+  try {
+    const connection = new Connection(clusterApiUrl(SOLANA_NETWORK), "confirmed");
+    const DECIMALS = 6;
+    const expectedRawAmount = Math.round(expectedAmount * 10 ** DECIMALS);
+
+    // Get transaction details
+    const tx = await connection.getTransaction(signature, {
+      maxSupportedTransactionVersion: 0,
+    });
+
+    if (!tx) {
+      return { valid: false, reason: "Transaction not found on blockchain" };
+    }
+
+    if (!tx.meta) {
+      return { valid: false, reason: "Transaction metadata not available" };
+    }
+
+    if (tx.meta.err) {
+      return { valid: false, reason: `Transaction failed: ${JSON.stringify(tx.meta.err)}` };
+    }
+
+    // Check if transaction was successful
+    const preBalances = tx.meta.preTokenBalances || [];
+    const postBalances = tx.meta.postTokenBalances || [];
+
+    // Find USDC token transfer
+    const recipientPubkey = new PublicKey(expectedRecipient);
+    const recipientATA = await getAssociatedTokenAddress(
+      new PublicKey(USDC_MINT),
+      recipientPubkey
+    );
+
+    let foundTransfer = false;
+    let transferredAmount = 0;
+
+    // Check token balance changes
+    for (const post of postBalances) {
+      if (post.owner === recipientATA.toString() && post.mint === USDC_MINT) {
+        const pre = preBalances.find(
+          (p) => p.accountIndex === post.accountIndex && p.mint === USDC_MINT
+        );
+        const preAmount = pre ? parseFloat(pre.uiTokenAmount.uiAmountString || "0") : 0;
+        const postAmount = parseFloat(post.uiTokenAmount.uiAmountString || "0");
+        const diff = postAmount - preAmount;
+
+        if (diff > 0) {
+          foundTransfer = true;
+          transferredAmount = Math.round(diff * 10 ** DECIMALS);
+          break;
+        }
+      }
+    }
+
+    if (!foundTransfer) {
+      return { valid: false, reason: "No USDC transfer found to recipient" };
+    }
+
+    // Verify amount (allow small rounding differences)
+    const amountDiff = Math.abs(transferredAmount - expectedRawAmount);
+    if (amountDiff > 100) { // Allow 0.0001 USDC difference for rounding
+      return {
+        valid: false,
+        reason: `Amount mismatch: expected ${expectedAmount} USDC, got ${transferredAmount / 10 ** DECIMALS}`,
+      };
+    }
+
+    return { valid: true };
+  } catch (e: any) {
+    console.error("Payment verification error:", e);
+    return { valid: false, reason: e?.message || "Verification failed" };
+  }
+}
+
 
 
 
@@ -485,24 +571,6 @@ export default function AgentVerseDemo() {
     }
   }, [route]);
   
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-  
-    const now = Date.now();
-    const last = Number(localStorage.getItem(TRENDING_RESET_KEY) || 0);
-  
-    // каждые 24 часа обнуляем "24h" счётчики
-    if (!last || now - last > 24 * 60 * 60 * 1000) {
-      setAgents(prev =>
-        prev.map(a => ({
-          ...a,
-          sessions24h: 0,
-          likes24h: 0,
-        }))
-      );
-      localStorage.setItem(TRENDING_RESET_KEY, String(now));
-    }
-  }, []);
   
 
   // App state
@@ -565,8 +633,8 @@ useEffect(() => {
       setUsdcLoading(true);
 
       const connection = new Connection(clusterApiUrl(SOLANA_NETWORK), "confirmed");
-      if (!walletPk) return; // или обработка выше
-const owner = new PublicKey(walletPk);
+      if (!walletPk) return;
+      const owner = new PublicKey(walletPk);
       const mint = new PublicKey(USDC_MINT);
 
       // --- USDC ---
@@ -575,8 +643,14 @@ const owner = new PublicKey(walletPk);
         const accountInfo = await connection.getTokenAccountBalance(ata);
         const uiAmount = accountInfo.value.uiAmount ?? 0;
         if (!cancelled) setUsdcBalance(uiAmount);
-      } catch (e) {
-        if (!cancelled) setUsdcBalance(0);
+      } catch (e: any) {
+        // Token account doesn't exist = 0 balance (not an error)
+        if (e?.message?.includes("could not find account") || e?.message?.includes("Invalid param")) {
+          if (!cancelled) setUsdcBalance(0);
+        } else {
+          console.error("Failed to load USDC balance:", e);
+          // Keep previous balance on error instead of resetting to 0
+        }
       }
 
       // --- SOL ---
@@ -584,14 +658,13 @@ const owner = new PublicKey(walletPk);
         const lamports = await connection.getBalance(owner);
         const sol = lamports / LAMPORTS_PER_SOL;
         if (!cancelled) setSolBalance(sol);
-      } catch (e) {
-        if (!cancelled) setSolBalance(null);
+      } catch (e: any) {
+        console.error("Failed to load SOL balance:", e);
+        // Keep previous balance on error
       }
-    } catch (e) {
-      if (!cancelled) {
-        setUsdcBalance(0);
-        setSolBalance(null);
-      }
+    } catch (e: any) {
+      console.error("Balance loading error:", e);
+      // Don't reset balances on error - keep previous values
     } finally {
       if (!cancelled) setUsdcLoading(false);
     }
@@ -626,6 +699,26 @@ const owner = new PublicKey(walletPk);
   const [exploreTab, setExploreTab] = useState<ExploreTab>("all");
   const [selected, setSelected] = useState<Agent | null>(null);
   const [paid, setPaid] = useState(false);
+
+  // ✅ Reset trending counters every 24 hours (moved here after agents state)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+  
+    const now = Date.now();
+    const last = Number(localStorage.getItem(TRENDING_RESET_KEY) || 0);
+  
+    // каждые 24 часа обнуляем "24h" счётчики
+    if (!last || now - last > 24 * 60 * 60 * 1000) {
+      setAgents(prev =>
+        prev.map(a => ({
+          ...a,
+          sessions24h: 0,
+          likes24h: 0,
+        }))
+      );
+      localStorage.setItem(TRENDING_RESET_KEY, String(now));
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2879,32 +2972,24 @@ return (
                       amountUsdc={selected.priceUSDC}
                       recipient={selected.creatorWallet}
                       onSuccess={async (sig: string) => {
-                        if (!selected || !address) return;
+                        if (!selected || !walletPk) return;
 
-                        const resp = await fetch(
-                          "https://nodemhwf6mm2-appt--3000--cf284e50.local-credentialless.webcontainer.io/verify-payment",
-                          {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              signature: sig,
-                              expectedRecipient: selected.creatorWallet,
-                              expectedAmount: selected.priceUSDC,
-                              buyer: address,
-                            }),
-                          }
+                        // ✅ Verify payment on-chain (no external server needed)
+                        const verification = await verifyPaymentOnChain(
+                          sig,
+                          selected.creatorWallet!,
+                          selected.priceUSDC,
+                          walletPk
                         );
 
-                        const json = await resp.json();
-
-                        if (!json.valid) {
+                        if (!verification.valid) {
                           alert(
-                            "Payment verification failed: " + json.reason
+                            "Payment verification failed: " + (verification.reason || "Unknown error")
                           );
                           return;
                         }
 
-                        // всё ок — сохраняем сессию
+                        // ✅ Payment verified — save session
                         saveSession(selected, sig);
                         setPaid(true);
                       }}
@@ -3172,12 +3257,31 @@ function PhantomPayButton({
 
       const signed = await provider.signTransaction(tx);
       const sig = await connection.sendRawTransaction(signed.serialize());
-      await connection.confirmTransaction(sig, "confirmed");
+      
+      // Wait for confirmation with timeout
+      try {
+        await Promise.race([
+          connection.confirmTransaction(sig, "confirmed"),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Transaction confirmation timeout")), 30000)
+          )
+        ]);
+      } catch (confirmError: any) {
+        // Transaction was sent but confirmation timed out - still proceed
+        console.warn("Confirmation timeout, but transaction was sent:", sig);
+      }
 
       onSuccess && onSuccess(sig);
-    } catch (e) {
-      console.error(e);
-      alert("USDC payment failed");
+    } catch (e: any) {
+      console.error("Payment error:", e);
+      const errorMsg = e?.message || "Unknown error";
+      if (errorMsg.includes("User rejected")) {
+        alert("Payment cancelled by user");
+      } else if (errorMsg.includes("insufficient funds") || errorMsg.includes("0x1")) {
+        alert("Insufficient USDC balance. Please check your wallet.");
+      } else {
+        alert(`USDC payment failed: ${errorMsg}`);
+      }
     } finally {
       setLoading(false);
     }

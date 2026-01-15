@@ -19,13 +19,19 @@ function apiRoutes() {
         let body = "";
         req.on("data", (c: any) => (body += c));
         req.on("end", () => {
-          const parsed = JSON.parse(body || "{}");
-          const lastUser = (parsed?.messages || []).slice().reverse().find((m: any) => m.role === "user");
-          const text = lastUser?.content || "(no text)";
+          try {
+            const parsed = JSON.parse(body || "{}");
+            const lastUser = (parsed?.messages || []).slice().reverse().find((m: any) => m.role === "user");
+            const text = lastUser?.content || "(no text)";
 
-          res.statusCode = 200;
-          res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify({ reply: `✅ DEMO BACKEND OK. You said: ${text}` }));
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ reply: `✅ DEMO BACKEND OK. You said: ${text}` }));
+          } catch (e: any) {
+            res.statusCode = 400;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ reply: `Invalid JSON: ${e?.message || "Parse error"}` }));
+          }
         });
       });
 
