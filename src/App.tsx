@@ -9,6 +9,7 @@ if (typeof window !== "undefined" && typeof (window as any).Buffer === "undefine
 }
 
 import React, { useMemo, useState, useEffect, useRef } from "react";
+import heic2any from "heic2any";
 import { motion } from "framer-motion";
 import {  
   Bot, 
@@ -75,9 +76,76 @@ const RPC_ENDPOINTS = [
   clusterApiUrl(SOLANA_NETWORK), // Fallback to clusterApiUrl
 ];
 
-// Get a working Solana connection with fallback endpoints
+// Helper function to make RPC calls through /api/solana-rpc proxy
+async function proxyRpcRequest(method: string, params: any[]): Promise<any> {
+  const response = await fetch("/api/solana-rpc", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      method,
+      params,
+      id: Date.now(),
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `RPC request failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  
+  if (data.error) {
+    throw new Error(data.error.message || "RPC error");
+  }
+
+  return data.result;
+}
+
+// Get latest blockhash through proxy or direct connection
+async function getLatestBlockhash(useProxy: boolean): Promise<{ blockhash: string; lastValidBlockHeight: number }> {
+  if (useProxy) {
+    const result = await proxyRpcRequest("getLatestBlockhash", ["finalized"]);
+    return {
+      blockhash: result.value.blockhash,
+      lastValidBlockHeight: result.value.lastValidBlockHeight,
+    };
+  } else {
+    // Try direct connection
+    for (const endpoint of RPC_ENDPOINTS) {
+      try {
+        const connection = new Connection(endpoint, "confirmed");
+        return await connection.getLatestBlockhash("finalized");
+      } catch (e: any) {
+        console.warn(`RPC endpoint failed: ${endpoint}`, e?.message);
+        continue;
+      }
+    }
+    // If all direct endpoints fail, use proxy
+    return getLatestBlockhash(true);
+  }
+}
+
+// Get a working Solana connection - use proxy for getLatestBlockhash in production
 async function getSolanaConnection(): Promise<Connection> {
-  // Try endpoints in order until one works
+  // In production (Vercel), use proxy for RPC calls to avoid 403 errors
+  // In dev, try direct connection first
+  const isProduction = typeof window !== "undefined" && 
+    (window.location.hostname.includes("vercel.app") || 
+     window.location.hostname.includes("vercel.com") ||
+     import.meta.env.PROD);
+
+  // For getLatestBlockhash, we'll use the proxy function directly
+  // For other operations, try direct connection first
+  if (isProduction) {
+    // In production, use a connection but we'll override getLatestBlockhash calls
+    // We'll handle this in the payment flow
+    return new Connection("https://api.mainnet-beta.solana.com", "confirmed");
+  }
+
+  // In dev, try direct endpoints first
   for (const endpoint of RPC_ENDPOINTS) {
     try {
       const connection = new Connection(endpoint, "confirmed");
@@ -86,12 +154,11 @@ async function getSolanaConnection(): Promise<Connection> {
       return connection;
     } catch (e: any) {
       console.warn(`RPC endpoint failed: ${endpoint}`, e?.message);
-      // Try next endpoint
       continue;
     }
   }
-  
-  // If all fail, return the first one anyway (will fail later with better error message)
+
+  // If all direct endpoints fail in dev, use fallback
   console.error("All RPC endpoints failed, using fallback");
   return new Connection(RPC_ENDPOINTS[0], "confirmed");
 }
@@ -3459,34 +3526,56 @@ function PhantomPayButton({
       if (!provider || !provider.isPhantom) {
         alert("Phantom wallet not found. Please install Phantom.");
         onError && onError();
+        setLoading(false);
         return;
       }
 
-      // подключаем кошелёк
-      await provider.connect();
+      // Check if already connected, otherwise connect
+      let publicKey = provider.publicKey;
+      if (!publicKey) {
+        try {
+          const response = await provider.connect();
+          publicKey = response.publicKey;
+        } catch (connectError: any) {
+          if (connectError.code === 4001) {
+            // User rejected connection
+            onError && onError();
+            setLoading(false);
+            return;
+          }
+          throw connectError;
+        }
+      }
 
-      // web3 + spl-token через esm.sh (чистый фронтенд)
+      // Validate recipient
       if (!recipient) {
         alert("This agent has no payout wallet configured. Payment is disabled.");
         onError && onError();
+        setLoading(false);
         return;
       }
 
-      // Get a working RPC connection with fallback
-      const connection = await getSolanaConnection();
+      // Determine if we should use proxy (production) or direct connection
+      const isProduction = typeof window !== "undefined" && 
+        (window.location.hostname.includes("vercel.app") || 
+         window.location.hostname.includes("vercel.com") ||
+         import.meta.env.PROD);
 
-      const fromPubkey = new PublicKey(provider.publicKey.toString());
+      const fromPubkey = new PublicKey(publicKey.toString());
       const toPubkey = new PublicKey(recipient);
       const mint = new PublicKey(USDC_MINT);
 
-      // USDC обычно с 6 знаками после запятой
+      // USDC has 6 decimals
       const DECIMALS = 6;
-      const rawAmount = Math.round(amountUsdc * 10 ** DECIMALS); // напр. 0.30 → 300000
+      const rawAmount = Math.round(amountUsdc * 10 ** DECIMALS); // e.g., 0.30 → 300000
 
-      // Находим ATA (associated token account) отправителя и получателя
+      // Get associated token accounts for sender and recipient
+      // For ATA lookup, we can use a direct connection temporarily or proxy
+      const connection = await getSolanaConnection();
       const fromTokenAccount = await getAssociatedTokenAddress(mint, fromPubkey);
       const toTokenAccount = await getAssociatedTokenAddress(mint, toPubkey);
 
+      // Create SPL token transfer instruction
       const ix = createTransferInstruction(
         fromTokenAccount,
         toTokenAccount,
@@ -3496,36 +3585,64 @@ function PhantomPayButton({
         TOKEN_PROGRAM_ID
       );
 
+      // Create and prepare transaction
       const tx = new Transaction().add(ix);
       tx.feePayer = fromPubkey;
       
-      // Get latest blockhash - this is where 403 errors often occur
+      // Get latest blockhash BEFORE opening Phantom - this ensures transaction is ready
+      // This is critical: Phantom should open with a ready-to-sign transaction
+      // Use proxy in production to avoid 403 errors
+      let blockhash: string;
       try {
-        const { blockhash } = await connection.getLatestBlockhash();
+        const blockhashResult = await getLatestBlockhash(isProduction);
+        blockhash = blockhashResult.blockhash;
         tx.recentBlockhash = blockhash;
       } catch (blockhashError: any) {
         console.error("Failed to get blockhash:", blockhashError);
-        throw new Error(`RPC provider blocked or unavailable: ${blockhashError.message || "Please configure RPC URL / API key"}`);
+        throw new Error(`Failed to prepare transaction: ${blockhashError.message || "RPC unavailable"}`);
       }
 
-      // Use signAndSendTransaction for better UX (Phantom handles both signing and sending)
-      const { signature } = await provider.signAndSendTransaction(tx);
-      const sig = signature;
+      // Get connection for confirmation (use proxy if in production)
+      const confirmConnection = isProduction ? connection : await getSolanaConnection();
+
+      // Now open Phantom with ready-to-sign transaction
+      // signAndSendTransaction opens Phantom immediately and returns signature
+      let signature: string;
+      try {
+        const result = await provider.signAndSendTransaction(tx);
+        signature = result.signature;
+      } catch (signError: any) {
+        // Check if user rejected
+        if (signError.code === 4001 || 
+            signError.message?.includes("User rejected") ||
+            signError.message?.includes("User cancelled")) {
+          // User rejected - don't show error, just reset
+          onError && onError();
+          setLoading(false);
+          return;
+        }
+        throw signError;
+      }
       
-      // Wait for confirmation with timeout
+      // Wait for confirmation (optional, but recommended)
+      // Note: In production, confirmation may need to go through proxy too
+      // But signAndSendTransaction returns after Phantom sends, so we can try direct confirmation
       try {
         await Promise.race([
-          connection.confirmTransaction(sig, "confirmed"),
+          confirmConnection.confirmTransaction(signature, "confirmed"),
           new Promise((_, reject) => 
             setTimeout(() => reject(new Error("Transaction confirmation timeout")), 30000)
           )
         ]);
+        console.log("Transaction confirmed:", signature);
       } catch (confirmError: any) {
         // Transaction was sent but confirmation timed out - still proceed
-        console.warn("Confirmation timeout, but transaction was sent:", sig);
+        // The transaction is on-chain, we just didn't wait for confirmation
+        console.warn("Confirmation timeout, but transaction was sent:", signature);
       }
 
-      onSuccess && onSuccess(sig);
+      // Success - call onSuccess callback
+      onSuccess && onSuccess(signature);
     } catch (e: any) {
       console.error("Payment error:", e);
       
@@ -3534,11 +3651,12 @@ function PhantomPayButton({
       // Always call onError to reset modal state from "processing" to "error"
       onError && onError();
       
-      if (errorMsg.includes("User rejected") || errorMsg.includes("User cancelled")) {
-        // User cancelled - don't show error alert, just reset state
+      // Handle specific error cases
+      if (errorMsg.includes("User rejected") || errorMsg.includes("User cancelled") || errorMsg.includes("4001")) {
+        // User cancelled - don't show error alert
         return;
-      } else if (errorMsg.includes("RPC provider blocked") || errorMsg.includes("403") || errorMsg.includes("Access forbidden")) {
-        alert("RPC provider blocked or unavailable. Please try again or configure a custom RPC endpoint.");
+      } else if (errorMsg.includes("403") || errorMsg.includes("Access forbidden") || errorMsg.includes("RPC")) {
+        alert("RPC provider error. Transaction may have been sent - please check your wallet.");
       } else if (errorMsg.includes("insufficient funds") || errorMsg.includes("0x1")) {
         alert("Insufficient USDC balance. Please check your wallet.");
       } else if (errorMsg.includes("Buffer is not defined")) {
@@ -4344,6 +4462,8 @@ function ChatView({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [previewImage, setPreviewImage] = useState<ChatAttachment | null>(null);
+  const [previewImages, setPreviewImages] = useState<ChatAttachment[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
 
 
@@ -4363,6 +4483,33 @@ function ChatView({
     selectedAgent && selectedAgent.id
       ? `agentverse_chat_${selectedAgent.id}`
       : null;
+
+  // 🔹 Keyboard navigation for image preview modal
+  useEffect(() => {
+    if (!previewImage || previewImages.length <= 1) return;
+
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        const prevIndex = previewIndex > 0 ? previewIndex - 1 : previewImages.length - 1;
+        setPreviewIndex(prevIndex);
+        setPreviewImage(previewImages[prevIndex]);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        const nextIndex = previewIndex < previewImages.length - 1 ? previewIndex + 1 : 0;
+        setPreviewIndex(nextIndex);
+        setPreviewImage(previewImages[nextIndex]);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setPreviewImage(null);
+        setPreviewImages([]);
+        setPreviewIndex(0);
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [previewImage, previewImages, previewIndex]);
 
   // 🔹 подгружаем историю из localStorage при смене агента
   useEffect(() => {
@@ -4560,10 +4707,10 @@ function ChatView({
         return `${mb.toFixed(1)} MB`;
       }
     
-      function addFiles(files: File[]) {
+      async function addFiles(files: File[]) {
         if (!files.length) return;
     
-        const next: ChatAttachment[] = files.map((file) => {
+        const next: ChatAttachment[] = await Promise.all(files.map(async (file) => {
           let id: string;
           try {
             id = crypto.randomUUID();
@@ -4571,14 +4718,39 @@ function ChatView({
             id = `${Date.now()}_${file.name}_${Math.random()}`;
           }
     
-          const url = URL.createObjectURL(file);
           const ext = file.name.includes(".")
             ? file.name.split(".").pop()!.toLowerCase()
             : "";
           
-          // Check if file is an image, but exclude HEIC/HEIF as browsers can't render them
-          const isImage = file.type.startsWith("image/") && 
-            !["heic", "heif"].includes(ext);
+          const isHeic = ["heic", "heif"].includes(ext);
+          let url: string;
+          let convertedFile: File | null = null;
+          
+          // Convert HEIC/HEIF to JPEG
+          if (isHeic) {
+            try {
+              const converted = await heic2any({
+                blob: file,
+                toType: "image/jpeg",
+                quality: 0.92,
+              }) as Blob | Blob[];
+              const blob = Array.isArray(converted) ? converted[0] : converted;
+              convertedFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), {
+                type: "image/jpeg",
+                lastModified: file.lastModified,
+              });
+              url = URL.createObjectURL(convertedFile);
+            } catch (error) {
+              console.warn("HEIC conversion failed, treating as file:", error);
+              url = URL.createObjectURL(file);
+            }
+          } else {
+            url = URL.createObjectURL(file);
+          }
+          
+          // Check if file is an image (including converted HEIC)
+          const isImage = convertedFile ? true : 
+            (file.type.startsWith("image/") && !isHeic);
           
           const sizeLabel = formatFileSize(file.size);
     
@@ -4587,19 +4759,19 @@ function ChatView({
             name: file.name,
             url,
             type: isImage ? "image" : "file",
-            ext,
+            ext: convertedFile ? "jpg" : ext,
             sizeLabel,
           };
-        });
+        }));
     
         setPendingFiles((prev) => [...prev, ...next]);
       }
     
       // 🔹 обработка выбора файлов через input
-      function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+      async function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
         const files = Array.from(e.target.files || []);
         if (!files.length) return;
-        addFiles(files);
+        await addFiles(files);
         if (e.target) e.target.value = "";
       }
     
@@ -4615,12 +4787,12 @@ function ChatView({
         setIsDragging(false);
       }
     
-      function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+      async function handleDrop(e: React.DragEvent<HTMLDivElement>) {
         e.preventDefault();
         setIsDragging(false);
         const files = Array.from(e.dataTransfer.files || []);
         if (!files.length) return;
-        addFiles(files);
+        await addFiles(files);
       }
     
 
@@ -4913,72 +5085,84 @@ setLoading(true);
 
                   {/* вложения */}
                   {m.attachments && m.attachments.length > 0 && (
-                    <div className="mt-2 space-y-2">
-                      {m.attachments.map((att) => {
-                        // Check if file is HEIC/HEIF - treat as file even if type is "image"
-                        const ext = att.ext?.toLowerCase() || "";
-                        const isHeic = ["heic", "heif"].includes(ext);
-                        const shouldShowAsImage = att.type === "image" && !isHeic;
-
-                        if (shouldShowAsImage) {
-                          return (
-                            <img
-                              key={att.id}
-                              src={att.url}
-                              alt={att.name}
-                              onClick={() => setPreviewImage(att)}
-                              className="max-w-xs md:max-w-sm max-h-64 rounded-lg border border-white/10 object-contain cursor-pointer hover:opacity-90 transition"
-                              onError={(e) => {
-                                // If image fails to load (e.g., expired blob URL or unsupported format), fallback to file card
-                                console.warn("Image failed to load:", att.name);
-                                const target = e.target as HTMLImageElement;
-                                // Replace image with file card by updating parent
-                                const parent = target.parentElement;
-                                if (parent) {
-                                  parent.innerHTML = `
-                                    <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/15 bg-white/5 text-xs">
-                                      <div class="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center font-mono text-[10px] uppercase">${att.ext || "FILE"}</div>
-                                      <div class="flex-1 min-w-0">
-                                        <div class="truncate">${att.name}</div>
-                                        <div class="text-[10px] text-white/50">${(att.ext || "file").toUpperCase()}${att.sizeLabel ? ` · ${att.sizeLabel}` : ""}</div>
-                                      </div>
-                                      ${att.url ? `<a href="${att.url}" download="${att.name}" class="text-xs underline text-white/60 hover:text-white/80">Download</a>` : ""}
-                                    </div>
-                                  `;
-                                }
-                              }}
-                            />
-                          );
-                        }
-
-                        // File card for non-images or HEIC files
+                    <div className="mt-2">
+                      {/* Separate images and files */}
+                      {(() => {
+                        const images = m.attachments.filter(att => att.type === "image");
+                        const files = m.attachments.filter(att => att.type === "file");
+                        
                         return (
-                          <div
-                            key={att.id}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/15 bg-white/5 text-xs"
-                          >
-                            <div className="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center font-mono text-[10px] uppercase">
-                              {att.ext || "FILE"}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="truncate">{att.name}</div>
-                              <div className="text-[10px] text-white/50">
-                                {(att.ext || "file").toUpperCase()}
-                                {att.sizeLabel ? ` · ${att.sizeLabel}` : ""}
+                          <>
+                            {/* Images grid */}
+                            {images.length > 0 && (
+                              <div className={`grid gap-2 mb-2 ${
+                                images.length === 1 
+                                  ? "grid-cols-1" 
+                                  : images.length === 2 
+                                  ? "grid-cols-2" 
+                                  : "grid-cols-2 md:grid-cols-3"
+                              }`}>
+                                {images.map((att) => (
+                                  <img
+                                    key={att.id}
+                                    src={att.url}
+                                    alt={att.name}
+                                    onClick={() => {
+                                      setPreviewImages(images);
+                                      setPreviewIndex(images.findIndex(img => img.id === att.id));
+                                      setPreviewImage(att);
+                                    }}
+                                    className="w-full max-w-xs md:max-w-sm max-h-64 rounded-lg border border-white/10 object-contain cursor-pointer hover:opacity-90 transition"
+                                    onError={(e) => {
+                                      console.warn("Image failed to load:", att.name);
+                                      const target = e.target as HTMLImageElement;
+                                      target.style.display = "none";
+                                    }}
+                                  />
+                                ))}
                               </div>
-                            </div>
-                            {att.url && (
-                              <a
-                                href={att.url}
-                                download={att.name}
-                                className="text-xs underline text-white/60 hover:text-white/80 transition"
-                              >
-                                Download
-                              </a>
                             )}
-                          </div>
+                            
+                            {/* File cards */}
+                            {files.length > 0 && (
+                              <div className="space-y-2">
+                                {files.map((att) => (
+                                  <div
+                                    key={att.id}
+                                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/15 bg-white/5 text-xs cursor-pointer hover:bg-white/10 transition"
+                                    onClick={() => {
+                                      if (att.url) {
+                                        window.open(att.url, "_blank");
+                                      }
+                                    }}
+                                  >
+                                    <div className="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center font-mono text-[10px] uppercase">
+                                      {att.ext || "FILE"}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="truncate">{att.name}</div>
+                                      <div className="text-[10px] text-white/50">
+                                        {(att.ext || "file").toUpperCase()}
+                                        {att.sizeLabel ? ` · ${att.sizeLabel}` : ""}
+                                      </div>
+                                    </div>
+                                    {att.url && (
+                                      <a
+                                        href={att.url}
+                                        download={att.name}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="text-xs underline text-white/60 hover:text-white/80 transition"
+                                      >
+                                        Open
+                                      </a>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </>
                         );
-                      })}
+                      })()}
                     </div>
                   )}
                 </div>
@@ -5026,7 +5210,7 @@ setLoading(true);
                         <img
                           src={att.url}
                           alt={att.name}
-                          className="h-24 w-24 rounded-xl object-cover border border-white/25 shadow-md"
+                          className="h-24 w-24 rounded-lg object-cover border border-white/10 shadow-md"
                           onError={(e) => {
                             // If image fails to load (e.g., HEIC), treat as file
                             console.warn("Image failed to load, showing as file:", att.name);
@@ -5150,33 +5334,91 @@ setLoading(true);
        {/* 🟡 ВОТ ЗДЕСЬ — ОВЕРЛЕЙ ДЛЯ ФУЛЛСКРИН-ФОТО */}
        {previewImage && (
         <div
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setPreviewImage(null)}
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => {
+            setPreviewImage(null);
+            setPreviewImages([]);
+            setPreviewIndex(0);
+          }}
         >
           <div
-            className="relative max-w-5xl max-h-[90vh]"
+            className="relative max-w-5xl max-h-[90vh] flex flex-col items-center"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Close button */}
             <button
-              onClick={() => setPreviewImage(null)}
+              onClick={() => {
+                setPreviewImage(null);
+                setPreviewImages([]);
+                setPreviewIndex(0);
+              }}
               className="
-                absolute -top-3 -right-3 h-8 w-8 rounded-full
+                absolute -top-3 -right-3 h-10 w-10 rounded-full
                 bg-black/80 border border-white/30
-                flex items-center justify-center text-white text-sm
-                hover:bg-white/10 transition
+                flex items-center justify-center text-white text-lg
+                hover:bg-white/10 transition z-10
               "
             >
               ×
             </button>
 
+            {/* Navigation buttons (if multiple images) */}
+            {previewImages.length > 1 && previewIndex >= 0 && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const prevIndex = previewIndex > 0 ? previewIndex - 1 : previewImages.length - 1;
+                    setPreviewIndex(prevIndex);
+                    setPreviewImage(previewImages[prevIndex]);
+                  }}
+                  className="
+                    absolute left-4 top-1/2 -translate-y-1/2
+                    h-10 w-10 rounded-full
+                    bg-black/80 border border-white/30
+                    flex items-center justify-center text-white text-xl
+                    hover:bg-white/10 transition z-10
+                  "
+                >
+                  ‹
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const nextIndex = previewIndex < previewImages.length - 1 ? previewIndex + 1 : 0;
+                    setPreviewIndex(nextIndex);
+                    setPreviewImage(previewImages[nextIndex]);
+                  }}
+                  className="
+                    absolute right-4 top-1/2 -translate-y-1/2
+                    h-10 w-10 rounded-full
+                    bg-black/80 border border-white/30
+                    flex items-center justify-center text-white text-xl
+                    hover:bg-white/10 transition z-10
+                  "
+                >
+                  ›
+                </button>
+              </>
+            )}
+
+            {/* Image */}
             <img
               src={previewImage.url}
               alt={previewImage.name}
-              className="max-w-full max-h-[80vh] rounded-xl border border-white/20 shadow-2xl object-contain"
+              className="max-w-full max-h-[80vh] rounded-lg border border-white/10 shadow-2xl object-contain"
             />
 
-            <div className="mt-2 text-center text-xs text-white/70 break-all">
-              {previewImage.name}
+            {/* Image info and counter */}
+            <div className="mt-3 text-center">
+              <div className="text-xs text-white/70 break-all">
+                {previewImage.name}
+              </div>
+              {previewImages.length > 1 && previewIndex >= 0 && (
+                <div className="text-xs text-white/50 mt-1">
+                  {previewIndex + 1} / {previewImages.length}
+                </div>
+              )}
             </div>
           </div>
         </div>

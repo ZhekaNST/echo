@@ -82,6 +82,75 @@ function apiRoutes() {
           }
         });
       });
+
+      // ✅ Solana RPC Proxy (for production RPC calls without 403)
+      server.middlewares.use("/api/solana-rpc", async (req: any, res: any) => {
+        if (req.method === "OPTIONS") {
+          res.statusCode = 200;
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+          res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+          return res.end();
+        }
+        if (req.method !== "POST") {
+          res.statusCode = 405;
+          res.setHeader("Content-Type", "application/json");
+          return res.end(JSON.stringify({ error: "Method not allowed" }));
+        }
+
+        let body = "";
+        req.on("data", (chunk: any) => (body += chunk));
+        req.on("end", async () => {
+          try {
+            const { method, params, id } = JSON.parse(body || "{}");
+            if (!method) {
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              return res.end(JSON.stringify({ error: "Missing method" }));
+            }
+
+            // In dev, use public RPC (or env var if set)
+            const rpcUrl = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+            const rpcApiKey = process.env.SOLANA_RPC_API_KEY;
+
+            const headers: Record<string, string> = {
+              "Content-Type": "application/json",
+            };
+
+            if (rpcApiKey) {
+              if (rpcUrl.includes("helius")) {
+                headers["Authorization"] = `Bearer ${rpcApiKey}`;
+              } else if (rpcUrl.includes("quicknode")) {
+                headers["x-api-key"] = rpcApiKey;
+              } else {
+                headers["Authorization"] = `Bearer ${rpcApiKey}`;
+              }
+            }
+
+            const rpcResponse = await fetch(rpcUrl, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                jsonrpc: "2.0",
+                id: id || 1,
+                method,
+                params: params || [],
+              }),
+            });
+
+            const responseData = await rpcResponse.json();
+
+            res.statusCode = rpcResponse.status;
+            res.setHeader("Content-Type", "application/json");
+            res.setHeader("Access-Control-Allow-Origin", "*");
+            res.end(JSON.stringify(responseData));
+          } catch (e: any) {
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "RPC proxy error", message: e.message }));
+          }
+        });
+      });
     },
   };
 }
