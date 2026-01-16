@@ -167,7 +167,7 @@ async function getSolanaConnection(): Promise<Connection> {
 
 
 /*
-  AgentVerse — Web3 AI Agent Marketplace (single-file demo, fixed)
+  AgentVerse — Web3 AI Agent Marketplace
   Additions in this revision:
   • Fixes: removed stray code causing syntax errors and repaired JSX comment/quote issues.
   • Top Rated gradient borders (orange -> amber) on the best agents.
@@ -189,6 +189,19 @@ function rememberHomeScroll() {
 function restoreHomeScrollOnce() {
   if (typeof window === "undefined") return;
 
+  // First check exploreScrollY (saved when navigating from Explore to agent view)
+  const exploreY = sessionStorage.getItem("exploreScrollY");
+  if (exploreY) {
+    const y = parseInt(exploreY, 10) || 0;
+    // Delay scroll restoration to ensure DOM is ready
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: y, behavior: "auto" });
+    });
+    sessionStorage.removeItem("exploreScrollY");
+    return;
+  }
+
+  // Fallback to HOME_SCROLL_KEY
   const raw = sessionStorage.getItem(HOME_SCROLL_KEY);
   if (!raw) return;
 
@@ -320,6 +333,10 @@ function pushExplore(
   });
   const qs = sp.toString();
   push(qs ? `/explore?${qs}` : "/explore");
+  // Scroll to top when navigating to Explore
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  });
 }
 
 
@@ -351,7 +368,7 @@ likes24h?: number;          // демо-счётчик
   ragDescription?: string | null;
   toolsDescription?: string | null;
 
-  // 🔐 Auth token для creator backend (demo)
+  // 🔐 Auth token for creator backend
   authToken?: string | null;
 
   // session limits
@@ -685,7 +702,7 @@ function buildTopTags() {
 
 const formatUSDC = (n: number) => `${n.toFixed(2)} USDC`;
 
-export default function AgentVerseDemo() {
+export default function AgentVerse() {
   // Routing (no Next.js)
   const { route, push } = useHashRoute("/");
   const topTags = useMemo(() => buildTopTags(), []);
@@ -826,7 +843,7 @@ useEffect(() => {
   // Dedicated flag to control Pay modal visibility - only true when user explicitly opens it
   const [payModalOpen, setPayModalOpen] = useState(false);
   // Modal state machine - controls banners and payment flow
-  const [modalState, setModalState] = useState<"idle" | "ready" | "processing" | "paid" | "error" | "missing_payout_wallet" | "demo_free" | "creator_free">("idle");
+  const [modalState, setModalState] = useState<"idle" | "ready" | "processing" | "paid" | "error" | "missing_payout_wallet" | "free" | "creator_free">("idle");
 
   // ✅ Reset trending counters every 24 hours (moved here after agents state)
   useEffect(() => {
@@ -878,6 +895,8 @@ useEffect(() => {
   // create / edit agent modal
   const [creating, setCreating] = useState(false);
   const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
+  const [shouldScrollToForm, setShouldScrollToForm] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const [newAgent, setNewAgent] = useState<Agent>({
     id: "",
     name: "",
@@ -906,6 +925,25 @@ useEffect(() => {
   "idle" | "testing" | "ok" | "fail"
 >("idle");
 const [endpointTestMsg, setEndpointTestMsg] = useState<string>("");
+
+// Scroll to edit form and focus name input when triggered from Profile
+useEffect(() => {
+  if (creating && shouldScrollToForm) {
+    // Reset the flag
+    setShouldScrollToForm(false);
+    
+    // Scroll to top and focus name input after DOM updates
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      
+      // Focus name input after scroll animation
+      setTimeout(() => {
+        nameInputRef.current?.focus();
+        nameInputRef.current?.select();
+      }, 100);
+    });
+  }
+}, [creating, shouldScrollToForm]);
 
 function isValidHttpUrl(s: string) {
   try {
@@ -1066,7 +1104,7 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
   // --- NEW: skeleton loading state ---
   const [loadingGrid, setLoadingGrid] = useState(true);
   useEffect(() => {
-    const t = setTimeout(() => setLoadingGrid(false), 700); // quick skeleton demo
+    const t = setTimeout(() => setLoadingGrid(false), 700); // loading skeleton
     return () => clearTimeout(t);
   }, []);
 
@@ -1284,9 +1322,9 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
     setPayModalOpen(true);
     
     // Determine initial modal state based on current agent properties
-    const isDemo = !agent.creator && !agent.creatorWallet;
-    if (isDemo) {
-      setModalState("demo_free");
+    const isFreeAgent = !agent.creator && !agent.creatorWallet;
+    if (isFreeAgent) {
+      setModalState("free");
     } else if (!agent.creatorWallet) {
       // Agent is payable but has no payout wallet configured
       setModalState("missing_payout_wallet");
@@ -1359,11 +1397,13 @@ setCreating(true);
     setNewAgent({ ...agent });
     setAutoPrice(false); // при редактировании обычно руками правим цену  
     setCreating(true);
+    setShouldScrollToForm(true); // trigger scroll after form renders
   }
 
   function cancelCreate() {
     setCreating(false);
     setEditingAgentId(null);
+    setShouldScrollToForm(false);
     setNewAgent({
       id: "",
       name: "",
@@ -1608,6 +1648,7 @@ const canPublish =
               <div className="space-y-3">
                 <label className="text-sm text-white/70">Name</label>
                 <Input
+                  ref={nameInputRef}
                   value={newAgent.name}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setNewAgent(a => ({ ...a, name: e.target.value }))
@@ -2341,7 +2382,10 @@ return (
     >
       <Button
         className="gap-3 px-7 py-3 text-lg"
-        onClick={() => push("/explore")}
+        onClick={() => {
+          push("/explore");
+          requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+        }}
       >
         <Play className="h-5 w-5" />
         Explore agents
@@ -2383,6 +2427,7 @@ return (
   <div className="max-w-7xl mx-auto px-4 py-16 space-y-14">
 
   <MarketplaceRail
+  railId="trending"
   kicker="Marketplace"
   title={<><span className="mr-2">🔥</span>Trending now</>}
   subtitle="Agents people are actively chatting with right now."
@@ -2393,6 +2438,7 @@ return (
 />
 
 <MarketplaceRail
+  railId="toprated"
   kicker="Community"
   title={<><span className="mr-2">⭐</span>Top rated</>}
   subtitle="Highest liked agents across the marketplace."
@@ -2403,6 +2449,7 @@ return (
 />
 
 <MarketplaceRail
+  railId="new"
   kicker="Explore"
   title={<><span className="mr-2">🆕</span>New agents</>}
   subtitle="Recently published agents you can try first."
@@ -2432,7 +2479,10 @@ return (
       </div>
       <button
         type="button"
-        onClick={() => push("/explore")}
+        onClick={() => {
+          push("/explore");
+          requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+        }}
         className="hidden md:inline-flex text-[11px] text-white/60 hover:text-white/90 transition"
       >
         View all agents →
@@ -2451,7 +2501,12 @@ return (
         <button
           key={c.id}
           type="button"
-          onClick={() => push(`/explore?collection=${encodeURIComponent(c.id)}`)}
+          onClick={() => {
+            push(`/explore?collection=${encodeURIComponent(c.id)}`);
+            requestAnimationFrame(() => {
+              window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+            });
+          }}
           className="
             group shrink-0 w-[220px] sm:w-[260px] text-left
             rounded-[26px] bg-white/[0.02] border border-white/12
@@ -2554,8 +2609,8 @@ return (
         viewport={{ once: true, amount: 0.3 }}
         transition={{ duration: 0.45, delay: 0.08 }}
       >
-        Echo is a playground for AI agents with crypto-native 
-        payments. Numbers below are live from this demo marketplace.
+        AgentVerse is a marketplace for AI agents with crypto-native
+        payments. Real-time stats from the marketplace.
       </motion.p>
 
       <motion.div
@@ -2619,7 +2674,7 @@ return (
           ~{estVolume.toLocaleString()} USDC
         </div>
         <div className="mt-2 text-sm md:text-base text-white/60 tracking-wider uppercase">
-          Estimated demo volume
+          Total volume
         </div>
       </motion.div>
     </div>
@@ -2675,7 +2730,10 @@ return (
           <Button
             variant="secondary"
             className="w-full text-xs bg-white/5 hover:bg-white/10"
-            onClick={() => push("/explore")}
+            onClick={() => {
+              push("/explore");
+              requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+            }}
           >
             Browse agents
           </Button>
@@ -2703,7 +2761,7 @@ return (
           <ul className="mt-1 text-[11px] text-white/60 space-y-1">
             <li>• Set your own price in USDC</li>
             <li>• Non-custodial payouts to your wallet</li>
-            <li>• Track sessions, likes and demo revenue</li>
+            <li>• Track sessions, likes and revenue</li>
           </ul>
         </div>
         <div className="mt-4 flex gap-2">
@@ -3127,11 +3185,17 @@ return (
     {/* Pay Modal — only shown when payModalOpen is true */}
     {payModalOpen && selected && (
       <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm grid place-items-center p-4 pointer-events-auto"
+        className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md grid place-items-center p-4 pointer-events-auto"
         role="dialog"
         aria-modal="true"
+        onClick={(e) => {
+          // Close modal when clicking backdrop (outside the card)
+          if (e.target === e.currentTarget) {
+            closePay();
+          }
+        }}
       >
-        <Card className="w-full max-w-md bg-white/[.04] border-white/10">
+        <Card className="w-full max-w-md bg-[#0c0c18]/95 border-white/15 shadow-2xl">
           <CardHeader className="flex-row items-start justify-between">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl grid place-items-center text-lg bg-white/10">
@@ -3178,10 +3242,10 @@ return (
                   Start Chat
                 </Button>
               </div>
-            ) : modalState === "demo_free" ? (
+            ) : modalState === "free" ? (
               <div className="space-y-3">
                 <div className="rounded-lg border border-cyan-400/40 bg-cyan-500/10 p-3 text-cyan-100 text-sm">
-                  This is a demo agent. Sessions are free for everyone.
+                  This agent is free. Start chatting now!
                 </div>
                 <Button
                   variant="secondary"
@@ -3279,8 +3343,15 @@ return (
                 />
 
                 <div className="text-xs text-white/50">
-                  USDC transfer on Solana.
+                  USDC transfer on Solana mainnet.
                 </div>
+                
+                {/* Preview domain warning */}
+                {typeof window !== "undefined" && window.location.hostname.includes("vercel.app") && (
+                  <div className="text-[10px] text-amber-400/70 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 mt-1">
+                    ⚠️ Preview domain detected. Phantom may show a security warning. For trusted payments, use our official domain.
+                  </div>
+                )}
               </div>
             ) : (
               // Fallback for "idle" or unknown state - show ready
@@ -3315,29 +3386,36 @@ return (
                 />
 
                 <div className="text-xs text-white/50">
-                  USDC transfer on Solana.
+                  USDC transfer on Solana mainnet.
                 </div>
+                
+                {/* Preview domain warning */}
+                {typeof window !== "undefined" && window.location.hostname.includes("vercel.app") && (
+                  <div className="text-[10px] text-amber-400/70 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 mt-1">
+                    ⚠️ Preview domain detected. Phantom may show a security warning. For trusted payments, use our official domain.
+                  </div>
+                )}
               </div>
             )}
 
             <div className="text-xs text-white/50">
-              Demo mode: payment & minting are simulated for preview.
+              Payments are processed securely via Solana blockchain.
             </div>
           </CardContent>
         </Card>
       </div>
     )}
 
-    {/* Footer — без изменений */}
+    {/* Footer */}
     <footer className="border-t border-white/10">
       <div className="max-w-7xl mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-6 gap-8">
           {/* Brand */}
           <div className="md:col-span-1 flex items-center gap-2">
-            <div className="h-7 w-7 rounded-md bg-white/10 grid place-items-center">
+            <div className="h-7 w-7 rounded-md bg-gradient-to-r from-cyan-400/20 via-indigo-400/20 to-emerald-400/20 border border-white/10 grid place-items-center">
               <Bot className="h-4 w-4" />
             </div>
-            <div className="text-white text-lg font-semibold">Echo</div>
+            <div className="text-white text-lg font-semibold">AgentVerse</div>
           </div>
 
           {/* Company */}
@@ -3345,17 +3423,12 @@ return (
             <div className="text-white font-medium mb-3">Company</div>
             <ul className="space-y-2 text-sm text-white/70">
               <li>
-                <a href="#about" className="hover:text-white">
-                  About
+                <a href="#/about" className="hover:text-white transition">
+                  About Us
                 </a>
               </li>
               <li>
-                <a href="#careers" className="hover:text-white">
-                  Careers
-                </a>
-              </li>
-              <li>
-                <a href="#contact" className="hover:text-white">
+                <a href="#/contact" className="hover:text-white transition">
                   Contact
                 </a>
               </li>
@@ -3367,52 +3440,52 @@ return (
             <div className="text-white font-medium mb-3">Help & Support</div>
             <ul className="space-y-2 text-sm text-white/70">
               <li>
-                <a href="#/learn" className="hover:text-white">
+                <a href="#/learn" className="hover:text-white transition">
                   Learn
                 </a>
               </li>
               <li>
-                <a href="#guide" className="hover:text-white">
-                  Guide
-                </a>
-              </li>
-              <li>
-                <a href="#support" className="hover:text-white">
-                  Support
-                </a>
-              </li>
-              <li>
-                <a href="#docs" className="hover:text-white">
+                <a href="#/docs" className="hover:text-white transition">
                   Documentation
                 </a>
               </li>
-            </ul>
-          </div>
-
-          {/* Learn */}
-          <div>
-            <div className="text-white font-medium mb-3">Learn</div>
-            <ul className="space-y-2 text-sm text-white/70">
               <li>
-                <a href="#solana-wallet" className="hover:text-white">
-                  Solana Wallet
+                <a href="mailto:support@agentverse.app" className="hover:text-white transition">
+                  Support
                 </a>
               </li>
             </ul>
           </div>
 
-          {/* Token Price */}
+          {/* Resources */}
           <div>
-            <div className="text-white font-medium mb-3">Token Price</div>
+            <div className="text-white font-medium mb-3">Resources</div>
             <ul className="space-y-2 text-sm text-white/70">
               <li>
-                <a
-                  href="https://coinmarketcap.com/currencies/solana/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-white transition"
-                >
-                  Solana Price
+                <a href="https://phantom.app" target="_blank" rel="noreferrer" className="hover:text-white transition">
+                  Get Phantom Wallet
+                </a>
+              </li>
+              <li>
+                <a href="https://solana.com" target="_blank" rel="noreferrer" className="hover:text-white transition">
+                  About Solana
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Legal */}
+          <div>
+            <div className="text-white font-medium mb-3">Legal</div>
+            <ul className="space-y-2 text-sm text-white/70">
+              <li>
+                <a href="#/terms" className="hover:text-white transition">
+                  Terms of Service
+                </a>
+              </li>
+              <li>
+                <a href="#/privacy" className="hover:text-white transition">
+                  Privacy Policy
                 </a>
               </li>
             </ul>
@@ -3424,7 +3497,7 @@ return (
               href="https://x.com/agentversepr"
               target="_blank"
               rel="noreferrer"
-              className="text-white/70 hover:text-white"
+              className="text-white/70 hover:text-white transition"
               aria-label="Twitter"
             >
               <Twitter className="h-5 w-5" />
@@ -3433,13 +3506,16 @@ return (
         </div>
 
         <div className="mt-10 border-t border-white/10 pt-4 flex flex-col md:flex-row items-center justify-between text-sm text-white/60">
-          <div>Echo © 2026</div>
-          <div className="flex gap-6">
-            <a href="#legal" className="hover:text-white">
-              Legal
+          <div>© 2025 AgentVerse. All rights reserved.</div>
+          <div className="flex gap-6 mt-2 md:mt-0">
+            <a href="#/terms" className="hover:text-white transition">
+              Terms
             </a>
-            <a href="#privacy" className="hover:text-white">
+            <a href="#/privacy" className="hover:text-white transition">
               Privacy
+            </a>
+            <a href="#/about" className="hover:text-white transition">
+              About
             </a>
           </div>
         </div>
@@ -4114,6 +4190,7 @@ function MarketplaceRail({
   badge,
   onOpen,
   onChat,
+  railId,
 }: {
   kicker?: string;
   title: React.ReactNode;
@@ -4122,9 +4199,11 @@ function MarketplaceRail({
   badge?: (a: Agent) => string | undefined;
   onOpen: (a: Agent) => void;
   onChat: (a: Agent) => void;
+  railId?: string; // unique ID for scroll position persistence
 }) {
   const rowRef = useRef<HTMLDivElement | null>(null);
   const SCROLL = 320;
+  const scrollKey = railId ? `explore_scroll_${railId}` : null;
 
   // ✅ прогресс скролла (для нижней линии)
   const [progress, setProgress] = useState(0);
@@ -4133,6 +4212,35 @@ function MarketplaceRail({
     const el = rowRef.current;
     if (!el) return;
     el.scrollBy({ left: dir === "left" ? -SCROLL : SCROLL, behavior: "smooth" });
+  };
+
+  // ✅ Restore scroll position on mount
+  useEffect(() => {
+    if (!scrollKey || typeof window === "undefined") return;
+    const el = rowRef.current;
+    if (!el) return;
+
+    const saved = sessionStorage.getItem(scrollKey);
+    if (saved) {
+      const pos = parseInt(saved, 10);
+      if (!isNaN(pos)) {
+        // Use requestAnimationFrame to ensure DOM is ready
+        requestAnimationFrame(() => {
+          el.scrollLeft = pos;
+        });
+      }
+    }
+  }, [scrollKey]);
+
+  // ✅ Save scroll position before navigating away
+  const saveScrollPosition = () => {
+    if (!scrollKey || typeof window === "undefined") return;
+    const el = rowRef.current;
+    if (el) {
+      sessionStorage.setItem(scrollKey, String(el.scrollLeft));
+    }
+    // Also save vertical scroll position
+    sessionStorage.setItem("exploreScrollY", String(window.scrollY));
   };
 
   // ✅ обновляем прогресс когда юзер скроллит ленту
@@ -4260,13 +4368,17 @@ function MarketplaceRail({
               pb-5 pt-2
               [-webkit-overflow-scrolling:touch]
               snap-x snap-mandatory
+              hide-scrollbar
             "
           >
             {items.map((a, idx) => (
               <motion.button
                 key={a.id}
                 type="button"
-                onClick={() => onOpen(a)}
+                onClick={() => {
+                  saveScrollPosition();
+                  onOpen(a);
+                }}
                 initial={{ opacity: 0, y: 12 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, amount: 0.2 }}
@@ -4330,6 +4442,7 @@ function MarketplaceRail({
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            saveScrollPosition();
                             onChat(a);
                           }}
                           className="
@@ -4864,7 +4977,7 @@ setLoading(true);
           hasToken: !!selectedAgent.authToken,
         });
         
-        const res = await fetch("/api/demo-backend", {
+        const res = await fetch("/api/agent-backend", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -5066,6 +5179,48 @@ setLoading(true);
 
           {messages.map((m, i) => {
             const isUser = m.role === "user";
+            
+            // Check if message is image-only (no text, only image attachments)
+            const images = m.attachments?.filter(att => att.type === "image") || [];
+            const files = m.attachments?.filter(att => att.type === "file") || [];
+            const hasText = m.content && m.content.trim().length > 0;
+            const isImageOnlyMessage = !hasText && images.length > 0 && files.length === 0;
+            
+            // For image-only messages, render without the bubble frame
+            if (isImageOnlyMessage) {
+              return (
+                <div
+                  key={i}
+                  className={cx(
+                    "mb-2 flex w-full",
+                    isUser ? "justify-end" : "justify-start"
+                  )}
+                >
+                  <div className="max-w-[78%] flex flex-col gap-2">
+                    {images.map((att) => (
+                      <img
+                        key={att.id}
+                        src={att.url}
+                        alt={att.name}
+                        onClick={() => {
+                          setPreviewImages(images);
+                          setPreviewIndex(images.findIndex(img => img.id === att.id));
+                          setPreviewImage(att);
+                        }}
+                        className="max-w-full max-h-[420px] w-auto rounded-lg border border-white/10 object-contain cursor-pointer hover:opacity-90 transition"
+                        onError={(e) => {
+                          console.warn("Image failed to load:", att.name);
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = "none";
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            
+            // Regular message with text (and optional attachments)
             return (
               <div
                 key={i}
@@ -5076,89 +5231,79 @@ setLoading(true);
               >
                 <div
                   className={cx(
-                    "max-w-[78%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm",
+                    "max-w-[78%] rounded-2xl px-3 py-2 text-sm leading-relaxed",
                     isUser
                       ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-br-sm"
                       : "bg-white/8 border border-white/10 text-white rounded-bl-sm"
                   )}
                 >
                   {/* текст сообщения */}
-                  {m.content && <div>{m.content}</div>}
+                  {hasText && <div>{m.content}</div>}
 
-                  {/* вложения */}
+                  {/* вложения (images + files) inside bubble for mixed content */}
                   {m.attachments && m.attachments.length > 0 && (
-                    <div className="mt-2">
-                      {/* Separate images and files */}
-                      {(() => {
-                        const images = m.attachments.filter(att => att.type === "image");
-                        const files = m.attachments.filter(att => att.type === "file");
-                        
-                        return (
-                          <>
-                            {/* Images - vertical stack, clean look */}
-                            {images.length > 0 && (
-                              <div className="flex flex-col gap-2 mb-2">
-                                {images.map((att) => (
-                                  <img
-                                    key={att.id}
-                                    src={att.url}
-                                    alt={att.name}
-                                    onClick={() => {
-                                      setPreviewImages(images);
-                                      setPreviewIndex(images.findIndex(img => img.id === att.id));
-                                      setPreviewImage(att);
-                                    }}
-                                    className="max-w-full max-h-80 w-auto rounded-md border border-white/10 object-contain cursor-pointer hover:opacity-90 transition"
-                                    onError={(e) => {
-                                      console.warn("Image failed to load:", att.name);
-                                      const target = e.target as HTMLImageElement;
-                                      target.style.display = "none";
-                                    }}
-                                  />
-                                ))}
-                              </div>
-                            )}
+                    <div className={hasText ? "mt-2" : ""}>
+                      {/* Images - vertical stack */}
+                      {images.length > 0 && (
+                        <div className="flex flex-col gap-2 mb-2">
+                          {images.map((att) => (
+                            <img
+                              key={att.id}
+                              src={att.url}
+                              alt={att.name}
+                              onClick={() => {
+                                setPreviewImages(images);
+                                setPreviewIndex(images.findIndex(img => img.id === att.id));
+                                setPreviewImage(att);
+                              }}
+                              className="max-w-full max-h-[320px] w-auto rounded-md border border-white/10 object-contain cursor-pointer hover:opacity-90 transition"
+                              onError={(e) => {
+                                console.warn("Image failed to load:", att.name);
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = "none";
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
                             
-                            {/* File cards */}
-                            {files.length > 0 && (
-                              <div className="space-y-2">
-                                {files.map((att) => (
-                                  <div
-                                    key={att.id}
-                                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/15 bg-white/5 text-xs cursor-pointer hover:bg-white/10 transition"
-                                    onClick={() => {
-                                      if (att.url) {
-                                        window.open(att.url, "_blank");
-                                      }
-                                    }}
-                                  >
-                                    <div className="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center font-mono text-[10px] uppercase">
-                                      {att.ext || "FILE"}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="truncate">{att.name}</div>
-                                      <div className="text-[10px] text-white/50">
-                                        {(att.ext || "file").toUpperCase()}
-                                        {att.sizeLabel ? ` · ${att.sizeLabel}` : ""}
-                                      </div>
-                                    </div>
-                                    {att.url && (
-                                      <a
-                                        href={att.url}
-                                        download={att.name}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="text-xs underline text-white/60 hover:text-white/80 transition"
-                                      >
-                                        Open
-                                      </a>
-                                    )}
-                                  </div>
-                                ))}
+                      {/* File cards */}
+                      {files.length > 0 && (
+                        <div className="space-y-2">
+                          {files.map((att) => (
+                            <div
+                              key={att.id}
+                              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/15 bg-black/20 text-xs cursor-pointer hover:bg-white/10 transition"
+                              onClick={() => {
+                                if (att.url) {
+                                  window.open(att.url, "_blank");
+                                }
+                              }}
+                            >
+                              <div className="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center font-mono text-[10px] uppercase">
+                                {att.ext || "FILE"}
                               </div>
-                            )}
-                          </>
-                        );
-                      })()}
+                              <div className="flex-1 min-w-0">
+                                <div className="truncate">{att.name}</div>
+                                <div className="text-[10px] text-white/50">
+                                  {(att.ext || "file").toUpperCase()}
+                                  {att.sizeLabel ? ` · ${att.sizeLabel}` : ""}
+                                </div>
+                              </div>
+                              {att.url && (
+                                <a
+                                  href={att.url}
+                                  download={att.name}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-xs underline text-white/60 hover:text-white/80 transition"
+                                >
+                                  Open
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -5323,8 +5468,8 @@ setLoading(true);
         <div className="text-[11px] text-white/50">
           Session limits (time & messages) are enforced locally for
           regular users. Creators can use their own agents without limits.  
-          Your full conversation is stored per-agent in your browser.  
-          File uploads are handled in the browser for preview only in this demo.
+          Your conversation is stored per-agent in your browser.  
+          File uploads are handled in the browser for preview.
         </div>
       </div>
        {/* 🟡 ВОТ ЗДЕСЬ — ОВЕРЛЕЙ ДЛЯ ФУЛЛСКРИН-ФОТО */}
@@ -5937,7 +6082,7 @@ function ProfileStatsView({ onBack, agents, address, purchases }: { onBack: () =
           <div className="text-3xl font-semibold mt-1">{totalLikes.toLocaleString()}</div>
         </Card>
         <Card className="bg-white/[.04] text-center p-6 sm:col-span-3">
-          <div className="text-white/60 text-sm">Revenue (demo)</div>
+          <div className="text-white/60 text-sm">Revenue</div>
           <div className="text-3xl font-semibold mt-1">{totalRevenue.toFixed(2)} USDC</div>
         </Card>
       </div>
@@ -6425,6 +6570,7 @@ function AgentDetailView({
         {/* More from this creator — SAME DESIGN AS HOME */}
 {creatorAgents.length > 0 && (
   <MarketplaceRail
+    railId="creator"
     kicker="Creator"
     title="More from this creator"
     subtitle="Other agents published by the same creator."
@@ -6441,17 +6587,14 @@ function AgentDetailView({
 {/* Similar agents — SAME DESIGN AS HOME */}
 {similarAgents.length > 0 && (
   <MarketplaceRail
+    railId="similar"
     kicker="Marketplace"
     title="Similar agents"
     subtitle="Based on categories & popularity"
     items={similarAgents}
-
-    /* ВОТ СЮДА */
     onOpen={(a) =>
       (window.location.hash = `/agent?id=${encodeURIComponent(a.id)}`)
     }
-
-    /* Chat-кнопка */
     onChat={(a) => onOpenPay(a)}
   />
 )}
@@ -6509,7 +6652,7 @@ function AgentDetailView({
             <CardHeader>
               <CardTitle className="text-sm">Add your review</CardTitle>
               <CardDescription className="text-xs text-white/60">
-                Reviews are stored locally in your browser for this demo.
+                Reviews are stored locally in your browser.
               </CardDescription>
             </CardHeader>
             <CardContent>

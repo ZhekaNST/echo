@@ -4,8 +4,8 @@ function apiRoutes() {
   return {
     name: "api-routes",
     configureServer(server: any) {
-      // ✅ ТЕСТОВЫЙ БЭКЕНД (работает сразу)
-      server.middlewares.use("/api/demo-backend", async (req: any, res: any) => {
+      // ✅ Agent Backend (local development)
+      server.middlewares.use("/api/agent-backend", async (req: any, res: any) => {
         if (req.method === "OPTIONS") {
           res.statusCode = 200;
           return res.end();
@@ -26,7 +26,7 @@ function apiRoutes() {
 
             res.statusCode = 200;
             res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ reply: `✅ DEMO BACKEND OK. You said: ${text}` }));
+            res.end(JSON.stringify({ reply: `✅ Backend OK. You said: ${text}` }));
           } catch (e: any) {
             res.statusCode = 400;
             res.setHeader("Content-Type", "application/json");
