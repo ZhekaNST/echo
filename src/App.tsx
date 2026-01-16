@@ -107,7 +107,8 @@ async function proxyRpcRequest(method: string, params: any[]): Promise<any> {
 // Get latest blockhash through proxy or direct connection
 async function getLatestBlockhash(useProxy: boolean): Promise<{ blockhash: string; lastValidBlockHeight: number }> {
   if (useProxy) {
-    const result = await proxyRpcRequest("getLatestBlockhash", ["finalized"]);
+    // Solana JSON-RPC spec: params must be [{ commitment: "finalized" }] NOT ["finalized"]
+    const result = await proxyRpcRequest("getLatestBlockhash", [{ commitment: "finalized" }]);
     return {
       blockhash: result.value.blockhash,
       lastValidBlockHeight: result.value.lastValidBlockHeight,
@@ -117,7 +118,8 @@ async function getLatestBlockhash(useProxy: boolean): Promise<{ blockhash: strin
     for (const endpoint of RPC_ENDPOINTS) {
       try {
         const connection = new Connection(endpoint, "confirmed");
-        return await connection.getLatestBlockhash("finalized");
+        // web3.js accepts { commitment: "finalized" } object
+        return await connection.getLatestBlockhash({ commitment: "finalized" });
       } catch (e: any) {
         console.warn(`RPC endpoint failed: ${endpoint}`, e?.message);
         continue;
@@ -5093,15 +5095,9 @@ setLoading(true);
                         
                         return (
                           <>
-                            {/* Images grid */}
+                            {/* Images - vertical stack, clean look */}
                             {images.length > 0 && (
-                              <div className={`grid gap-2 mb-2 ${
-                                images.length === 1 
-                                  ? "grid-cols-1" 
-                                  : images.length === 2 
-                                  ? "grid-cols-2" 
-                                  : "grid-cols-2 md:grid-cols-3"
-                              }`}>
+                              <div className="flex flex-col gap-2 mb-2">
                                 {images.map((att) => (
                                   <img
                                     key={att.id}
@@ -5112,7 +5108,7 @@ setLoading(true);
                                       setPreviewIndex(images.findIndex(img => img.id === att.id));
                                       setPreviewImage(att);
                                     }}
-                                    className="w-full max-w-xs md:max-w-sm max-h-64 rounded-lg border border-white/10 object-contain cursor-pointer hover:opacity-90 transition"
+                                    className="max-w-full max-h-80 w-auto rounded-md border border-white/10 object-contain cursor-pointer hover:opacity-90 transition"
                                     onError={(e) => {
                                       console.warn("Image failed to load:", att.name);
                                       const target = e.target as HTMLImageElement;
@@ -5332,89 +5328,98 @@ setLoading(true);
         </div>
       </div>
        {/* 🟡 ВОТ ЗДЕСЬ — ОВЕРЛЕЙ ДЛЯ ФУЛЛСКРИН-ФОТО */}
-       {previewImage && (
+       {/* Image Lightbox/Viewer Modal */}
+       {previewImage && previewImage.url && (
         <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
           onClick={() => {
             setPreviewImage(null);
             setPreviewImages([]);
             setPreviewIndex(0);
           }}
         >
-          <div
-            className="relative max-w-5xl max-h-[90vh] flex flex-col items-center"
-            onClick={(e) => e.stopPropagation()}
+          {/* Close button - top right corner */}
+          <button
+            onClick={() => {
+              setPreviewImage(null);
+              setPreviewImages([]);
+              setPreviewIndex(0);
+            }}
+            className="
+              absolute top-4 right-4 h-10 w-10 rounded-full
+              bg-white/10 hover:bg-white/20
+              flex items-center justify-center text-white text-2xl
+              transition z-20
+            "
           >
-            {/* Close button */}
+            ×
+          </button>
+
+          {/* Navigation - Previous */}
+          {previewImages.length > 1 && (
             <button
-              onClick={() => {
-                setPreviewImage(null);
-                setPreviewImages([]);
-                setPreviewIndex(0);
+              onClick={(e) => {
+                e.stopPropagation();
+                const prevIndex = previewIndex > 0 ? previewIndex - 1 : previewImages.length - 1;
+                setPreviewIndex(prevIndex);
+                setPreviewImage(previewImages[prevIndex]);
               }}
               className="
-                absolute -top-3 -right-3 h-10 w-10 rounded-full
-                bg-black/80 border border-white/30
-                flex items-center justify-center text-white text-lg
-                hover:bg-white/10 transition z-10
+                absolute left-4 top-1/2 -translate-y-1/2
+                h-12 w-12 rounded-full
+                bg-white/10 hover:bg-white/20
+                flex items-center justify-center text-white text-2xl
+                transition z-20
               "
             >
-              ×
+              ‹
             </button>
+          )}
 
-            {/* Navigation buttons (if multiple images) */}
-            {previewImages.length > 1 && previewIndex >= 0 && (
-              <>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const prevIndex = previewIndex > 0 ? previewIndex - 1 : previewImages.length - 1;
-                    setPreviewIndex(prevIndex);
-                    setPreviewImage(previewImages[prevIndex]);
-                  }}
-                  className="
-                    absolute left-4 top-1/2 -translate-y-1/2
-                    h-10 w-10 rounded-full
-                    bg-black/80 border border-white/30
-                    flex items-center justify-center text-white text-xl
-                    hover:bg-white/10 transition z-10
-                  "
-                >
-                  ‹
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const nextIndex = previewIndex < previewImages.length - 1 ? previewIndex + 1 : 0;
-                    setPreviewIndex(nextIndex);
-                    setPreviewImage(previewImages[nextIndex]);
-                  }}
-                  className="
-                    absolute right-4 top-1/2 -translate-y-1/2
-                    h-10 w-10 rounded-full
-                    bg-black/80 border border-white/30
-                    flex items-center justify-center text-white text-xl
-                    hover:bg-white/10 transition z-10
-                  "
-                >
-                  ›
-                </button>
-              </>
-            )}
+          {/* Navigation - Next */}
+          {previewImages.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const nextIndex = previewIndex < previewImages.length - 1 ? previewIndex + 1 : 0;
+                setPreviewIndex(nextIndex);
+                setPreviewImage(previewImages[nextIndex]);
+              }}
+              className="
+                absolute right-4 top-1/2 -translate-y-1/2
+                h-12 w-12 rounded-full
+                bg-white/10 hover:bg-white/20
+                flex items-center justify-center text-white text-2xl
+                transition z-20
+              "
+            >
+              ›
+            </button>
+          )}
 
-            {/* Image */}
+          {/* Main Image - centered */}
+          <div
+            className="flex flex-col items-center justify-center p-4 max-w-[90vw] max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <img
               src={previewImage.url}
               alt={previewImage.name}
-              className="max-w-full max-h-[80vh] rounded-lg border border-white/10 shadow-2xl object-contain"
+              className="max-w-full max-h-[85vh] object-contain rounded-lg"
+              onError={(e) => {
+                console.error("Preview image failed to load:", previewImage.url);
+                // Show fallback text if image fails
+                const target = e.target as HTMLImageElement;
+                target.style.display = "none";
+              }}
             />
 
-            {/* Image info and counter */}
-            <div className="mt-3 text-center">
-              <div className="text-xs text-white/70 break-all">
+            {/* Image info - below image */}
+            <div className="mt-4 text-center">
+              <div className="text-sm text-white/80 break-all max-w-md">
                 {previewImage.name}
               </div>
-              {previewImages.length > 1 && previewIndex >= 0 && (
+              {previewImages.length > 1 && (
                 <div className="text-xs text-white/50 mt-1">
                   {previewIndex + 1} / {previewImages.length}
                 </div>
