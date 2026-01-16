@@ -2353,10 +2353,10 @@ return (
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="text-5xl md:text-7xl lg:text-8xl font-semibold leading-[1.1] tracking-tight"
+      className="text-5xl md:text-7xl lg:text-8xl font-semibold leading-[1.2] tracking-tight pb-2"
     >
       <span className="block">Web3 marketplace</span>
-      <span className="block mt-4 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-emerald-300 to-indigo-300 drop-shadow-[0_0_45px_rgba(34,211,238,0.7)]">
+      <span className="block mt-4 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-emerald-300 to-indigo-300 drop-shadow-[0_0_45px_rgba(34,211,238,0.7)] pb-1">
         for AI agents on Solana.
       </span>
     </motion.h1>
@@ -2494,7 +2494,7 @@ return (
       className="
         flex gap-4 overflow-x-auto pb-2
         [-webkit-overflow-scrolling:touch]
-        scroll-smooth
+        scroll-smooth hide-scrollbar
       "
     >
       {homeCollections.map((c) => (
@@ -4496,6 +4496,7 @@ function MarketplaceTopTags({
             flex items-center gap-6 py-3
             overflow-x-auto whitespace-nowrap
             [-webkit-overflow-scrolling:touch]
+            hide-scrollbar
           "
         >
           {tags.map((t) => {
@@ -5196,7 +5197,7 @@ setLoading(true);
                     isUser ? "justify-end" : "justify-start"
                   )}
                 >
-                  <div className="max-w-[78%] flex flex-col gap-2">
+                  <div className="flex flex-col gap-1.5">
                     {images.map((att) => (
                       <img
                         key={att.id}
@@ -5207,7 +5208,7 @@ setLoading(true);
                           setPreviewIndex(images.findIndex(img => img.id === att.id));
                           setPreviewImage(att);
                         }}
-                        className="max-w-full max-h-[420px] w-auto rounded-lg border border-white/10 object-contain cursor-pointer hover:opacity-90 transition"
+                        className="max-w-[280px] max-h-[200px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition"
                         onError={(e) => {
                           console.warn("Image failed to load:", att.name);
                           const target = e.target as HTMLImageElement;
@@ -5245,7 +5246,7 @@ setLoading(true);
                     <div className={hasText ? "mt-2" : ""}>
                       {/* Images - vertical stack */}
                       {images.length > 0 && (
-                        <div className="flex flex-col gap-2 mb-2">
+                        <div className="flex flex-col gap-1.5 mb-2">
                           {images.map((att) => (
                             <img
                               key={att.id}
@@ -5256,7 +5257,7 @@ setLoading(true);
                                 setPreviewIndex(images.findIndex(img => img.id === att.id));
                                 setPreviewImage(att);
                               }}
-                              className="max-w-full max-h-[320px] w-auto rounded-md border border-white/10 object-contain cursor-pointer hover:opacity-90 transition"
+                              className="max-w-[260px] max-h-[180px] rounded-lg object-cover cursor-pointer hover:opacity-90 transition"
                               onError={(e) => {
                                 console.warn("Image failed to load:", att.name);
                                 const target = e.target as HTMLImageElement;
@@ -5544,32 +5545,49 @@ setLoading(true);
 
           {/* Main Image - centered */}
           <div
-            className="flex flex-col items-center justify-center p-4 max-w-[90vw] max-h-[90vh]"
+            className="flex flex-col items-center justify-center p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <img
-              src={previewImage.url}
-              alt={previewImage.name}
-              className="max-w-full max-h-[85vh] object-contain rounded-lg"
-              onError={(e) => {
-                console.error("Preview image failed to load:", previewImage.url);
-                // Show fallback text if image fails
-                const target = e.target as HTMLImageElement;
-                target.style.display = "none";
-              }}
-            />
-
-            {/* Image info - below image */}
-            <div className="mt-4 text-center">
-              <div className="text-sm text-white/80 break-all max-w-md">
-                {previewImage.name}
-              </div>
-              {previewImages.length > 1 && (
-                <div className="text-xs text-white/50 mt-1">
-                  {previewIndex + 1} / {previewImages.length}
-                </div>
+            {previewImage.type === "image" && previewImage.url ? (
+              <img
+                src={previewImage.url}
+                alt={previewImage.name}
+                className="max-w-[90vw] max-h-[80vh] object-contain rounded-lg shadow-2xl"
+                onError={(e) => {
+                  console.error("Preview image failed to load:", previewImage.url);
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = "none";
+                  // Show fallback
+                  const fallback = target.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = "flex";
+                }}
+              />
+            ) : null}
+            
+            {/* Fallback for non-images or failed loads */}
+            <div 
+              className="hidden flex-col items-center justify-center gap-3 p-8 rounded-xl bg-white/5 border border-white/10"
+              style={{ display: previewImage.type !== "image" ? "flex" : "none" }}
+            >
+              <div className="text-4xl">📄</div>
+              <div className="text-white/80 text-sm">{previewImage.name}</div>
+              {previewImage.url && (
+                <a 
+                  href={previewImage.url} 
+                  download={previewImage.name}
+                  className="mt-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm transition"
+                >
+                  Download
+                </a>
               )}
             </div>
+
+            {/* Image counter */}
+            {previewImages.length > 1 && (
+              <div className="mt-4 text-xs text-white/50">
+                {previewIndex + 1} / {previewImages.length}
+              </div>
+            )}
           </div>
         </div>
       )}
