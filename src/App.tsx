@@ -1506,9 +1506,9 @@ avatar: "🤖",
           push(`/agent?id=${encodeURIComponent(id)}`)
         }
         onEditAgent={(agent) => {
-          // 🔹 БОЛЬШЕ НЕ ПУШИМ НА "/"
-          // просто включаем режим редактирования
+          // Start edit mode and navigate to home (where create/edit form is)
           startEdit(agent);
+          push("/"); // Navigate away from profile to show the edit form
         }}
       />
     );
@@ -2353,10 +2353,10 @@ return (
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="text-5xl md:text-7xl lg:text-8xl font-semibold leading-[1.2] tracking-tight pb-2"
+      className="text-5xl md:text-7xl lg:text-8xl font-semibold leading-tight tracking-tight"
     >
-      <span className="block">Web3 marketplace</span>
-      <span className="block mt-4 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-emerald-300 to-indigo-300 drop-shadow-[0_0_45px_rgba(34,211,238,0.7)] pb-1">
+      <span className="block pb-1">Web3 marketplace</span>
+      <span className="block mt-3 pb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-emerald-300 to-indigo-300 drop-shadow-[0_0_45px_rgba(34,211,238,0.7)]">
         for AI agents on Solana.
       </span>
     </motion.h1>
@@ -4864,9 +4864,11 @@ function ChatView({
             url = URL.createObjectURL(file);
           }
           
-          // Check if file is an image (including converted HEIC)
-          const isImage = convertedFile ? true : 
-            (file.type.startsWith("image/") && !isHeic);
+          // Check if file is an image (by mime type OR extension)
+          const imageExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "heic", "heif"];
+          const isImage = convertedFile 
+            ? true 
+            : (file.type.startsWith("image/") || imageExtensions.includes(ext));
           
           const sizeLabel = formatFileSize(file.size);
     
@@ -5548,7 +5550,8 @@ setLoading(true);
             className="flex flex-col items-center justify-center p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            {previewImage.type === "image" && previewImage.url ? (
+            {/* Always try to render image if we have a URL */}
+            {previewImage.url && (
               <img
                 src={previewImage.url}
                 alt={previewImage.name}
@@ -5557,30 +5560,9 @@ setLoading(true);
                   console.error("Preview image failed to load:", previewImage.url);
                   const target = e.target as HTMLImageElement;
                   target.style.display = "none";
-                  // Show fallback
-                  const fallback = target.nextElementSibling as HTMLElement;
-                  if (fallback) fallback.style.display = "flex";
                 }}
               />
-            ) : null}
-            
-            {/* Fallback for non-images or failed loads */}
-            <div 
-              className="hidden flex-col items-center justify-center gap-3 p-8 rounded-xl bg-white/5 border border-white/10"
-              style={{ display: previewImage.type !== "image" ? "flex" : "none" }}
-            >
-              <div className="text-4xl">📄</div>
-              <div className="text-white/80 text-sm">{previewImage.name}</div>
-              {previewImage.url && (
-                <a 
-                  href={previewImage.url} 
-                  download={previewImage.name}
-                  className="mt-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm transition"
-                >
-                  Download
-                </a>
-              )}
-            </div>
+            )}
 
             {/* Image counter */}
             {previewImages.length > 1 && (
