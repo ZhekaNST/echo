@@ -67,6 +67,35 @@ const SOLANA_NETWORK = "mainnet-beta" as const;
 // ⚠️ TODO: сюда вставь mint USDC для нужной сети (devnet/mainnet)
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
+// RPC endpoints with fallback strategy
+const RPC_ENDPOINTS = [
+  "https://api.mainnet-beta.solana.com",
+  "https://solana-api.projectserum.com",
+  "https://rpc.ankr.com/solana",
+  clusterApiUrl(SOLANA_NETWORK), // Fallback to clusterApiUrl
+];
+
+// Get a working Solana connection with fallback endpoints
+async function getSolanaConnection(): Promise<Connection> {
+  // Try endpoints in order until one works
+  for (const endpoint of RPC_ENDPOINTS) {
+    try {
+      const connection = new Connection(endpoint, "confirmed");
+      // Test the connection with a lightweight call
+      await connection.getSlot();
+      return connection;
+    } catch (e: any) {
+      console.warn(`RPC endpoint failed: ${endpoint}`, e?.message);
+      // Try next endpoint
+      continue;
+    }
+  }
+  
+  // If all fail, return the first one anyway (will fail later with better error message)
+  console.error("All RPC endpoints failed, using fallback");
+  return new Connection(RPC_ENDPOINTS[0], "confirmed");
+}
+
 
 /*
   AgentVerse — Web3 AI Agent Marketplace (single-file demo, fixed)
@@ -348,6 +377,22 @@ function clearSession(agentId: string) {
   } catch {}
 }
 
+// получить все активные сессии для списка агентов
+function getAllActiveSessions(agents: Agent[]): Array<{ agent: Agent; session: AgentSession }> {
+  if (typeof window === "undefined") return [];
+  
+  const activeSessions: Array<{ agent: Agent; session: AgentSession }> = [];
+  
+  for (const agent of agents) {
+    const session = getActiveSession(agent.id);
+    if (session) {
+      activeSessions.push({ agent, session });
+    }
+  }
+  
+  return activeSessions;
+}
+
 // ✅ Verify payment transaction on-chain (replaces broken external server)
 async function verifyPaymentOnChain(
   signature: string,
@@ -356,7 +401,7 @@ async function verifyPaymentOnChain(
   buyerPubkey: string
 ): Promise<{ valid: boolean; reason?: string }> {
   try {
-    const connection = new Connection(clusterApiUrl(SOLANA_NETWORK), "confirmed");
+    const connection = await getSolanaConnection();
     const DECIMALS = 6;
     const expectedRawAmount = Math.round(expectedAmount * 10 ** DECIMALS);
 
@@ -643,7 +688,7 @@ useEffect(() => {
     try {
       setUsdcLoading(true);
 
-      const connection = new Connection(clusterApiUrl(SOLANA_NETWORK), "confirmed");
+      const connection = await getSolanaConnection();
       if (!walletPk) return;
       const owner = new PublicKey(walletPk);
       const mint = new PublicKey(USDC_MINT);
@@ -709,6 +754,8 @@ useEffect(() => {
   const [sortBy, setSortBy] = useState<SortBy>('recommended');
   const [exploreTab, setExploreTab] = useState<ExploreTab>("all");
   const [selected, setSelected] = useState<Agent | null>(null);
+  // Dedicated flag to control Pay modal visibility - only true when user explicitly opens it
+  const [payModalOpen, setPayModalOpen] = useState(false);
   // Modal state machine - controls banners and payment flow
   const [modalState, setModalState] = useState<"idle" | "ready" | "processing" | "paid" | "error" | "missing_payout_wallet" | "demo_free" | "creator_free">("idle");
 
@@ -744,6 +791,8 @@ useEffect(() => {
       }
     }
     // Removed paidSession localStorage check - use active session instead
+    // NOTE: We restore selectedAgent for convenience but DO NOT auto-open modal
+    // Modal only opens when user explicitly clicks Chat/Pay button
   }, [agents]);
 
   // Reset modal state when selected agent changes
@@ -1098,12 +1147,21 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
       )
     );
     
-    // Reset modal state when navigating to chat
+    // Close modal and clear state before navigation
+    setPayModalOpen(false);
     setModalState("idle");
+    
+    // Clear localStorage flags before navigation
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("paidSession");
+      localStorage.removeItem("selectedAgentId");
+    }
+    
+    const agentId = selected.id;
     setSelected(null);
 
     // уходим на чат с этим агентом
-    push(`/chat?id=${encodeURIComponent(selected.id)}`);
+    push(`/chat?id=${encodeURIComponent(agentId)}`);
   }
   
   function openAgentView(agentId: string) {
@@ -1112,10 +1170,7 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
   }
 
   function openPay(agent: Agent) {
-    // 🔐 сохраняем выбранного агента
-    localStorage.setItem("selectedAgentId", agent.id);
-
-    // 1) Creator → free, go directly to chat
+    // 1) Creator → free, go directly to chat (no modal needed)
     if (connected && agent.creator && address === agent.creator) {
       setPurchases((prev) => [
         {
@@ -1128,6 +1183,12 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
       ]);
       
       setSelected(agent);
+      // Clear localStorage flags before navigation
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("paidSession");
+        localStorage.removeItem("selectedAgentId");
+      }
+      setPayModalOpen(false);
       push(`/chat?id=${encodeURIComponent(agent.id)}`);
       return;
     }
@@ -1138,12 +1199,20 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
 
     if (activeSession) {
       setSelected(agent);
+      // Clear localStorage flags before navigation
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("paidSession");
+        localStorage.removeItem("selectedAgentId");
+      }
+      setPayModalOpen(false);
       push(`/chat?id=${encodeURIComponent(agent.id)}`);
       return;
     }
     
     // 3) Otherwise → open payment modal on home page with initial state
+    // This is the ONLY place where we set payModalOpen = true
     setSelected(agent);
+    setPayModalOpen(true);
     
     // Determine initial modal state based on current agent properties
     const isDemo = !agent.creator && !agent.creatorWallet;
@@ -1161,8 +1230,14 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
   }    
     
   function closePay() {
+    setPayModalOpen(false);
     setSelected(null);
     setModalState("idle");
+    // Clear localStorage flags when closing modal
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("paidSession");
+      localStorage.removeItem("selectedAgentId");
+    }
   }
 
   // like handler with guard (toggle like/unlike, one like per agent per user)
@@ -2721,6 +2796,72 @@ return (
           </div>
         </section>
 
+        {/* Active Sessions Section */}
+        {(() => {
+          const activeSessions = getAllActiveSessions(agents);
+          if (activeSessions.length === 0) return null;
+          
+          return (
+            <section className="border-t border-white/10 pt-6">
+              <div className="max-w-7xl mx-auto px-4 pb-6">
+                <div className="mb-4">
+                  <h2 className="text-xl font-semibold text-white">Active Sessions</h2>
+                  <p className="text-sm text-white/60 mt-1">Continue your conversations</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {activeSessions.map(({ agent, session }) => {
+                    const timeLeft = session.expiresAt 
+                      ? Math.max(0, Math.floor((session.expiresAt - Date.now()) / 60000))
+                      : null;
+                    
+                    return (
+                      <Card
+                        key={agent.id}
+                        className="rounded-2xl border border-white/10 bg-white/[.03] hover:bg-white/[.06] transition"
+                      >
+                        <CardHeader className="flex-row items-center gap-3 pb-2">
+                          <div className="h-11 w-11 rounded-xl grid place-items-center text-xl bg-white/10">
+                            {agent.avatar}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="text-base break-words">{agent.name}</CardTitle>
+                            <CardDescription className="text-white/60 break-words text-xs line-clamp-2">
+                              {agent.tagline}
+                            </CardDescription>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="text-xs text-white/60">
+                            {timeLeft !== null 
+                              ? timeLeft > 0 
+                                ? `Time left: ${timeLeft} min`
+                                : "Session expired"
+                              : "Active"}
+                          </div>
+                          <div className="text-xs text-white/50 truncate">
+                            {agent.promptPreview}
+                          </div>
+                        </CardContent>
+                        <CardFooter>
+                          <Button
+                            className="w-full py-2 gap-2"
+                            onClick={() => {
+                              setSelected(agent);
+                              push(`/chat?id=${encodeURIComponent(agent.id)}`);
+                            }}
+                          >
+                            <Bot className="h-4 w-4" />
+                            Resume Session
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          );
+        })()}
         
         {/* Agents Grid */}
         <section>
@@ -2869,15 +3010,20 @@ return (
                           View
                         </Button>
                       </div>
-
-                      {/* Chat */}
-                      <Button
-                        className="w-full py-2 text-base gap-2"
-                        onClick={() => openPay(a)}
-                      >
-                        <Bot className="h-4 w-4" />
-                        Chat
-                      </Button>
+                      
+                      {/* Chat / Continue */}
+                      {(() => {
+                        const hasActiveSession = typeof window !== "undefined" ? !!getActiveSession(a.id) : false;
+                        return (
+                          <Button
+                            className="w-full py-2 text-base gap-2"
+                            onClick={() => openPay(a)}
+                          >
+                            <Bot className="h-4 w-4" />
+                            {hasActiveSession ? "Continue" : "Chat"}
+                          </Button>
+                        );
+                      })()}
                     </CardFooter>
                   </Card>
                 );
@@ -2909,8 +3055,8 @@ return (
     )}
 
 
-    {/* Pay Modal — как был */}
-    {selected && (
+    {/* Pay Modal — only shown when payModalOpen is true */}
+    {payModalOpen && selected && (
       <div
         className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm grid place-items-center p-4 pointer-events-auto"
         role="dialog"
@@ -3326,10 +3472,8 @@ function PhantomPayButton({
         return;
       }
 
-      const connection = new Connection(
-        clusterApiUrl(SOLANA_NETWORK),
-        "confirmed"
-      );
+      // Get a working RPC connection with fallback
+      const connection = await getSolanaConnection();
 
       const fromPubkey = new PublicKey(provider.publicKey.toString());
       const toPubkey = new PublicKey(recipient);
@@ -3354,7 +3498,15 @@ function PhantomPayButton({
 
       const tx = new Transaction().add(ix);
       tx.feePayer = fromPubkey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      
+      // Get latest blockhash - this is where 403 errors often occur
+      try {
+        const { blockhash } = await connection.getLatestBlockhash();
+        tx.recentBlockhash = blockhash;
+      } catch (blockhashError: any) {
+        console.error("Failed to get blockhash:", blockhashError);
+        throw new Error(`RPC provider blocked or unavailable: ${blockhashError.message || "Please configure RPC URL / API key"}`);
+      }
 
       // Use signAndSendTransaction for better UX (Phantom handles both signing and sending)
       const { signature } = await provider.signAndSendTransaction(tx);
@@ -3376,12 +3528,17 @@ function PhantomPayButton({
       onSuccess && onSuccess(sig);
     } catch (e: any) {
       console.error("Payment error:", e);
-      onError && onError();
       
       const errorMsg = e?.message || "Unknown error";
+      
+      // Always call onError to reset modal state from "processing" to "error"
+      onError && onError();
+      
       if (errorMsg.includes("User rejected") || errorMsg.includes("User cancelled")) {
         // User cancelled - don't show error alert, just reset state
         return;
+      } else if (errorMsg.includes("RPC provider blocked") || errorMsg.includes("403") || errorMsg.includes("Access forbidden")) {
+        alert("RPC provider blocked or unavailable. Please try again or configure a custom RPC endpoint.");
       } else if (errorMsg.includes("insufficient funds") || errorMsg.includes("0x1")) {
         alert("Insufficient USDC balance. Please check your wallet.");
       } else if (errorMsg.includes("Buffer is not defined")) {
@@ -4045,24 +4202,29 @@ function MarketplaceRail({
                     </div>
                     <div className="flex-1" />
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onChat(a);
-                      }}
-                      className="
-                        h-9 px-3 rounded-xl text-sm font-medium
-                        bg-gradient-to-r from-cyan-400/70 via-indigo-400/65 to-emerald-400/60
-                        border border-white/10
-                        shadow-[0_0_18px_rgba(99,102,241,0.18)]
-                        hover:shadow-[0_0_28px_rgba(34,211,238,0.20)]
-                        transition
-                      "
-                    >
-                      Chat
-                    </button>
+                    {(() => {
+                      const hasActiveSession = typeof window !== "undefined" ? !!getActiveSession(a.id) : false;
+                      return (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onChat(a);
+                          }}
+                          className="
+                            h-9 px-3 rounded-xl text-sm font-medium
+                            bg-gradient-to-r from-cyan-400/70 via-indigo-400/65 to-emerald-400/60
+                            border border-white/10
+                            shadow-[0_0_18px_rgba(99,102,241,0.18)]
+                            hover:shadow-[0_0_28px_rgba(34,211,238,0.20)]
+                            transition
+                          "
+                        >
+                          {hasActiveSession ? "Continue" : "Chat"}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               </motion.button>
@@ -4233,6 +4395,18 @@ function ChatView({
     setPendingFiles([]); // при смене агента чистим незасланные файлы
   }, [selectedAgent?.id, storageKey, selectedAgent?.name]);
 
+  // Cleanup object URLs when component unmounts or files are removed
+  useEffect(() => {
+    return () => {
+      // Revoke all pending file URLs on cleanup
+      pendingFiles.forEach((file) => {
+        if (file.url && file.url.startsWith("blob:")) {
+          URL.revokeObjectURL(file.url);
+        }
+      });
+    };
+  }, [pendingFiles]);
+
   // 🔹 тикающий таймер каждую секунду
   useEffect(() => {
     if (!sessionStart) return;
@@ -4398,10 +4572,14 @@ function ChatView({
           }
     
           const url = URL.createObjectURL(file);
-          const isImage = file.type.startsWith("image/");
           const ext = file.name.includes(".")
             ? file.name.split(".").pop()!.toLowerCase()
             : "";
+          
+          // Check if file is an image, but exclude HEIC/HEIF as browsers can't render them
+          const isImage = file.type.startsWith("image/") && 
+            !["heic", "heif"].includes(ext);
+          
           const sizeLabel = formatFileSize(file.size);
     
           return {
@@ -4610,9 +4788,9 @@ setLoading(true);
   }
 
   return (
-    <div className="min-h-screen w-screen overflow-x-hidden bg-gradient-to-b from-black via-[#050513] to-black text-white">
+    <div className="h-screen w-screen overflow-hidden bg-gradient-to-b from-black via-[#050513] to-black text-white flex flex-col">
       {/* HEADER */}
-      <header className="sticky top-0 z-40 backdrop-blur border-b border-white/10">
+      <header className="shrink-0 z-40 backdrop-blur border-b border-white/10">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
@@ -4681,8 +4859,8 @@ setLoading(true);
         </div>
       </header>
 
-      {/* BODY */}
-      <div className="max-w-5xl mx-auto px-4 py-3 flex flex-col gap-3">
+      {/* BODY - Fixed height flex container */}
+      <div className="flex-1 min-h-0 max-w-5xl mx-auto w-full px-4 py-3 flex flex-col gap-3">
                 {/* Chat container + drag-and-drop */}
                 <div
           ref={chatRef}
@@ -4690,7 +4868,7 @@ setLoading(true);
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={cx(
-            "relative h-[75vh] overflow-auto rounded-2xl bg-gradient-to-b from-white/[0.04] via-white/[0.02] to-transparent p-4 border transition-colors",
+            "flex-1 min-h-0 overflow-auto rounded-2xl bg-gradient-to-b from-white/[0.04] via-white/[0.02] to-transparent p-4 border transition-colors",
             isDragging ? "border-cyan-400/70 bg-cyan-500/5" : "border-white/10"
           )}
         >
@@ -4736,26 +4914,71 @@ setLoading(true);
                   {/* вложения */}
                   {m.attachments && m.attachments.length > 0 && (
                     <div className="mt-2 space-y-2">
-                      {m.attachments.map((att) =>
-                        att.type === "image" ? (
-                          <img
+                      {m.attachments.map((att) => {
+                        // Check if file is HEIC/HEIF - treat as file even if type is "image"
+                        const ext = att.ext?.toLowerCase() || "";
+                        const isHeic = ["heic", "heif"].includes(ext);
+                        const shouldShowAsImage = att.type === "image" && !isHeic;
+
+                        if (shouldShowAsImage) {
+                          return (
+                            <img
+                              key={att.id}
+                              src={att.url}
+                              alt={att.name}
+                              onClick={() => setPreviewImage(att)}
+                              className="max-w-xs md:max-w-sm max-h-64 rounded-lg border border-white/10 object-contain cursor-pointer hover:opacity-90 transition"
+                              onError={(e) => {
+                                // If image fails to load (e.g., expired blob URL or unsupported format), fallback to file card
+                                console.warn("Image failed to load:", att.name);
+                                const target = e.target as HTMLImageElement;
+                                // Replace image with file card by updating parent
+                                const parent = target.parentElement;
+                                if (parent) {
+                                  parent.innerHTML = `
+                                    <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/15 bg-white/5 text-xs">
+                                      <div class="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center font-mono text-[10px] uppercase">${att.ext || "FILE"}</div>
+                                      <div class="flex-1 min-w-0">
+                                        <div class="truncate">${att.name}</div>
+                                        <div class="text-[10px] text-white/50">${(att.ext || "file").toUpperCase()}${att.sizeLabel ? ` · ${att.sizeLabel}` : ""}</div>
+                                      </div>
+                                      ${att.url ? `<a href="${att.url}" download="${att.name}" class="text-xs underline text-white/60 hover:text-white/80">Download</a>` : ""}
+                                    </div>
+                                  `;
+                                }
+                              }}
+                            />
+                          );
+                        }
+
+                        // File card for non-images or HEIC files
+                        return (
+                          <div
                             key={att.id}
-                            src={att.url}
-                            alt={att.name}
-                            onClick={() => setPreviewImage(att)}
-                            className="max-w-xs md:max-w-sm max-h-64 rounded-lg border border-white/10 object-contain"
-                          />
-                        ) : (
-                          <a
-                            key={att.id}
-                            href={att.url}
-                            download={att.name}
-                            className="block text-xs underline break-all text-white/80"
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/15 bg-white/5 text-xs"
                           >
-                            📎 {att.name}
-                          </a>
-                        )
-                      )}
+                            <div className="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center font-mono text-[10px] uppercase">
+                              {att.ext || "FILE"}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="truncate">{att.name}</div>
+                              <div className="text-[10px] text-white/50">
+                                {(att.ext || "file").toUpperCase()}
+                                {att.sizeLabel ? ` · ${att.sizeLabel}` : ""}
+                              </div>
+                            </div>
+                            {att.url && (
+                              <a
+                                href={att.url}
+                                download={att.name}
+                                className="text-xs underline text-white/60 hover:text-white/80 transition"
+                              >
+                                Download
+                              </a>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -4776,61 +4999,84 @@ setLoading(true);
           )}
         </div>
 
-        {/* Input row + attachments */}
-        <div className="flex flex-col gap-2">
-          {/* превью выбранных файлов до отправки */}
+        {/* Input row + attachments - Fixed at bottom, doesn't expand page */}
+        <div className="shrink-0 flex flex-col gap-2">
+          {/* превью выбранных файлов до отправки - with max height and scroll */}
           {pendingFiles.length > 0 && (
-            <div className="mt-1 flex items-center gap-3 overflow-x-auto pb-1">
-              {pendingFiles.map((att) => (
-                <div
-                  key={att.id}
-                  className="relative shrink-0 flex items-center"
-                >
-                  {att.type === "image" ? (
-                    // 🖼 крупный превью изображения
-                    <img
-                      src={att.url}
-                      alt={att.name}
-                      className="h-36 w-36 rounded-xl object-cover border border-white/25 shadow-md"
-                    />
-                  ) : (
-                    // 📎 файл как в ChatGPT: имя, формат, размер
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/15 bg-white/5 text-xs min-w-[190px] max-w-[260px]">
-                      <div className="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center font-mono text-[10px] uppercase">
-                        {att.ext || "FILE"}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate">{att.name}</div>
-                        <div className="text-[10px] text-white/50">
-                          {(att.ext || "file").toUpperCase()}
-                          {att.sizeLabel ? ` · ${att.sizeLabel}` : ""}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* крестик удалить конкретный файл */}
-                  <button
-                    onClick={() =>
-                      setPendingFiles((prev) =>
-                        prev.filter((f) => f.id !== att.id)
-                      )
+            <div className="max-h-28 overflow-y-auto overflow-x-hidden">
+              <div className="flex items-center gap-3 pb-1">
+                {pendingFiles.map((att) => {
+                  // Revoke URL when removing file
+                  const handleRemove = () => {
+                    if (att.url && att.url.startsWith("blob:")) {
+                      URL.revokeObjectURL(att.url);
                     }
-                    className="absolute -top-2 -right-2 bg-black/80 text-white text-xs h-5 w-5 rounded-full flex items-center justify-center border border-white/30"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+                    setPendingFiles((prev) =>
+                      prev.filter((f) => f.id !== att.id)
+                    );
+                  };
 
-              {/* кнопка очистить всё */}
-              <button
-                type="button"
-                className="text-xs text-white/50 underline"
-                onClick={() => setPendingFiles([])}
-              >
-                Clear all
-              </button>
+                  return (
+                    <div
+                      key={att.id}
+                      className="relative shrink-0 flex items-center"
+                    >
+                      {att.type === "image" ? (
+                        // 🖼 крупный превью изображения
+                        <img
+                          src={att.url}
+                          alt={att.name}
+                          className="h-24 w-24 rounded-xl object-cover border border-white/25 shadow-md"
+                          onError={(e) => {
+                            // If image fails to load (e.g., HEIC), treat as file
+                            console.warn("Image failed to load, showing as file:", att.name);
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        // 📎 файл как в ChatGPT: имя, формат, размер
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/15 bg-white/5 text-xs min-w-[190px] max-w-[260px]">
+                          <div className="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center font-mono text-[10px] uppercase">
+                            {att.ext || "FILE"}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="truncate">{att.name}</div>
+                            <div className="text-[10px] text-white/50">
+                              {(att.ext || "file").toUpperCase()}
+                              {att.sizeLabel ? ` · ${att.sizeLabel}` : ""}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* крестик удалить конкретный файл */}
+                      <button
+                        onClick={handleRemove}
+                        className="absolute -top-2 -right-2 bg-black/80 text-white text-xs h-5 w-5 rounded-full flex items-center justify-center border border-white/30 hover:bg-black/90 transition"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* кнопка очистить всё */}
+                <button
+                  type="button"
+                  className="text-xs text-white/50 underline hover:text-white/70 transition"
+                  onClick={() => {
+                    // Revoke all URLs before clearing
+                    pendingFiles.forEach((file) => {
+                      if (file.url && file.url.startsWith("blob:")) {
+                        URL.revokeObjectURL(file.url);
+                      }
+                    });
+                    setPendingFiles([]);
+                  }}
+                >
+                  Clear all
+                </button>
+              </div>
             </div>
           )}
 
@@ -5561,6 +5807,14 @@ function AgentDetailView({
   const [reviewName, setReviewName] = useState("");
   const [reviewRating, setReviewRating] = useState<number>(5);
   const [reviewText, setReviewText] = useState("");
+  
+  // Scroll to top when Agent Detail view opens
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+  }, [agent?.id]); // Reset scroll when agent changes
+  
   const creatorAgents = useMemo(() => {
     if (!agent) return [];
   
