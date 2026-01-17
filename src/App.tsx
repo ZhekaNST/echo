@@ -179,12 +179,43 @@ async function getSolanaConnection(): Promise<Connection> {
 */
 
 const HOME_SCROLL_KEY = "echo_home_scroll";
+const EXPLORE_SCROLL_KEY = "echo_explore_scroll";
+const PREVIOUS_PAGE_KEY = "echo_previous_page";
 
 const TRENDING_RESET_KEY = "echo_trending_reset_v1";
 
 function rememberHomeScroll() {
   if (typeof window === "undefined") return;
   sessionStorage.setItem(HOME_SCROLL_KEY, String(window.scrollY));
+}
+
+function rememberExploreScroll() {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(EXPLORE_SCROLL_KEY, String(window.scrollY));
+  sessionStorage.setItem(PREVIOUS_PAGE_KEY, "explore");
+}
+
+function restoreExploreScrollOnce() {
+  if (typeof window === "undefined") return;
+  
+  const previousPage = sessionStorage.getItem(PREVIOUS_PAGE_KEY);
+  if (previousPage !== "explore") return;
+  
+  const raw = sessionStorage.getItem(EXPLORE_SCROLL_KEY);
+  if (!raw) return;
+
+  const y = parseInt(raw, 10) || 0;
+
+  // Delay scroll restoration to ensure DOM is ready
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      window.scrollTo({ top: y, behavior: "auto" });
+    }, 50);
+  });
+
+  // Clear after restoring
+  sessionStorage.removeItem(EXPLORE_SCROLL_KEY);
+  sessionStorage.removeItem(PREVIOUS_PAGE_KEY);
 }
 
 function restoreHomeScrollOnce() {
@@ -721,6 +752,13 @@ export default function Echo() {
   useEffect(() => {
     if (route === "/") {
       restoreHomeScrollOnce();
+    }
+  }, [route]);
+
+  // Restore scroll position when returning to Explore page
+  useEffect(() => {
+    if (route.startsWith("/explore")) {
+      restoreExploreScrollOnce();
     }
   }, [route]);
   
@@ -1328,7 +1366,12 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
   }
   
   function openAgentView(agentId: string) {
-    rememberHomeScroll();
+    // Save scroll position based on current page
+    if (route.startsWith("/explore")) {
+      rememberExploreScroll();
+    } else {
+      rememberHomeScroll();
+    }
     push(`/agent?id=${encodeURIComponent(agentId)}`);
   }
 
@@ -1620,11 +1663,23 @@ avatar: "🤖",
         : undefined;
       const id = search?.get("id") || "";
       const agent = agents.find((a) => a.id === id) || null;
-  
+
+      // Check if user came from Explore page to go back correctly
+      const handleBack = () => {
+        const previousPage = typeof window !== "undefined" 
+          ? sessionStorage.getItem(PREVIOUS_PAGE_KEY) 
+          : null;
+        if (previousPage === "explore") {
+          push("/explore");
+        } else {
+          push("/");
+        }
+      };
+
       return (
         <AgentDetailView
           agent={agent}
-          onBack={() => push("/")}
+          onBack={handleBack}
           onOpenPay={(ag) => openPay(ag)}
           liked={liked}
           onLike={handleLike}
