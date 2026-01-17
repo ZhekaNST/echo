@@ -21,7 +21,8 @@ import {
   Plus, 
   Twitter, 
   User,
-  Paperclip
+  Paperclip,
+  MessageCircle
 } from "lucide-react";
 
 import { Connection, PublicKey, clusterApiUrl, LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
@@ -897,6 +898,8 @@ useEffect(() => {
   const [payModalOpen, setPayModalOpen] = useState(false);
   // Modal state machine - controls banners and payment flow
   const [modalState, setModalState] = useState<"idle" | "ready" | "processing" | "paid" | "error" | "missing_payout_wallet" | "free" | "creator_free">("idle");
+  // Active Sessions panel visibility
+  const [showSessionsPanel, setShowSessionsPanel] = useState(false);
 
   // ✅ Reset trending counters every 24 hours (moved here after agents state)
   useEffect(() => {
@@ -2992,73 +2995,6 @@ return (
           </div>
         </section>
 
-        {/* Active Sessions Section */}
-        {(() => {
-          const activeSessions = getAllActiveSessions(agents);
-          if (activeSessions.length === 0) return null;
-          
-          return (
-            <section className="border-t border-white/10 pt-6">
-              <div className="max-w-7xl mx-auto px-4 pb-6">
-                <div className="mb-4">
-                  <h2 className="text-xl font-semibold text-white">Active Sessions</h2>
-                  <p className="text-sm text-white/60 mt-1">Continue your conversations</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {activeSessions.map(({ agent, session }) => {
-                    const timeLeft = session.expiresAt 
-                      ? Math.max(0, Math.floor((session.expiresAt - Date.now()) / 60000))
-                      : null;
-                    
-                    return (
-                      <Card
-                        key={agent.id}
-                        className="rounded-2xl border border-white/10 bg-white/[.03] hover:bg-white/[.06] transition"
-                      >
-                        <CardHeader className="flex-row items-center gap-3 pb-2">
-                          <div className="h-11 w-11 rounded-xl grid place-items-center text-xl bg-white/10">
-                            {agent.avatar}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-base break-words">{agent.name}</CardTitle>
-                            <CardDescription className="text-white/60 break-words text-xs line-clamp-2">
-                              {agent.tagline}
-                            </CardDescription>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          <div className="text-xs text-white/60">
-                            {timeLeft !== null 
-                              ? timeLeft > 0 
-                                ? `Time left: ${timeLeft} min`
-                                : "Session expired"
-                              : "Active"}
-                          </div>
-                          <div className="text-xs text-white/50 truncate">
-                            {agent.promptPreview}
-                          </div>
-                        </CardContent>
-                        <CardFooter>
-                          <Button
-                            className="w-full py-2 gap-2"
-                            onClick={() => {
-                              setSelected(agent);
-                              push(`/chat?id=${encodeURIComponent(agent.id)}`);
-                            }}
-                          >
-                            <Bot className="h-4 w-4" />
-                            Resume Session
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-          );
-        })()}
-        
         {/* Agents Grid */}
         <section>
           <div className="max-w-7xl mx-auto px-4 pb-20 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
@@ -3250,6 +3186,126 @@ return (
       </>
     )}
 
+    {/* 🔥 Floating Active Sessions Button */}
+    {(() => {
+      const activeSessions = getAllActiveSessions(agents);
+      if (activeSessions.length === 0) return null;
+
+      return (
+        <>
+          {/* Floating Button */}
+          <button
+            onClick={() => setShowSessionsPanel(true)}
+            className="fixed right-4 bottom-20 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-105 transition-all duration-200 group"
+          >
+            <div className="relative">
+              <Bot className="h-5 w-5" />
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full text-[10px] font-bold flex items-center justify-center animate-pulse">
+                {activeSessions.length}
+              </span>
+            </div>
+            <span className="hidden sm:inline">Active Sessions</span>
+          </button>
+
+          {/* Slide-out Panel */}
+          {showSessionsPanel && (
+            <div className="fixed inset-0 z-50" onClick={() => setShowSessionsPanel(false)}>
+              {/* Backdrop */}
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              
+              {/* Panel */}
+              <div 
+                className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-[#0a0a14] border-l border-white/10 shadow-2xl overflow-hidden flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-gradient-to-r from-purple-900/30 to-indigo-900/30">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                      <Bot className="h-5 w-5 text-purple-400" />
+                      Active Sessions
+                    </h2>
+                    <p className="text-sm text-white/50">{activeSessions.length} conversation{activeSessions.length !== 1 ? 's' : ''} in progress</p>
+                  </div>
+                  <button
+                    onClick={() => setShowSessionsPanel(false)}
+                    className="p-2 rounded-lg hover:bg-white/10 transition-colors text-white/60 hover:text-white"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {/* Sessions List */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {activeSessions.map(({ agent, session }) => {
+                    const timeLeft = session.expiresAt
+                      ? Math.max(0, Math.floor((session.expiresAt - Date.now()) / 60000))
+                      : null;
+
+                    return (
+                      <div
+                        key={agent.id}
+                        className="group p-4 rounded-xl bg-white/[.03] border border-white/10 hover:border-purple-500/30 hover:bg-white/[.05] transition-all cursor-pointer"
+                        onClick={() => {
+                          setSelected(agent);
+                          setShowSessionsPanel(false);
+                          push(`/chat?id=${encodeURIComponent(agent.id)}`);
+                        }}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="h-12 w-12 rounded-xl grid place-items-center text-2xl bg-gradient-to-br from-purple-500/20 to-indigo-500/20 border border-purple-500/20 flex-shrink-0">
+                            {agent.avatar}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-white group-hover:text-purple-300 transition-colors truncate">
+                              {agent.name}
+                            </h3>
+                            <p className="text-sm text-white/50 truncate mt-0.5">
+                              {agent.tagline}
+                            </p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${
+                                timeLeft === null 
+                                  ? 'bg-emerald-500/20 text-emerald-400' 
+                                  : timeLeft > 0 
+                                    ? 'bg-blue-500/20 text-blue-400'
+                                    : 'bg-red-500/20 text-red-400'
+                              }`}>
+                                <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                                {timeLeft === null 
+                                  ? 'Active' 
+                                  : timeLeft > 0 
+                                    ? `${timeLeft}m left`
+                                    : 'Expired'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400">
+                              <MessageCircle className="h-4 w-4" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Footer */}
+                <div className="px-5 py-4 border-t border-white/10 bg-white/[.02]">
+                  <button
+                    onClick={() => setShowSessionsPanel(false)}
+                    className="w-full py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors text-sm"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      );
+    })()}
 
     {/* Pay Modal — only shown when payModalOpen is true */}
     {payModalOpen && selected && (
