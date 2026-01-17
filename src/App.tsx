@@ -1300,18 +1300,16 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
   }
 
   function openPay(agent: Agent) {
-    // 1) Creator → free, go directly to chat (no modal needed)
-    if (connected && agent.creator && address === agent.creator) {
-      setPurchases((prev) => [
-        {
-          id: crypto.randomUUID(),
-          agentId: agent.id,
-          priceUSDC: agent.priceUSDC,
-          ts: Date.now(),
-        },
-        ...prev,
-      ]);
-      
+    // 1) Creator → free access, go directly to chat (NO modal, NO payment)
+    // Check both creator and creatorWallet against full wallet address (walletPk)
+    const isCreator = connected && walletPk && (
+      (agent.creator && agent.creator === walletPk) ||
+      (agent.creatorWallet && agent.creatorWallet === walletPk)
+    );
+    
+    if (isCreator) {
+      // Creator gets free access - save session and go to chat
+      saveSession(agent, "creator-free-access");
       setSelected(agent);
       // Clear localStorage flags before navigation
       if (typeof window !== "undefined") {
