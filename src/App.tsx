@@ -394,6 +394,22 @@ const TTS_VOICES = [
   { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", description: "Strong, female", language: "English" },
 ];
 
+// 🔊 TTS Models (ElevenLabs)
+const TTS_MODELS = [
+  { id: "eleven_multilingual_v2", name: "Multilingual v2", description: "Best quality, 29 languages", speed: "Normal" },
+  { id: "eleven_turbo_v2_5", name: "Turbo v2.5", description: "Fast, great quality", speed: "Fast" },
+  { id: "eleven_turbo_v2", name: "Turbo v2", description: "Fastest, good quality", speed: "Fastest" },
+  { id: "eleven_monolingual_v1", name: "English v1", description: "English only, lightweight", speed: "Fast" },
+];
+
+// Default voice settings
+const DEFAULT_VOICE_SETTINGS = {
+  stability: 0.5,        // 0-1: Higher = more consistent, Lower = more expressive
+  similarityBoost: 0.75, // 0-1: How closely to match original voice
+  style: 0.0,            // 0-1: Style exaggeration (only for v2 models)
+  speakerBoost: true,    // Enhance speaker clarity
+};
+
 const CATEGORY_ITEMS = [
   { id: "tools", label: "Tools" },
   { id: "voice", label: "Voice" },
@@ -4630,7 +4646,10 @@ function ChatView({
 }) {
   // 🔊 TTS Voice selection state
   const [selectedVoice, setSelectedVoice] = useState(TTS_VOICES[0]);
+  const [selectedModel, setSelectedModel] = useState(TTS_MODELS[0]);
+  const [voiceSettings, setVoiceSettings] = useState(DEFAULT_VOICE_SETTINGS);
   const [showVoiceSelector, setShowVoiceSelector] = useState(false);
+  const [showTtsSettings, setShowTtsSettings] = useState(false);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -5110,6 +5129,13 @@ function ChatView({
             body: JSON.stringify({ 
               text: text.slice(0, 2000),
               voiceId: selectedVoice.id,
+              modelId: selectedModel.id,
+              voiceSettings: {
+                stability: voiceSettings.stability,
+                similarity_boost: voiceSettings.similarityBoost,
+                style: voiceSettings.style,
+                use_speaker_boost: voiceSettings.speakerBoost,
+              },
             }),
           });
 
@@ -5125,7 +5151,7 @@ function ChatView({
             ...history,
             {
               role: "assistant",
-              content: `🔊 Here's your audio (Voice: **${selectedVoice.name}**):\n\n"${text.length > 100 ? text.slice(0, 100) + '...' : text}"`,
+              content: `🔊 Here's your audio:\n• Voice: **${selectedVoice.name}**\n• Model: ${selectedModel.name}\n\n"${text.length > 100 ? text.slice(0, 100) + '...' : text}"`,
               audioUrl,
             },
           ];
@@ -5665,46 +5691,181 @@ function ChatView({
           )}
 
 
-          {/* 🔊 Voice Selector for TTS Agent */}
+          {/* 🔊 Voice Selector & Settings for TTS Agent */}
           {selectedAgent?.engineProvider === "tts" && (
-            <div className="relative mb-2">
-              <button
-                onClick={() => setShowVoiceSelector(!showVoiceSelector)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30 text-purple-300 hover:bg-purple-500/30 transition-colors text-sm"
-              >
-                <span>🎤</span>
-                <span>Voice: <strong>{selectedVoice.name}</strong></span>
-                <span className="text-purple-400/60">({selectedVoice.description})</span>
-                <svg className={`w-4 h-4 transition-transform ${showVoiceSelector ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              
-              {showVoiceSelector && (
-                <div className="absolute bottom-full left-0 mb-2 w-72 max-h-64 overflow-y-auto rounded-xl bg-[#1a1a2e] border border-white/10 shadow-xl z-50">
-                  <div className="p-2 border-b border-white/10 text-xs text-white/50 uppercase tracking-wide">
-                    Select Voice
+            <div className="mb-3 space-y-2">
+              {/* Voice & Model Selection Row */}
+              <div className="flex flex-wrap gap-2">
+                {/* Voice Selector */}
+                <div className="relative">
+                  <button
+                    onClick={() => { setShowVoiceSelector(!showVoiceSelector); setShowTtsSettings(false); }}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30 text-purple-300 hover:bg-purple-500/30 transition-colors text-sm"
+                  >
+                    <span>🎤</span>
+                    <span>Voice: <strong>{selectedVoice.name}</strong></span>
+                    <svg className={`w-4 h-4 transition-transform ${showVoiceSelector ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  
+                  {showVoiceSelector && (
+                    <div className="absolute bottom-full left-0 mb-2 w-72 max-h-64 overflow-y-auto rounded-xl bg-[#1a1a2e] border border-white/10 shadow-xl z-50">
+                      <div className="p-2 border-b border-white/10 text-xs text-white/50 uppercase tracking-wide">
+                        Select Voice
+                      </div>
+                      {TTS_VOICES.map((voice) => (
+                        <button
+                          key={voice.id}
+                          onClick={() => {
+                            setSelectedVoice(voice);
+                            setShowVoiceSelector(false);
+                          }}
+                          className={`w-full px-3 py-2 text-left hover:bg-white/5 transition-colors flex items-center justify-between ${
+                            selectedVoice.id === voice.id ? 'bg-purple-500/20 text-purple-300' : 'text-white/80'
+                          }`}
+                        >
+                          <div>
+                            <div className="font-medium">{voice.name}</div>
+                            <div className="text-xs text-white/50">{voice.description} • {voice.language}</div>
+                          </div>
+                          {selectedVoice.id === voice.id && (
+                            <span className="text-purple-400">✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Model Selector */}
+                <div className="relative">
+                  <select
+                    value={selectedModel.id}
+                    onChange={(e) => {
+                      const model = TTS_MODELS.find(m => m.id === e.target.value);
+                      if (model) setSelectedModel(model);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 text-sm cursor-pointer appearance-none pr-8"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2393c5fd'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', backgroundSize: '16px' }}
+                  >
+                    {TTS_MODELS.map((model) => (
+                      <option key={model.id} value={model.id} className="bg-[#1a1a2e] text-white">
+                        {model.name} ({model.speed})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Settings Button */}
+                <button
+                  onClick={() => { setShowTtsSettings(!showTtsSettings); setShowVoiceSelector(false); }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+                    showTtsSettings 
+                      ? 'bg-emerald-500/30 border-emerald-500/50 text-emerald-300' 
+                      : 'bg-white/5 border-white/20 text-white/70 hover:bg-white/10'
+                  }`}
+                >
+                  <span>⚙️</span>
+                  <span>Settings</span>
+                </button>
+              </div>
+
+              {/* Voice Settings Panel */}
+              {showTtsSettings && (
+                <div className="p-4 rounded-xl bg-[#1a1a2e] border border-white/10 space-y-4">
+                  <div className="text-sm font-medium text-white/80 flex items-center gap-2">
+                    <span>⚙️</span> Voice Settings
                   </div>
-                  {TTS_VOICES.map((voice) => (
+                  
+                  {/* Stability Slider */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/60">Stability</span>
+                      <span className="text-purple-300">{Math.round(voiceSettings.stability * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={voiceSettings.stability * 100}
+                      onChange={(e) => setVoiceSettings(prev => ({ ...prev, stability: Number(e.target.value) / 100 }))}
+                      className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                      style={{ background: `linear-gradient(to right, #a855f7 ${voiceSettings.stability * 100}%, #374151 ${voiceSettings.stability * 100}%)` }}
+                    />
+                    <div className="flex justify-between text-[10px] text-white/40">
+                      <span>More expressive</span>
+                      <span>More consistent</span>
+                    </div>
+                  </div>
+
+                  {/* Similarity Boost Slider */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/60">Similarity Boost</span>
+                      <span className="text-blue-300">{Math.round(voiceSettings.similarityBoost * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={voiceSettings.similarityBoost * 100}
+                      onChange={(e) => setVoiceSettings(prev => ({ ...prev, similarityBoost: Number(e.target.value) / 100 }))}
+                      className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                      style={{ background: `linear-gradient(to right, #3b82f6 ${voiceSettings.similarityBoost * 100}%, #374151 ${voiceSettings.similarityBoost * 100}%)` }}
+                    />
+                    <div className="flex justify-between text-[10px] text-white/40">
+                      <span>Less similar</span>
+                      <span>More similar to original</span>
+                    </div>
+                  </div>
+
+                  {/* Style Slider */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/60">Style Exaggeration</span>
+                      <span className="text-emerald-300">{Math.round(voiceSettings.style * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={voiceSettings.style * 100}
+                      onChange={(e) => setVoiceSettings(prev => ({ ...prev, style: Number(e.target.value) / 100 }))}
+                      className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                      style={{ background: `linear-gradient(to right, #10b981 ${voiceSettings.style * 100}%, #374151 ${voiceSettings.style * 100}%)` }}
+                    />
+                    <div className="flex justify-between text-[10px] text-white/40">
+                      <span>Neutral</span>
+                      <span>More dramatic</span>
+                    </div>
+                  </div>
+
+                  {/* Speaker Boost Toggle */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-white/60">Speaker Boost</div>
+                      <div className="text-[10px] text-white/40">Enhance voice clarity</div>
+                    </div>
                     <button
-                      key={voice.id}
-                      onClick={() => {
-                        setSelectedVoice(voice);
-                        setShowVoiceSelector(false);
-                      }}
-                      className={`w-full px-3 py-2 text-left hover:bg-white/5 transition-colors flex items-center justify-between ${
-                        selectedVoice.id === voice.id ? 'bg-purple-500/20 text-purple-300' : 'text-white/80'
+                      onClick={() => setVoiceSettings(prev => ({ ...prev, speakerBoost: !prev.speakerBoost }))}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${
+                        voiceSettings.speakerBoost ? 'bg-purple-500' : 'bg-gray-600'
                       }`}
                     >
-                      <div>
-                        <div className="font-medium">{voice.name}</div>
-                        <div className="text-xs text-white/50">{voice.description} • {voice.language}</div>
-                      </div>
-                      {selectedVoice.id === voice.id && (
-                        <span className="text-purple-400">✓</span>
-                      )}
+                      <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                        voiceSettings.speakerBoost ? 'left-7' : 'left-1'
+                      }`} />
                     </button>
-                  ))}
+                  </div>
+
+                  {/* Reset Button */}
+                  <button
+                    onClick={() => setVoiceSettings(DEFAULT_VOICE_SETTINGS)}
+                    className="w-full py-1.5 text-xs text-white/50 hover:text-white/80 transition-colors"
+                  >
+                    Reset to defaults
+                  </button>
                 </div>
               )}
             </div>
@@ -5720,18 +5881,6 @@ function ChatView({
             >
               <Paperclip className="h-4 w-4" />
             </Button>
-
-            {/* 🎤 Voice selector button for TTS (mobile-friendly alternative) */}
-            {selectedAgent?.engineProvider === "tts" && (
-              <Button
-                variant="secondary"
-                className="px-3 bg-purple-500/20 border-purple-500/30 hover:bg-purple-500/30"
-                onClick={() => setShowVoiceSelector(!showVoiceSelector)}
-                title={`Voice: ${selectedVoice.name}`}
-              >
-                🎤
-              </Button>
-            )}
 
             <Input
   ref={inputRef}

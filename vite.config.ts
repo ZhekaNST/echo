@@ -178,7 +178,7 @@ function apiRoutes() {
         req.on("data", (chunk: any) => (body += chunk));
         req.on("end", async () => {
           try {
-            const { text, voiceId, modelId } = JSON.parse(body || "{}");
+            const { text, voiceId, modelId, voiceSettings } = JSON.parse(body || "{}");
             const trimmedText = typeof text === "string" ? text.trim() : "";
 
             if (!trimmedText) {
@@ -200,6 +200,14 @@ function apiRoutes() {
               return res.end(JSON.stringify({ error: { message: "Voice ID required. Set ELEVENLABS_VOICE_ID in .env.local", code: "VOICE_ID_REQUIRED" } }));
             }
 
+            // Build voice settings from request or use defaults
+            const finalVoiceSettings = {
+              stability: voiceSettings?.stability ?? 0.5,
+              similarity_boost: voiceSettings?.similarity_boost ?? 0.75,
+              style: voiceSettings?.style ?? 0.0,
+              use_speaker_boost: voiceSettings?.use_speaker_boost ?? true,
+            };
+
             const finalModelId = modelId || "eleven_multilingual_v2";
 
             console.log(`[TTS] Request: voice=${finalVoiceId}, model=${finalModelId}, textLength=${trimmedText.length}`);
@@ -214,7 +222,7 @@ function apiRoutes() {
               body: JSON.stringify({
                 text: trimmedText,
                 model_id: finalModelId,
-                voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+                voice_settings: finalVoiceSettings,
               }),
             });
 

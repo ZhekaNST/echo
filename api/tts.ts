@@ -5,10 +5,18 @@ const DEFAULT_MODEL_ID = "eleven_multilingual_v2";
 const MAX_TEXT_LENGTH = 2000;
 const MIN_TEXT_LENGTH = 1;
 
+interface VoiceSettings {
+  stability?: number;
+  similarity_boost?: number;
+  style?: number;
+  use_speaker_boost?: boolean;
+}
+
 interface TTSRequest {
   text?: string;
   voiceId?: string;
   modelId?: string;
+  voiceSettings?: VoiceSettings;
 }
 
 interface ErrorResponse {
@@ -85,6 +93,15 @@ export default async function handler(
     // Log request (without sensitive data)
     console.log(`TTS Request: voice=${voiceId}, model=${modelId}, textLength=${text.length}`);
 
+    // Build voice settings from request or use defaults
+    const voiceSettingsFromRequest = body.voiceSettings || {};
+    const finalVoiceSettings = {
+      stability: voiceSettingsFromRequest.stability ?? 0.5,
+      similarity_boost: voiceSettingsFromRequest.similarity_boost ?? 0.75,
+      style: voiceSettingsFromRequest.style ?? 0.0,
+      use_speaker_boost: voiceSettingsFromRequest.use_speaker_boost ?? true,
+    };
+
     const elevenLabsResponse = await fetch(elevenLabsUrl, {
       method: "POST",
       headers: {
@@ -95,10 +112,7 @@ export default async function handler(
       body: JSON.stringify({
         text,
         model_id: modelId,
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-        },
+        voice_settings: finalVoiceSettings,
       }),
     });
 
