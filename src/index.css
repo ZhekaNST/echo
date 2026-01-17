@@ -110,3 +110,25 @@ button:focus-visible {
   50%  { background-position: 100% 50%; }
   100% { background-position: 0%   50%; }
 }
+
+/* Hide native scrollbars for horizontal scroll containers */
+.hide-scrollbar {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none !important;  /* Chrome, Safari, Opera */
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+/* Also hide scrollbar on any overflow-x-auto elements within rails */
+.hide-scrollbar * {
+  scrollbar-width: none !important;
+}
+
+.hide-scrollbar *::-webkit-scrollbar {
+  display: none !important;
+}

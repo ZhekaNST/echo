@@ -4548,11 +4548,12 @@ function MarketplaceRail({
             className="
               flex gap-5
               overflow-x-auto scroll-smooth
-              pb-5 pt-2
+              pt-2
               [-webkit-overflow-scrolling:touch]
               snap-x snap-mandatory
               hide-scrollbar
             "
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {items.map((a, idx) => (
               <motion.button
