@@ -842,9 +842,20 @@ useEffect(() => {
 
   
 
-    const [agents, setAgents] = useState<Agent[]>(() =>
-    loadLS<Agent[]>(LS.AGENTS, INITIAL_AGENTS)
-  );  
+    const [agents, setAgents] = useState<Agent[]>(() => {
+    const storedAgents = loadLS<Agent[]>(LS.AGENTS, []);
+    
+    // Merge: ensure all INITIAL_AGENTS exist (add missing built-in agents)
+    const storedIds = new Set(storedAgents.map(a => a.id));
+    const missingBuiltIn = INITIAL_AGENTS.filter(a => !storedIds.has(a.id));
+    
+    if (missingBuiltIn.length > 0) {
+      // Add missing built-in agents at the beginning
+      return [...missingBuiltIn, ...storedAgents];
+    }
+    
+    return storedAgents.length > 0 ? storedAgents : INITIAL_AGENTS;
+  });  
   const [query, setQuery] = useState("");
   type SortBy =
   | "recommended"
@@ -4638,76 +4649,6 @@ function ChatView({
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // 🔹 TTS (Text-to-Speech) state
-  const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
-  const [ttsError, setTtsError] = useState<string | null>(null);
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  // 🔹 TTS helper function
-  async function speakText(text: string, messageIndex: number): Promise<void> {
-    // Stop any currently playing audio
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current = null;
-    }
-
-    // If clicking the same message that's speaking, just stop
-    if (speakingMessageIndex === messageIndex) {
-      setSpeakingMessageIndex(null);
-      return;
-    }
-
-    setSpeakingMessageIndex(messageIndex);
-    setTtsError(null);
-
-    try {
-      const response = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text.slice(0, 2000) }), // Respect max length
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData?.error?.message || `TTS failed: ${response.status}`);
-      }
-
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      currentAudioRef.current = audio;
-
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        setSpeakingMessageIndex(null);
-        currentAudioRef.current = null;
-      };
-
-      audio.onerror = () => {
-        URL.revokeObjectURL(audioUrl);
-        setSpeakingMessageIndex(null);
-        setTtsError("Failed to play audio");
-        currentAudioRef.current = null;
-      };
-
-      await audio.play();
-    } catch (error: any) {
-      console.error("TTS Error:", error);
-      setSpeakingMessageIndex(null);
-      setTtsError(error?.message || "Failed to generate speech");
-    }
-  }
-
-  // Cleanup TTS audio on unmount
-  useEffect(() => {
-    return () => {
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current = null;
-      }
-    };
-  }, []);
-
   // 🔹 старт сессии / таймер
   const [sessionStart, setSessionStart] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -5504,38 +5445,6 @@ function ChatView({
                 >
                   {/* текст сообщения */}
                   {hasText && <div>{m.content}</div>}
-
-                  {/* 🔊 Speak button for assistant messages with text (not for TTS agent which has its own audio) */}
-                  {!isUser && hasText && m.content && !m.audioUrl && selectedAgent?.engineProvider !== "tts" && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <button
-                        onClick={() => speakText(m.content, i)}
-                        disabled={speakingMessageIndex !== null && speakingMessageIndex !== i}
-                        className={cx(
-                          "flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition",
-                          speakingMessageIndex === i
-                            ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/40"
-                            : "bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/70 border border-white/10",
-                          speakingMessageIndex !== null && speakingMessageIndex !== i && "opacity-50 cursor-not-allowed"
-                        )}
-                      >
-                        {speakingMessageIndex === i ? (
-                          <>
-                            <span className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                            <span>Speaking...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>🔊</span>
-                            <span>Speak</span>
-                          </>
-                        )}
-                      </button>
-                      {ttsError && speakingMessageIndex === null && (
-                        <span className="text-[10px] text-red-400">{ttsError}</span>
-                      )}
-                    </div>
-                  )}
 
                   {/* 🔊 Audio player for TTS agent responses */}
                   {m.audioUrl && (
