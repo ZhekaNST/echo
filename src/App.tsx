@@ -380,6 +380,20 @@ type RuntimeMode = "hosted" | "custom" | "local";
 
 type ExploreTab = "all" | "trending" | "top" | "new" | "category";
 
+// 🔊 Available TTS Voices (ElevenLabs)
+const TTS_VOICES = [
+  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", description: "Calm, female", language: "English" },
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella", description: "Warm, female", language: "English" },
+  { id: "ErXwobaYiN019PkySvjV", name: "Antoni", description: "Calm, male", language: "English" },
+  { id: "VR6AewLTigWG4xSOukaG", name: "Arnold", description: "Deep, male", language: "English" },
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", description: "Narrative, male", language: "English" },
+  { id: "yoZ06aMxZJJ28mfd3POQ", name: "Sam", description: "Dynamic, male", language: "English" },
+  { id: "jBpfuIE2acCO8z3wKNLl", name: "Gigi", description: "Childlike, female", language: "English" },
+  { id: "oWAxZDx7w5VEj9dCyTzz", name: "Grace", description: "British, female", language: "English" },
+  { id: "ThT5KcBeYPX3keUQqHPh", name: "Dorothy", description: "Pleasant, female", language: "English" },
+  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", description: "Strong, female", language: "English" },
+];
+
 const CATEGORY_ITEMS = [
   { id: "tools", label: "Tools" },
   { id: "voice", label: "Voice" },
@@ -4614,11 +4628,15 @@ function ChatView({
   selectedAgent: Agent | null;
   isCreator?: boolean;
 }) {
+  // 🔊 TTS Voice selection state
+  const [selectedVoice, setSelectedVoice] = useState(TTS_VOICES[0]);
+  const [showVoiceSelector, setShowVoiceSelector] = useState(false);
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
       content: selectedAgent?.engineProvider === "tts"
-        ? `🔊 Welcome to Voice Generator!\n\nI convert text to natural-sounding speech using AI. Just type or paste any text (up to 2000 characters) and I'll generate audio for you.\n\nTry it now — send me something to say!`
+        ? `🔊 Welcome to Voice Generator!\n\nI convert text to natural-sounding speech using AI. Just type or paste any text (up to 2000 characters) and I'll generate audio for you.\n\n**Current voice: ${TTS_VOICES[0].name}** (${TTS_VOICES[0].description})\n\nClick the 🎤 button to change voices. Try it now — send me something to say!`
         : `Hi! ${
             selectedAgent ? `I'm ${selectedAgent.name}` : "I'm your agent"
           }. Ask me anything.`,
@@ -5089,7 +5107,10 @@ function ChatView({
           const ttsResponse = await fetch("/api/tts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: text.slice(0, 2000) }),
+            body: JSON.stringify({ 
+              text: text.slice(0, 2000),
+              voiceId: selectedVoice.id,
+            }),
           });
 
           if (!ttsResponse.ok) {
@@ -5104,7 +5125,7 @@ function ChatView({
             ...history,
             {
               role: "assistant",
-              content: `🔊 Here's your audio for:\n\n"${text.length > 100 ? text.slice(0, 100) + '...' : text}"`,
+              content: `🔊 Here's your audio (Voice: **${selectedVoice.name}**):\n\n"${text.length > 100 ? text.slice(0, 100) + '...' : text}"`,
               audioUrl,
             },
           ];
@@ -5644,6 +5665,51 @@ function ChatView({
           )}
 
 
+          {/* 🔊 Voice Selector for TTS Agent */}
+          {selectedAgent?.engineProvider === "tts" && (
+            <div className="relative mb-2">
+              <button
+                onClick={() => setShowVoiceSelector(!showVoiceSelector)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30 text-purple-300 hover:bg-purple-500/30 transition-colors text-sm"
+              >
+                <span>🎤</span>
+                <span>Voice: <strong>{selectedVoice.name}</strong></span>
+                <span className="text-purple-400/60">({selectedVoice.description})</span>
+                <svg className={`w-4 h-4 transition-transform ${showVoiceSelector ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              
+              {showVoiceSelector && (
+                <div className="absolute bottom-full left-0 mb-2 w-72 max-h-64 overflow-y-auto rounded-xl bg-[#1a1a2e] border border-white/10 shadow-xl z-50">
+                  <div className="p-2 border-b border-white/10 text-xs text-white/50 uppercase tracking-wide">
+                    Select Voice
+                  </div>
+                  {TTS_VOICES.map((voice) => (
+                    <button
+                      key={voice.id}
+                      onClick={() => {
+                        setSelectedVoice(voice);
+                        setShowVoiceSelector(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left hover:bg-white/5 transition-colors flex items-center justify-between ${
+                        selectedVoice.id === voice.id ? 'bg-purple-500/20 text-purple-300' : 'text-white/80'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-medium">{voice.name}</div>
+                        <div className="text-xs text-white/50">{voice.description} • {voice.language}</div>
+                      </div>
+                      {selectedVoice.id === voice.id && (
+                        <span className="text-purple-400">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-2">
             {/* кнопка прикрепить */}
             <Button
@@ -5655,12 +5721,26 @@ function ChatView({
               <Paperclip className="h-4 w-4" />
             </Button>
 
+            {/* 🎤 Voice selector button for TTS (mobile-friendly alternative) */}
+            {selectedAgent?.engineProvider === "tts" && (
+              <Button
+                variant="secondary"
+                className="px-3 bg-purple-500/20 border-purple-500/30 hover:bg-purple-500/30"
+                onClick={() => setShowVoiceSelector(!showVoiceSelector)}
+                title={`Voice: ${selectedVoice.name}`}
+              >
+                🎤
+              </Button>
+            )}
+
             <Input
   ref={inputRef}
   placeholder={
     sessionBlocked && !isCreator
       ? "Session limit reached for this agent"
-      : "Type your message…"
+      : selectedAgent?.engineProvider === "tts" 
+        ? "Enter text to convert to speech…"
+        : "Type your message…"
   }
   value={input}
   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
