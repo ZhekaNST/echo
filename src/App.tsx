@@ -1527,7 +1527,7 @@ avatar: "🤖",
       <ProfileAgentsView
         onBack={() => push("/")}
         agents={agents}
-        address={address}
+        address={walletPk}
         onOpenAgent={(id) =>
           push(`/agent?id=${encodeURIComponent(id)}`)
         }
@@ -1559,7 +1559,7 @@ avatar: "🤖",
     return <ProfilePurchasesView onBack={() => push('/')} agents={agents} purchases={purchases} />;
   }
   if (route.startsWith('/profile/stats')) {
-    return <ProfileStatsView onBack={() => push('/')} agents={agents} address={address} purchases={purchases} />;
+    return <ProfileStatsView onBack={() => push('/')} agents={agents} address={walletPk} purchases={purchases} />;
   }
 
   // 🔹 Learn page route
