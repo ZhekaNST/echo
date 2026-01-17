@@ -8,7 +8,7 @@ if (typeof window !== "undefined" && typeof (window as any).Buffer === "undefine
   (window as any).Buffer = Buffer;
 }
 
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import heic2any from "heic2any";
 import { motion } from "framer-motion";
 import {  
@@ -4541,13 +4541,19 @@ function MarketplaceTopTags({
 
 // --- Chat page with persistent history + timer/limits + creator unlock ---
 // --- Chat page with persistent history + timer/limits + creator unlock + file uploads ---
+
+// Import IndexedDB attachment storage
+import { putAttachment, getAttachmentBlob, deleteAttachments } from "./lib/attachmentStore";
+
+// Attachment metadata (persisted in localStorage with messages)
+// Actual blob data is stored in IndexedDB by id
 type ChatAttachment = {
   id: string;
   name: string;
-  url: string;
-  type: "image" | "file";
-  sizeLabel?: string; // например "1.3 MB"
-  ext?: string;       // расширение: "pdf", "png", ...
+  mime: string;        // e.g., "image/jpeg", "application/pdf"
+  size: number;        // bytes
+  kind: "image" | "file";
+  ext?: string;        // extension: "pdf", "png", ...
 };
 
 type ChatMessage = {
@@ -4577,14 +4583,19 @@ function ChatView({
   const chatRef = useRef<HTMLDivElement | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [previewImage, setPreviewImage] = useState<ChatAttachment | null>(null);
-  const [previewImages, setPreviewImages] = useState<ChatAttachment[]>([]);
+  
+  // Image viewer state
+  const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(null);
+  const [previewAttachmentIds, setPreviewAttachmentIds] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
 
+  // Cache for loaded attachment URLs (blob URLs from IndexedDB)
+  const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({});
+  const loadingAttachments = useRef<Set<string>>(new Set());
 
-
-  // 🔹 файлы, которые выбрал пользователь, но ещё не отправил
-  const [pendingFiles, setPendingFiles] = useState<ChatAttachment[]>([]);
+  // Pending files for upload (with temporary blob URLs for preview)
+  type PendingFile = ChatAttachment & { tempUrl: string };
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -4602,30 +4613,63 @@ function ChatView({
 
   // 🔹 Keyboard navigation for image preview modal
   useEffect(() => {
-    if (!previewImage || previewImages.length <= 1) return;
+    if (!previewAttachmentId || previewAttachmentIds.length <= 1) return;
 
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") {
         e.preventDefault();
-        const prevIndex = previewIndex > 0 ? previewIndex - 1 : previewImages.length - 1;
-        setPreviewIndex(prevIndex);
-        setPreviewImage(previewImages[prevIndex]);
+        const prevIdx = previewIndex > 0 ? previewIndex - 1 : previewAttachmentIds.length - 1;
+        setPreviewIndex(prevIdx);
+        setPreviewAttachmentId(previewAttachmentIds[prevIdx]);
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        const nextIndex = previewIndex < previewImages.length - 1 ? previewIndex + 1 : 0;
-        setPreviewIndex(nextIndex);
-        setPreviewImage(previewImages[nextIndex]);
+        const nextIdx = previewIndex < previewAttachmentIds.length - 1 ? previewIndex + 1 : 0;
+        setPreviewIndex(nextIdx);
+        setPreviewAttachmentId(previewAttachmentIds[nextIdx]);
       } else if (e.key === "Escape") {
         e.preventDefault();
-        setPreviewImage(null);
-        setPreviewImages([]);
+        setPreviewAttachmentId(null);
+        setPreviewAttachmentIds([]);
         setPreviewIndex(0);
       }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [previewImage, previewImages, previewIndex]);
+  }, [previewAttachmentId, previewAttachmentIds, previewIndex]);
+
+  // 🔹 Load attachment blob from IndexedDB and create URL
+  const loadAttachmentUrl = useCallback(async (attachmentId: string) => {
+    // Already loaded or loading
+    if (attachmentUrls[attachmentId] || loadingAttachments.current.has(attachmentId)) {
+      return;
+    }
+
+    loadingAttachments.current.add(attachmentId);
+
+    try {
+      const blob = await getAttachmentBlob(attachmentId);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        setAttachmentUrls(prev => ({ ...prev, [attachmentId]: url }));
+      }
+    } catch (error) {
+      console.error("Failed to load attachment:", attachmentId, error);
+    } finally {
+      loadingAttachments.current.delete(attachmentId);
+    }
+  }, [attachmentUrls]);
+
+  // 🔹 Cleanup attachment URLs on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(attachmentUrls).forEach(url => {
+        if (url.startsWith("blob:")) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, []);
 
   // 🔹 подгружаем историю из localStorage при смене агента
   useEffect(() => {
@@ -4663,8 +4707,8 @@ function ChatView({
     return () => {
       // Revoke all pending file URLs on cleanup
       pendingFiles.forEach((file) => {
-        if (file.url && file.url.startsWith("blob:")) {
-          URL.revokeObjectURL(file.url);
+        if (file.tempUrl?.startsWith("blob:")) {
+          URL.revokeObjectURL(file.tempUrl);
         }
       });
     };
@@ -4826,7 +4870,7 @@ function ChatView({
       async function addFiles(files: File[]) {
         if (!files.length) return;
     
-        const next: ChatAttachment[] = await Promise.all(files.map(async (file) => {
+        const newPendingFiles: PendingFile[] = await Promise.all(files.map(async (file) => {
           let id: string;
           try {
             id = crypto.randomUUID();
@@ -4839,8 +4883,10 @@ function ChatView({
             : "";
           
           const isHeic = ["heic", "heif"].includes(ext);
-          let url: string;
-          let convertedFile: File | null = null;
+          let blobToStore: Blob = file;
+          let finalMime = file.type || "application/octet-stream";
+          let finalName = file.name;
+          let finalExt = ext;
           
           // Convert HEIC/HEIF to JPEG
           if (isHeic) {
@@ -4850,39 +4896,47 @@ function ChatView({
                 toType: "image/jpeg",
                 quality: 0.92,
               }) as Blob | Blob[];
-              const blob = Array.isArray(converted) ? converted[0] : converted;
-              convertedFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), {
-                type: "image/jpeg",
-                lastModified: file.lastModified,
-              });
-              url = URL.createObjectURL(convertedFile);
+              blobToStore = Array.isArray(converted) ? converted[0] : converted;
+              finalMime = "image/jpeg";
+              finalName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+              finalExt = "jpg";
             } catch (error) {
               console.warn("HEIC conversion failed, treating as file:", error);
-              url = URL.createObjectURL(file);
             }
-          } else {
-            url = URL.createObjectURL(file);
           }
           
           // Check if file is an image (by mime type OR extension)
           const imageExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "heic", "heif"];
-          const isImage = convertedFile 
-            ? true 
-            : (file.type.startsWith("image/") || imageExtensions.includes(ext));
-          
-          const sizeLabel = formatFileSize(file.size);
+          const isImage = finalMime.startsWith("image/") || imageExtensions.includes(finalExt);
+
+          // Save blob to IndexedDB
+          try {
+            await putAttachment({
+              id,
+              blob: blobToStore,
+              name: finalName,
+              mime: finalMime,
+              size: blobToStore.size,
+            });
+          } catch (error) {
+            console.error("Failed to save attachment to IndexedDB:", error);
+          }
+
+          // Create temporary URL for preview (will be revoked after sending)
+          const tempUrl = URL.createObjectURL(blobToStore);
     
           return {
             id,
-            name: file.name,
-            url,
-            type: isImage ? "image" : "file",
-            ext: convertedFile ? "jpg" : ext,
-            sizeLabel,
-          };
+            name: finalName,
+            mime: finalMime,
+            size: blobToStore.size,
+            kind: isImage ? "image" : "file",
+            ext: finalExt,
+            tempUrl,
+          } as PendingFile;
         }));
     
-        setPendingFiles((prev) => [...prev, ...next]);
+        setPendingFiles((prev) => [...prev, ...newPendingFiles]);
       }
     
       // 🔹 обработка выбора файлов через input
@@ -4936,35 +4990,51 @@ function ChatView({
       return;
     }
 
+    // Convert PendingFiles to ChatAttachments (strip tempUrl)
+    const attachments: ChatAttachment[] = pendingFiles.map(pf => ({
+      id: pf.id,
+      name: pf.name,
+      mime: pf.mime,
+      size: pf.size,
+      kind: pf.kind,
+      ext: pf.ext,
+    }));
+
     const userMsg: ChatMessage = {
       role: "user",
       content: text || (pendingFiles.length ? "" : ""),
-      ...(pendingFiles.length ? { attachments: pendingFiles } : {}),
+      ...(attachments.length ? { attachments } : {}),
     };
 
     const history = [...messages, userMsg];
 
+    // Revoke temporary URLs and clear pending files
+    pendingFiles.forEach(pf => {
+      if (pf.tempUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(pf.tempUrl);
+      }
+    });
+
     setInput("");
-setPendingFiles([]);
+    setPendingFiles([]);
 
-if (inputRef.current) {
-  inputRef.current.focus();
-}
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
 
-syncMessages(history);
-setLoading(true);
-
+    syncMessages(history);
+    setLoading(true);
 
     try {
-      // сообщения для backend — только role + content, без blob-URL
+      // Messages for backend — only role + content + attachment metadata
       const backendMessages = history.map((m) => ({
         role: m.role,
         content: m.content || "",
         attachments: (m.attachments || []).map((a) => ({
           name: a.name,
-          type: a.type,
+          kind: a.kind,
           ext: a.ext,
-          sizeLabel: a.sizeLabel,
+          mime: a.mime,
         })),
       }));
       
@@ -5184,10 +5254,50 @@ setLoading(true);
             const isUser = m.role === "user";
             
             // Check if message is image-only (no text, only image attachments)
-            const images = m.attachments?.filter(att => att.type === "image") || [];
-            const files = m.attachments?.filter(att => att.type === "file") || [];
+            const images = m.attachments?.filter(att => att.kind === "image") || [];
+            const files = m.attachments?.filter(att => att.kind === "file") || [];
             const hasText = m.content && m.content.trim().length > 0;
             const isImageOnlyMessage = !hasText && images.length > 0 && files.length === 0;
+
+            // Helper to render an image attachment
+            const renderImageAttachment = (att: ChatAttachment, maxW: string, maxH: string, rounded: string) => {
+              const url = attachmentUrls[att.id];
+              
+              // Trigger lazy load if not loaded
+              if (!url) {
+                loadAttachmentUrl(att.id);
+              }
+
+              return (
+                <div 
+                  key={att.id}
+                  className={`${maxW} ${maxH} ${rounded} overflow-hidden bg-white/5 cursor-pointer hover:opacity-90 transition border border-white/10`}
+                  onClick={() => {
+                    const imageIds = images.map(img => img.id);
+                    setPreviewAttachmentIds(imageIds);
+                    setPreviewIndex(imageIds.indexOf(att.id));
+                    setPreviewAttachmentId(att.id);
+                  }}
+                >
+                  {url ? (
+                    <img
+                      src={url}
+                      alt={att.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        console.warn("Image failed to load:", att.name);
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white/30 text-xs">
+                      Loading...
+                    </div>
+                  )}
+                </div>
+              );
+            };
             
             // For image-only messages, render without the bubble frame
             if (isImageOnlyMessage) {
@@ -5200,24 +5310,7 @@ setLoading(true);
                   )}
                 >
                   <div className="flex flex-col gap-1.5">
-                    {images.map((att) => (
-                      <img
-                        key={att.id}
-                        src={att.url}
-                        alt={att.name}
-                        onClick={() => {
-                          setPreviewImages(images);
-                          setPreviewIndex(images.findIndex(img => img.id === att.id));
-                          setPreviewImage(att);
-                        }}
-                        className="max-w-[280px] max-h-[200px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition"
-                        onError={(e) => {
-                          console.warn("Image failed to load:", att.name);
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = "none";
-                        }}
-                      />
-                    ))}
+                    {images.map((att) => renderImageAttachment(att, "max-w-[280px]", "max-h-[200px]", "rounded-xl"))}
                   </div>
                 </div>
               );
@@ -5249,62 +5342,55 @@ setLoading(true);
                       {/* Images - vertical stack */}
                       {images.length > 0 && (
                         <div className="flex flex-col gap-1.5 mb-2">
-                          {images.map((att) => (
-                            <img
-                              key={att.id}
-                              src={att.url}
-                              alt={att.name}
-                              onClick={() => {
-                                setPreviewImages(images);
-                                setPreviewIndex(images.findIndex(img => img.id === att.id));
-                                setPreviewImage(att);
-                              }}
-                              className="max-w-[260px] max-h-[180px] rounded-lg object-cover cursor-pointer hover:opacity-90 transition"
-                              onError={(e) => {
-                                console.warn("Image failed to load:", att.name);
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = "none";
-                              }}
-                            />
-                          ))}
+                          {images.map((att) => renderImageAttachment(att, "max-w-[260px]", "max-h-[180px]", "rounded-lg"))}
                         </div>
                       )}
                             
                       {/* File cards */}
                       {files.length > 0 && (
                         <div className="space-y-2">
-                          {files.map((att) => (
-                            <div
-                              key={att.id}
-                              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/15 bg-black/20 text-xs cursor-pointer hover:bg-white/10 transition"
-                              onClick={() => {
-                                if (att.url) {
-                                  window.open(att.url, "_blank");
-                                }
-                              }}
-                            >
-                              <div className="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center font-mono text-[10px] uppercase">
-                                {att.ext || "FILE"}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="truncate">{att.name}</div>
-                                <div className="text-[10px] text-white/50">
-                                  {(att.ext || "file").toUpperCase()}
-                                  {att.sizeLabel ? ` · ${att.sizeLabel}` : ""}
+                          {files.map((att) => {
+                            const fileUrl = attachmentUrls[att.id];
+                            if (!fileUrl) {
+                              loadAttachmentUrl(att.id);
+                            }
+                            const sizeLabel = att.size ? (att.size < 1024 * 1024 
+                              ? `${(att.size / 1024).toFixed(1)} KB` 
+                              : `${(att.size / 1024 / 1024).toFixed(1)} MB`) : "";
+                            
+                            return (
+                              <div
+                                key={att.id}
+                                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/15 bg-black/20 text-xs cursor-pointer hover:bg-white/10 transition"
+                                onClick={() => {
+                                  if (fileUrl) {
+                                    window.open(fileUrl, "_blank");
+                                  }
+                                }}
+                              >
+                                <div className="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center font-mono text-[10px] uppercase">
+                                  {att.ext || "FILE"}
                                 </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="truncate">{att.name}</div>
+                                  <div className="text-[10px] text-white/50">
+                                    {(att.ext || "file").toUpperCase()}
+                                    {sizeLabel ? ` · ${sizeLabel}` : ""}
+                                  </div>
+                                </div>
+                                {fileUrl && (
+                                  <a
+                                    href={fileUrl}
+                                    download={att.name}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-xs underline text-white/60 hover:text-white/80 transition"
+                                  >
+                                    Open
+                                  </a>
+                                )}
                               </div>
-                              {att.url && (
-                                <a
-                                  href={att.url}
-                                  download={att.name}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-xs underline text-white/60 hover:text-white/80 transition"
-                                >
-                                  Open
-                                </a>
-                              )}
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -5334,35 +5420,44 @@ setLoading(true);
             <div className="max-h-28 overflow-y-auto overflow-x-hidden">
               <div className="flex items-center gap-3 pb-1">
                 {pendingFiles.map((att) => {
-                  // Revoke URL when removing file
-                  const handleRemove = () => {
-                    if (att.url && att.url.startsWith("blob:")) {
-                      URL.revokeObjectURL(att.url);
+                  // Revoke URL and remove from IndexedDB when removing file
+                  const handleRemove = async () => {
+                    if (att.tempUrl?.startsWith("blob:")) {
+                      URL.revokeObjectURL(att.tempUrl);
+                    }
+                    // Also remove from IndexedDB
+                    try {
+                      await deleteAttachments([att.id]);
+                    } catch (e) {
+                      console.warn("Failed to delete attachment from IndexedDB:", e);
                     }
                     setPendingFiles((prev) =>
                       prev.filter((f) => f.id !== att.id)
                     );
                   };
 
+                  const sizeLabel = att.size ? (att.size < 1024 * 1024 
+                    ? `${(att.size / 1024).toFixed(1)} KB` 
+                    : `${(att.size / 1024 / 1024).toFixed(1)} MB`) : "";
+
                   return (
                     <div
                       key={att.id}
                       className="relative shrink-0 flex items-center"
                     >
-                      {att.type === "image" ? (
-                        // 🖼 крупный превью изображения
+                      {att.kind === "image" ? (
+                        // 🖼 image preview
                         <img
-                          src={att.url}
+                          src={att.tempUrl}
                           alt={att.name}
                           className="h-24 w-24 rounded-lg object-cover border border-white/10 shadow-md"
                           onError={(e) => {
-                            // If image fails to load (e.g., HEIC), treat as file
                             console.warn("Image failed to load, showing as file:", att.name);
                             (e.target as HTMLImageElement).style.display = "none";
                           }}
                         />
                       ) : (
-                        // 📎 файл как в ChatGPT: имя, формат, размер
+                        // 📎 file card
                         <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/15 bg-white/5 text-xs min-w-[190px] max-w-[260px]">
                           <div className="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center font-mono text-[10px] uppercase">
                             {att.ext || "FILE"}
@@ -5371,13 +5466,13 @@ setLoading(true);
                             <div className="truncate">{att.name}</div>
                             <div className="text-[10px] text-white/50">
                               {(att.ext || "file").toUpperCase()}
-                              {att.sizeLabel ? ` · ${att.sizeLabel}` : ""}
+                              {sizeLabel ? ` · ${sizeLabel}` : ""}
                             </div>
                           </div>
                         </div>
                       )}
 
-                      {/* крестик удалить конкретный файл */}
+                      {/* remove button */}
                       <button
                         onClick={handleRemove}
                         className="absolute -top-2 -right-2 bg-black/80 text-white text-xs h-5 w-5 rounded-full flex items-center justify-center border border-white/30 hover:bg-black/90 transition"
@@ -5388,17 +5483,23 @@ setLoading(true);
                   );
                 })}
 
-                {/* кнопка очистить всё */}
+                {/* clear all button */}
                 <button
                   type="button"
                   className="text-xs text-white/50 underline hover:text-white/70 transition"
-                  onClick={() => {
-                    // Revoke all URLs before clearing
+                  onClick={async () => {
+                    // Revoke all URLs and delete from IndexedDB
+                    const ids = pendingFiles.map(f => f.id);
                     pendingFiles.forEach((file) => {
-                      if (file.url && file.url.startsWith("blob:")) {
-                        URL.revokeObjectURL(file.url);
+                      if (file.tempUrl?.startsWith("blob:")) {
+                        URL.revokeObjectURL(file.tempUrl);
                       }
                     });
+                    try {
+                      await deleteAttachments(ids);
+                    } catch (e) {
+                      console.warn("Failed to delete attachments from IndexedDB:", e);
+                    }
                     setPendingFiles([]);
                   }}
                 >
@@ -5475,104 +5576,101 @@ setLoading(true);
           File uploads are handled in the browser for preview.
         </div>
       </div>
-       {/* 🟡 ВОТ ЗДЕСЬ — ОВЕРЛЕЙ ДЛЯ ФУЛЛСКРИН-ФОТО */}
        {/* Image Lightbox/Viewer Modal */}
-       {previewImage && previewImage.url && (
-        <div
-          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
-          onClick={() => {
-            setPreviewImage(null);
-            setPreviewImages([]);
+       {previewAttachmentId && (() => {
+          const previewUrl = attachmentUrls[previewAttachmentId];
+          
+          // Ensure the attachment is loaded
+          if (!previewUrl) {
+            loadAttachmentUrl(previewAttachmentId);
+          }
+
+          const closeViewer = () => {
+            setPreviewAttachmentId(null);
+            setPreviewAttachmentIds([]);
             setPreviewIndex(0);
-          }}
-        >
-          {/* Close button - top right corner */}
-          <button
-            onClick={() => {
-              setPreviewImage(null);
-              setPreviewImages([]);
-              setPreviewIndex(0);
-            }}
-            className="
-              absolute top-4 right-4 h-10 w-10 rounded-full
-              bg-white/10 hover:bg-white/20
-              flex items-center justify-center text-white text-2xl
-              transition z-20
-            "
-          >
-            ×
-          </button>
+          };
 
-          {/* Navigation - Previous */}
-          {previewImages.length > 1 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                const prevIndex = previewIndex > 0 ? previewIndex - 1 : previewImages.length - 1;
-                setPreviewIndex(prevIndex);
-                setPreviewImage(previewImages[prevIndex]);
-              }}
-              className="
-                absolute left-4 top-1/2 -translate-y-1/2
-                h-12 w-12 rounded-full
-                bg-white/10 hover:bg-white/20
-                flex items-center justify-center text-white text-2xl
-                transition z-20
-              "
+          const goToPrev = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            const prevIdx = previewIndex > 0 ? previewIndex - 1 : previewAttachmentIds.length - 1;
+            setPreviewIndex(prevIdx);
+            setPreviewAttachmentId(previewAttachmentIds[prevIdx]);
+          };
+
+          const goToNext = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            const nextIdx = previewIndex < previewAttachmentIds.length - 1 ? previewIndex + 1 : 0;
+            setPreviewIndex(nextIdx);
+            setPreviewAttachmentId(previewAttachmentIds[nextIdx]);
+          };
+
+          return (
+            <div
+              className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
+              onClick={closeViewer}
             >
-              ‹
-            </button>
-          )}
+              {/* Close button */}
+              <button
+                onClick={closeViewer}
+                className="absolute top-4 right-4 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-2xl transition z-20"
+              >
+                ×
+              </button>
 
-          {/* Navigation - Next */}
-          {previewImages.length > 1 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                const nextIndex = previewIndex < previewImages.length - 1 ? previewIndex + 1 : 0;
-                setPreviewIndex(nextIndex);
-                setPreviewImage(previewImages[nextIndex]);
-              }}
-              className="
-                absolute right-4 top-1/2 -translate-y-1/2
-                h-12 w-12 rounded-full
-                bg-white/10 hover:bg-white/20
-                flex items-center justify-center text-white text-2xl
-                transition z-20
-              "
-            >
-              ›
-            </button>
-          )}
+              {/* Navigation - Previous */}
+              {previewAttachmentIds.length > 1 && (
+                <button
+                  onClick={goToPrev}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-2xl transition z-20"
+                >
+                  ‹
+                </button>
+              )}
 
-          {/* Main Image - centered */}
-          <div
-            className="flex flex-col items-center justify-center p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Always try to render image if we have a URL */}
-            {previewImage.url && (
-              <img
-                src={previewImage.url}
-                alt={previewImage.name}
-                className="max-w-[90vw] max-h-[80vh] object-contain rounded-lg shadow-2xl"
-                onError={(e) => {
-                  console.error("Preview image failed to load:", previewImage.url);
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = "none";
-                }}
-              />
-            )}
+              {/* Navigation - Next */}
+              {previewAttachmentIds.length > 1 && (
+                <button
+                  onClick={goToNext}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-2xl transition z-20"
+                >
+                  ›
+                </button>
+              )}
 
-            {/* Image counter */}
-            {previewImages.length > 1 && (
-              <div className="mt-4 text-xs text-white/50">
-                {previewIndex + 1} / {previewImages.length}
+              {/* Main Image */}
+              <div
+                className="flex flex-col items-center justify-center p-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                    onError={(e) => {
+                      console.error("Preview image failed to load");
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-4 p-8 rounded-xl bg-white/5 border border-white/10">
+                    <div className="text-white/40 text-lg">Loading image...</div>
+                    <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+                  </div>
+                )}
+
+                {/* Image counter */}
+                {previewAttachmentIds.length > 1 && (
+                  <div className="mt-4 text-xs text-white/50">
+                    {previewIndex + 1} / {previewAttachmentIds.length}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-      )}
+            </div>
+          );
+        })()}
     </div>
   );
 }
