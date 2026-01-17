@@ -481,84 +481,42 @@ function getAllActiveSessions(agents: Agent[]): Array<{ agent: Agent; session: A
   return activeSessions;
 }
 
-// ✅ Verify payment transaction on-chain (replaces broken external server)
-async function verifyPaymentOnChain(
+// ✅ Verify payment via SERVER-SIDE endpoint (secure verification)
+// IMPORTANT: Payment verification MUST happen on server to prevent spoofing
+async function verifyPaymentOnServer(
   signature: string,
   expectedRecipient: string,
   expectedAmount: number,
-  buyerPubkey: string
-): Promise<{ valid: boolean; reason?: string }> {
+  buyerPubkey: string,
+  agentId?: string
+): Promise<{ verified: boolean; error?: string }> {
   try {
-    const connection = await getSolanaConnection();
-    const DECIMALS = 6;
-    const expectedRawAmount = Math.round(expectedAmount * 10 ** DECIMALS);
-
-    // Get transaction details
-    const tx = await connection.getTransaction(signature, {
-      maxSupportedTransactionVersion: 0,
+    console.log("[Payment] Verifying on server:", signature.slice(0, 16) + "...");
+    
+    const response = await fetch("/api/payment/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        signature,
+        receiver: expectedRecipient,
+        amount: expectedAmount,
+        buyer: buyerPubkey,
+        agentId,
+      }),
     });
 
-    if (!tx) {
-      return { valid: false, reason: "Transaction not found on blockchain" };
+    const data = await response.json();
+
+    if (data.verified) {
+      console.log("[Payment] ✅ Server verified payment:", signature.slice(0, 16) + "...");
+      return { verified: true };
+    } else {
+      console.log("[Payment] ❌ Server rejected payment:", data.error);
+      return { verified: false, error: data.error || "Payment verification failed" };
     }
-
-    if (!tx.meta) {
-      return { valid: false, reason: "Transaction metadata not available" };
-    }
-
-    if (tx.meta.err) {
-      return { valid: false, reason: `Transaction failed: ${JSON.stringify(tx.meta.err)}` };
-    }
-
-    // Check if transaction was successful
-    const preBalances = tx.meta.preTokenBalances || [];
-    const postBalances = tx.meta.postTokenBalances || [];
-
-    // Find USDC token transfer
-    const recipientPubkey = new PublicKey(expectedRecipient);
-    const recipientATA = await getAssociatedTokenAddress(
-      new PublicKey(USDC_MINT),
-      recipientPubkey
-    );
-
-    let foundTransfer = false;
-    let transferredAmount = 0;
-
-    // Check token balance changes
-    for (const post of postBalances) {
-      if (post.owner === recipientATA.toString() && post.mint === USDC_MINT) {
-        const pre = preBalances.find(
-          (p) => p.accountIndex === post.accountIndex && p.mint === USDC_MINT
-        );
-        const preAmount = pre ? parseFloat(pre.uiTokenAmount.uiAmountString || "0") : 0;
-        const postAmount = parseFloat(post.uiTokenAmount.uiAmountString || "0");
-        const diff = postAmount - preAmount;
-
-        if (diff > 0) {
-          foundTransfer = true;
-          transferredAmount = Math.round(diff * 10 ** DECIMALS);
-          break;
-        }
-      }
-    }
-
-    if (!foundTransfer) {
-      return { valid: false, reason: "No USDC transfer found to recipient" };
-    }
-
-    // Verify amount (allow small rounding differences)
-    const amountDiff = Math.abs(transferredAmount - expectedRawAmount);
-    if (amountDiff > 100) { // Allow 0.0001 USDC difference for rounding
-      return {
-        valid: false,
-        reason: `Amount mismatch: expected ${expectedAmount} USDC, got ${transferredAmount / 10 ** DECIMALS}`,
-      };
-    }
-
-    return { valid: true };
   } catch (e: any) {
-    console.error("Payment verification error:", e);
-    return { valid: false, reason: e?.message || "Verification failed" };
+    console.error("[Payment] Verification request failed:", e);
+    return { verified: false, error: e?.message || "Failed to verify payment" };
   }
 }
 
@@ -3367,23 +3325,24 @@ return (
                   onSuccess={async (sig: string) => {
                     if (!selected || !walletPk) return;
 
-                    // ✅ Verify payment on-chain (no external server needed)
-                    const verification = await verifyPaymentOnChain(
+                    // ✅ Verify payment on SERVER (secure verification)
+                    const verification = await verifyPaymentOnServer(
                       sig,
                       selected.creatorWallet!,
                       selected.priceUSDC,
-                      walletPk
+                      walletPk,
+                      selected.id
                     );
 
-                    if (!verification.valid) {
+                    if (!verification.verified) {
                       setModalState("error");
                       alert(
-                        "Payment verification failed: " + (verification.reason || "Unknown error")
+                        "Payment verification failed: " + (verification.error || "Unknown error")
                       );
                       return;
                     }
 
-                    // ✅ Payment verified — save session
+                    // ✅ Payment verified by server — save session
                     saveSession(selected, sig);
                     setModalState("paid");
                   }}
@@ -3412,17 +3371,19 @@ return (
                   onSuccess={async (sig: string) => {
                     if (!selected || !walletPk) return;
 
-                    const verification = await verifyPaymentOnChain(
+                    // ✅ Verify payment on SERVER (secure verification)
+                    const verification = await verifyPaymentOnServer(
                       sig,
                       selected.creatorWallet!,
                       selected.priceUSDC,
-                      walletPk
+                      walletPk,
+                      selected.id
                     );
 
-                    if (!verification.valid) {
+                    if (!verification.verified) {
                       setModalState("error");
                       alert(
-                        "Payment verification failed: " + (verification.reason || "Unknown error")
+                        "Payment verification failed: " + (verification.error || "Unknown error")
                       );
                       return;
                     }
@@ -6067,7 +6028,11 @@ function ProfileAgentsView({
   onOpenAgent: (id: string) => void;
   onEditAgent: (agent: Agent) => void;
 }) {
-  const mine = agents.filter(a => a.creator && a.creator === (address || ''));
+  // Filter agents by creator OR creatorWallet matching connected wallet
+  const mine = agents.filter(a => {
+    if (!address) return false;
+    return (a.creator && a.creator === address) || (a.creatorWallet && a.creatorWallet === address);
+  });
 
   return (
     <div className="min-h-screen w-screen overflow-x-hidden bg-gradient-to-b from-black via-[#0b0b1a] to-black text-white">
@@ -7123,7 +7088,11 @@ function PrivacyPage({ onBack }: { onBack: () => void }) {
 }
 
 function ProfileStatsView({ onBack, agents, address, purchases }: { onBack: () => void; agents: Agent[]; address: string | null; purchases: { id: string; agentId: string; priceUSDC: number; ts: number }[]; }) {
-  const mine = agents.filter(a => a.creator && a.creator === (address || ''));
+  // Filter agents by creator OR creatorWallet matching connected wallet
+  const mine = agents.filter(a => {
+    if (!address) return false;
+    return (a.creator && a.creator === address) || (a.creatorWallet && a.creatorWallet === address);
+  });
   const totalSessions = mine.reduce((s,a)=>s+a.sessions,0);
   const totalLikes = mine.reduce((s,a)=>s+a.likes,0);
   const totalRevenue = purchases.filter(p => mine.some(a=>a.id===p.agentId)).reduce((s,p)=>s+p.priceUSDC,0);

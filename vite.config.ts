@@ -240,6 +240,173 @@ function apiRoutes() {
           }
         });
       });
+
+      // ✅ Payment Verification (SERVER-SIDE - Critical Security)
+      server.middlewares.use("/api/payment/verify", async (req: any, res: any) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+        if (req.method === "OPTIONS") {
+          res.statusCode = 200;
+          return res.end();
+        }
+        if (req.method !== "POST") {
+          res.statusCode = 405;
+          res.setHeader("Content-Type", "application/json");
+          return res.end(JSON.stringify({ verified: false, error: "Method not allowed" }));
+        }
+
+        let body = "";
+        req.on("data", (chunk: any) => (body += chunk));
+        req.on("end", async () => {
+          try {
+            const { signature, receiver, amount, buyer, agentId } = JSON.parse(body || "{}");
+
+            if (!signature || !receiver || typeof amount !== "number") {
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              return res.end(JSON.stringify({ verified: false, error: "Missing required fields" }));
+            }
+
+            console.log(`[Payment Verify] Checking: ${signature.slice(0, 16)}...`);
+            console.log(`[Payment Verify] Expected: ${amount} USDC to ${receiver.slice(0, 8)}...`);
+
+            // Use RPC to verify transaction on-chain
+            const rpcUrl = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+            const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+            const txResponse = await fetch(rpcUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                jsonrpc: "2.0",
+                id: 1,
+                method: "getTransaction",
+                params: [signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }],
+              }),
+            });
+
+            const txData = await txResponse.json();
+
+            if (txData.error || !txData.result) {
+              console.log("[Payment Verify] ❌ Transaction not found");
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              return res.end(JSON.stringify({ verified: false, error: "Transaction not found. Wait for confirmation." }));
+            }
+
+            const tx = txData.result;
+            if (tx.meta?.err) {
+              console.log("[Payment Verify] ❌ Transaction failed on-chain");
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              return res.end(JSON.stringify({ verified: false, error: "Transaction failed on-chain" }));
+            }
+
+            // Check token balances for USDC transfer
+            const preBalances = tx.meta?.preTokenBalances || [];
+            const postBalances = tx.meta?.postTokenBalances || [];
+            const DECIMALS = 6;
+            const expectedRaw = Math.round(amount * 10 ** DECIMALS);
+
+            let foundTransfer = false;
+            let actualAmount = 0;
+
+            for (const post of postBalances) {
+              if (post.mint === USDC_MINT && post.owner === receiver) {
+                const pre = preBalances.find((p: any) => p.accountIndex === post.accountIndex && p.mint === USDC_MINT);
+                const preAmount = pre ? parseFloat(pre.uiTokenAmount?.uiAmountString || "0") : 0;
+                const postAmount = parseFloat(post.uiTokenAmount?.uiAmountString || "0");
+                const diff = postAmount - preAmount;
+                if (diff > 0) {
+                  foundTransfer = true;
+                  actualAmount = diff;
+                  break;
+                }
+              }
+            }
+
+            if (!foundTransfer) {
+              console.log("[Payment Verify] ❌ No USDC transfer found to receiver");
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              return res.end(JSON.stringify({ verified: false, error: "No USDC transfer found to receiver" }));
+            }
+
+            // Verify amount (allow 0.01 USDC tolerance)
+            const actualRaw = Math.round(actualAmount * 10 ** DECIMALS);
+            if (Math.abs(actualRaw - expectedRaw) > 10000) {
+              console.log(`[Payment Verify] ❌ Amount mismatch: expected ${amount}, got ${actualAmount}`);
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              return res.end(JSON.stringify({ verified: false, error: `Amount mismatch: expected ${amount} USDC` }));
+            }
+
+            console.log("[Payment Verify] ✅ VERIFIED");
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ verified: true, signature, amount: actualAmount, receiver, agentId, verifiedAt: Date.now() }));
+
+          } catch (e: any) {
+            console.error("[Payment Verify] Error:", e.message);
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ verified: false, error: e.message || "Verification error" }));
+          }
+        });
+      });
+
+      // ✅ Payment Intent Creation (for tracking expected payments)
+      server.middlewares.use("/api/payment/create-intent", async (req: any, res: any) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+        if (req.method === "OPTIONS") {
+          res.statusCode = 200;
+          return res.end();
+        }
+        if (req.method !== "POST") {
+          res.statusCode = 405;
+          res.setHeader("Content-Type", "application/json");
+          return res.end(JSON.stringify({ error: "Method not allowed" }));
+        }
+
+        let body = "";
+        req.on("data", (chunk: any) => (body += chunk));
+        req.on("end", () => {
+          try {
+            const { agentId, amount, receiver, buyer } = JSON.parse(body || "{}");
+            const PLATFORM_WALLET = "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ";
+            const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+            const paymentReceiver = receiver || PLATFORM_WALLET;
+            const intentId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+            const amountRaw = Math.round(amount * 1000000); // 6 decimals
+
+            console.log(`[Payment Intent] Created: ${intentId} for ${amount} USDC`);
+
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({
+              success: true,
+              paymentIntent: {
+                id: intentId,
+                amount,
+                amountRaw,
+                receiver: paymentReceiver,
+                usdcMint: USDC_MINT,
+                expiresAt: Date.now() + 10 * 60 * 1000,
+              },
+            }));
+          } catch (e: any) {
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+      });
     },
   };
 }
