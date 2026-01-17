@@ -4530,7 +4530,7 @@ function MarketplaceRail({
         </div>
 
         {/* rail */}
-        <div className="relative">
+        <div className="relative overflow-hidden">
           {/* лёгкие fade по краям (чтобы не выглядело “скудно”) */}
           <div
             aria-hidden
@@ -4547,8 +4547,8 @@ function MarketplaceRail({
             ref={rowRef}
             className="
               flex gap-5
-              overflow-x-auto scroll-smooth
-              pt-2
+              overflow-x-auto overflow-y-hidden scroll-smooth
+              pt-2 pb-4
               [-webkit-overflow-scrolling:touch]
               snap-x snap-mandatory
               hide-scrollbar
