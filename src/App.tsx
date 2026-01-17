@@ -579,6 +579,8 @@ const INITIAL_AGENTS: Agent[] = [
     promptPreview: "I convert your text into natural-sounding speech using advanced AI voices.",
     description: "Voice Generator is a powerful text-to-speech tool powered by ElevenLabs. Simply type or paste any text, and I'll convert it to natural, human-like speech. Perfect for:\n\n• Creating voiceovers for videos\n• Listening to articles and documents\n• Accessibility and learning\n• Content creation\n\nSupports multiple languages and voices. Just send me your text and I'll speak it back to you!",
     engineProvider: "tts",
+    creator: "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ",
+    creatorWallet: "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ",
     createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
     lastActiveAt: Date.now() - 1000 * 60 * 30,
     sessions24h: 156,
