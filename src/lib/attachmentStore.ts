@@ -3,7 +3,7 @@
  * Stores actual blob data so images persist across page reloads.
  */
 
-const DB_NAME = "agentverse-attachments";
+const DB_NAME = "echo-attachments";
 const DB_VERSION = 1;
 const STORE_NAME = "files";
 

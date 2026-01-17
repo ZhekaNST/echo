@@ -167,7 +167,7 @@ async function getSolanaConnection(): Promise<Connection> {
 
 
 /*
-  AgentVerse — Web3 AI Agent Marketplace
+  Echo — Web3 AI Agent Marketplace
   Additions in this revision:
   • Fixes: removed stray code causing syntax errors and repaired JSX comment/quote issues.
   • Top Rated gradient borders (orange -> amber) on the best agents.
@@ -177,9 +177,9 @@ async function getSolanaConnection(): Promise<Connection> {
   • Working Profile menu pages: My Agents, Purchases, Creator Stats.
 */
 
-const HOME_SCROLL_KEY = "agentverse_home_scroll";
+const HOME_SCROLL_KEY = "echo_home_scroll";
 
-const TRENDING_RESET_KEY = "agentverse_trending_reset_v1";
+const TRENDING_RESET_KEY = "echo_trending_reset_v1";
 
 function rememberHomeScroll() {
   if (typeof window === "undefined") return;
@@ -362,7 +362,7 @@ likes24h?: number;          // демо-счётчик
   creatorWallet?: string;
 
   // engine / RAG
-  engineProvider?: "platform" | "creator_backend";
+  engineProvider?: "platform" | "creator_backend" | "tts";
   engineApiUrl?: string | null;
   ragEndpointUrl?: string | null;
   ragDescription?: string | null;
@@ -381,6 +381,8 @@ type RuntimeMode = "hosted" | "custom" | "local";
 type ExploreTab = "all" | "trending" | "top" | "new" | "category";
 
 const CATEGORY_ITEMS = [
+  { id: "tools", label: "Tools" },
+  { id: "voice", label: "Voice" },
   { id: "design", label: "Design" },
   { id: "startup", label: "Startup" },
   { id: "builders", label: "Builders" },
@@ -411,7 +413,7 @@ type AgentReview = {
   createdAt: number;    // timestamp
 };
 
-const SESSION_KEY_PREFIX = "agentverse_session_";
+const SESSION_KEY_PREFIX = "echo_session_";
 
 function getSessionKey(agentId: string) {
   return `${SESSION_KEY_PREFIX}${agentId}`;
@@ -564,6 +566,24 @@ async function verifyPaymentOnChain(
 
 
 const INITIAL_AGENTS: Agent[] = [
+  // 🔊 Text-to-Speech Agent (ElevenLabs)
+  {
+    id: "tts-agent",
+    name: "Voice Generator",
+    priceUSDC: 0,
+    tagline: "Convert any text to natural speech instantly.",
+    avatar: "🔊",
+    categories: ["tools", "voice"],
+    likes: 2840,
+    sessions: 5120,
+    promptPreview: "I convert your text into natural-sounding speech using advanced AI voices.",
+    description: "Voice Generator is a powerful text-to-speech tool powered by ElevenLabs. Simply type or paste any text, and I'll convert it to natural, human-like speech. Perfect for:\n\n• Creating voiceovers for videos\n• Listening to articles and documents\n• Accessibility and learning\n• Content creation\n\nSupports multiple languages and voices. Just send me your text and I'll speak it back to you!",
+    engineProvider: "tts",
+    createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
+    lastActiveAt: Date.now() - 1000 * 60 * 30,
+    sessions24h: 156,
+    likes24h: 42,
+  },
   {
     id: "a1",
     name: "AI Startup Mentor",
@@ -702,7 +722,7 @@ function buildTopTags() {
 
 const formatUSDC = (n: number) => `${n.toFixed(2)} USDC`;
 
-export default function AgentVerse() {
+export default function Echo() {
   // Routing (no Next.js)
   const { route, push } = useHashRoute("/");
   const topTags = useMemo(() => buildTopTags(), []);
@@ -980,7 +1000,7 @@ async function testChatEndpoint() {
       headers: {
         "content-type": "application/json",
         ...(newAgent.authToken
-          ? { "x-agentverse-key": String(newAgent.authToken) }
+          ? { "x-echo-key": String(newAgent.authToken) }
           : {}),
       },
       body: JSON.stringify({
@@ -1537,9 +1557,24 @@ avatar: "🤖",
   }
 
   // 🔹 Learn page route
-if (route.startsWith("/learn")) {
-  return <LearnPage onBack={() => push("/")} />;
-}
+  if (route.startsWith("/learn")) {
+    return <LearnPage onBack={() => push("/")} />;
+  }
+
+  // 🔹 About page route
+  if (route.startsWith("/about")) {
+    return <AboutPage onBack={() => push("/")} />;
+  }
+
+  // 🔹 Docs page route
+  if (route.startsWith("/docs")) {
+    return <DocsPage onBack={() => push("/")} />;
+  }
+
+  // 🔹 Privacy Policy page route
+  if (route.startsWith("/privacy")) {
+    return <PrivacyPage onBack={() => push("/")} />;
+  }
 
     // 🔹 НОВЫЙ РОУТ: страница агента
     if (route.startsWith("/agent")) {
@@ -1955,7 +1990,7 @@ const canPublish =
     <div className="rounded-lg bg-white/5 border border-white/10 p-3 space-y-2">
       <div className="text-xs font-semibold text-white/80">Auth token (optional)</div>
       <p className="text-[11px] text-white/50">
-        We send it as <span className="font-mono">x-agentverse-key</span>. Use it to protect your backend.
+        We send it as <span className="font-mono">x-echo-key</span>. Use it to protect your backend.
       </p>
 
       <Input
@@ -2609,7 +2644,7 @@ return (
         viewport={{ once: true, amount: 0.3 }}
         transition={{ duration: 0.45, delay: 0.08 }}
       >
-        AgentVerse is a marketplace for AI agents with crypto-native
+        Echo is a marketplace for AI agents with crypto-native
         payments. Real-time stats from the marketplace.
       </motion.p>
 
@@ -3415,7 +3450,7 @@ return (
             <div className="h-7 w-7 rounded-md bg-gradient-to-r from-cyan-400/20 via-indigo-400/20 to-emerald-400/20 border border-white/10 grid place-items-center">
               <Bot className="h-4 w-4" />
             </div>
-            <div className="text-white text-lg font-semibold">AgentVerse</div>
+            <div className="text-white text-lg font-semibold">Echo</div>
           </div>
 
           {/* Company */}
@@ -3450,7 +3485,7 @@ return (
                 </a>
               </li>
               <li>
-                <a href="mailto:support@agentverse.app" className="hover:text-white transition">
+                <a href="mailto:support@echo.app" className="hover:text-white transition">
                   Support
                 </a>
               </li>
@@ -3494,7 +3529,7 @@ return (
           {/* Socials */}
           <div className="md:col-span-1 md:justify-self-end flex items-start md:items-center gap-4">
             <a
-              href="https://x.com/agentversepr"
+              href="https://x.com/echo_ai"
               target="_blank"
               rel="noreferrer"
               className="text-white/70 hover:text-white transition"
@@ -3506,7 +3541,7 @@ return (
         </div>
 
         <div className="mt-10 border-t border-white/10 pt-4 flex flex-col md:flex-row items-center justify-between text-sm text-white/60">
-          <div>© 2025 AgentVerse. All rights reserved.</div>
+          <div>© 2025 Echo. All rights reserved.</div>
           <div className="flex gap-6 mt-2 md:mt-0">
             <a href="#/terms" className="hover:text-white transition">
               Terms
@@ -4560,6 +4595,7 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   attachments?: ChatAttachment[];
+  audioUrl?: string; // For TTS agent responses
 };
 
 function ChatView({
@@ -4574,9 +4610,11 @@ function ChatView({
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: `Hi! ${
-        selectedAgent ? `I'm ${selectedAgent.name}` : "I'm your agent"
-      }. Ask me anything.`,
+      content: selectedAgent?.engineProvider === "tts"
+        ? `🔊 Welcome to Voice Generator!\n\nI convert text to natural-sounding speech using AI. Just type or paste any text (up to 2000 characters) and I'll generate audio for you.\n\nTry it now — send me something to say!`
+        : `Hi! ${
+            selectedAgent ? `I'm ${selectedAgent.name}` : "I'm your agent"
+          }. Ask me anything.`,
     },
   ]);
 
@@ -4600,6 +4638,75 @@ function ChatView({
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  // 🔹 TTS (Text-to-Speech) state
+  const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
+  const [ttsError, setTtsError] = useState<string | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // 🔹 TTS helper function
+  async function speakText(text: string, messageIndex: number): Promise<void> {
+    // Stop any currently playing audio
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+
+    // If clicking the same message that's speaking, just stop
+    if (speakingMessageIndex === messageIndex) {
+      setSpeakingMessageIndex(null);
+      return;
+    }
+
+    setSpeakingMessageIndex(messageIndex);
+    setTtsError(null);
+
+    try {
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text.slice(0, 2000) }), // Respect max length
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData?.error?.message || `TTS failed: ${response.status}`);
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      currentAudioRef.current = audio;
+
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        setSpeakingMessageIndex(null);
+        currentAudioRef.current = null;
+      };
+
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        setSpeakingMessageIndex(null);
+        setTtsError("Failed to play audio");
+        currentAudioRef.current = null;
+      };
+
+      await audio.play();
+    } catch (error: any) {
+      console.error("TTS Error:", error);
+      setSpeakingMessageIndex(null);
+      setTtsError(error?.message || "Failed to generate speech");
+    }
+  }
+
+  // Cleanup TTS audio on unmount
+  useEffect(() => {
+    return () => {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
+    };
+  }, []);
 
   // 🔹 старт сессии / таймер
   const [sessionStart, setSessionStart] = useState<number | null>(null);
@@ -4608,7 +4715,7 @@ function ChatView({
   // ключ для localStorage по агенту
   const storageKey =
     selectedAgent && selectedAgent.id
-      ? `agentverse_chat_${selectedAgent.id}`
+      ? `echo_chat_${selectedAgent.id}`
       : null;
 
   // 🔹 Keyboard navigation for image preview modal
@@ -5026,6 +5133,68 @@ function ChatView({
     setLoading(true);
 
     try {
+      // 🔊 TTS Agent - Convert text to speech
+      if (selectedAgent.engineProvider === "tts") {
+        if (!text) {
+          const next: ChatMessage[] = [
+            ...history,
+            {
+              role: "assistant",
+              content: "Please enter some text that you'd like me to convert to speech.",
+            },
+          ];
+          syncMessages(next);
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const ttsResponse = await fetch("/api/tts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: text.slice(0, 2000) }),
+          });
+
+          if (!ttsResponse.ok) {
+            const errorData = await ttsResponse.json().catch(() => ({}));
+            throw new Error(errorData?.error?.message || `TTS failed: ${ttsResponse.status}`);
+          }
+
+          const audioBlob = await ttsResponse.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+
+          const next: ChatMessage[] = [
+            ...history,
+            {
+              role: "assistant",
+              content: `🔊 Here's your audio for:\n\n"${text.length > 100 ? text.slice(0, 100) + '...' : text}"`,
+              audioUrl,
+            },
+          ];
+          syncMessages(next);
+
+          // Auto-play the audio
+          const audio = new Audio(audioUrl);
+          audio.play().catch(() => {
+            // Autoplay blocked, user will use the player
+          });
+
+        } catch (ttsError: any) {
+          console.error("TTS Error:", ttsError);
+          const next: ChatMessage[] = [
+            ...history,
+            {
+              role: "assistant",
+              content: `Sorry, I couldn't generate the audio. ${ttsError?.message || "Please try again."}`,
+            },
+          ];
+          syncMessages(next);
+        }
+
+        setLoading(false);
+        return;
+      }
+
       // Messages for backend — only role + content + attachment metadata
       const backendMessages = history.map((m) => ({
         role: m.role,
@@ -5335,6 +5504,66 @@ function ChatView({
                 >
                   {/* текст сообщения */}
                   {hasText && <div>{m.content}</div>}
+
+                  {/* 🔊 Speak button for assistant messages with text (not for TTS agent which has its own audio) */}
+                  {!isUser && hasText && m.content && !m.audioUrl && selectedAgent?.engineProvider !== "tts" && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        onClick={() => speakText(m.content, i)}
+                        disabled={speakingMessageIndex !== null && speakingMessageIndex !== i}
+                        className={cx(
+                          "flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition",
+                          speakingMessageIndex === i
+                            ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/40"
+                            : "bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/70 border border-white/10",
+                          speakingMessageIndex !== null && speakingMessageIndex !== i && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        {speakingMessageIndex === i ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                            <span>Speaking...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>🔊</span>
+                            <span>Speak</span>
+                          </>
+                        )}
+                      </button>
+                      {ttsError && speakingMessageIndex === null && (
+                        <span className="text-[10px] text-red-400">{ttsError}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 🔊 Audio player for TTS agent responses */}
+                  {m.audioUrl && (
+                    <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border border-indigo-500/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-lg">🔊</span>
+                        <span className="text-xs text-white/60">Generated Audio</span>
+                      </div>
+                      <audio 
+                        controls 
+                        src={m.audioUrl} 
+                        className="w-full h-10 rounded-lg"
+                        style={{ 
+                          filter: "invert(1) hue-rotate(180deg)",
+                          opacity: 0.9 
+                        }}
+                      />
+                      <div className="mt-2 flex gap-2">
+                        <a
+                          href={m.audioUrl}
+                          download={`tts-audio-${Date.now()}.mp3`}
+                          className="text-[11px] text-indigo-300 hover:text-indigo-200 underline transition"
+                        >
+                          Download MP3
+                        </a>
+                      </div>
+                    </div>
+                  )}
 
                   {/* вложения (images + files) inside bubble for mixed content */}
                   {m.attachments && m.attachments.length > 0 && (
@@ -5847,7 +6076,7 @@ Assistant: ...
 
           <pre className="bg-black/40 border border-white/10 rounded-md p-3 text-xs whitespace-pre-wrap">
 {`POST /your-endpoint
-x-agentverse-key: <your-token>
+x-echo-key: <your-token>
 
 {
   "agentId": "...",
@@ -5882,7 +6111,7 @@ x-agentverse-key: <your-token>
         <section className="space-y-2">
           <h2 className="text-xl font-medium">5. Auth Token</h2>
           <p className="text-sm text-white/60">
-            Your backend can validate requests using x-agentverse-key. 
+            Your backend can validate requests using x-echo-key. 
             Never put OpenAI or Google API keys inside Echo — keep them on your backend only.
           </p>
         </section>
@@ -5964,7 +6193,7 @@ function ProfileAgentsView({
               const engineLabel =
                 a.engineProvider === "creator_backend"
                   ? "Custom backend"
-                  : "AgentVerse engine";
+                  : "Echo engine";
 
               const backendShort =
                 a.engineProvider === "creator_backend" && a.engineApiUrl
@@ -6146,6 +6375,837 @@ function ProfilePurchasesView({ onBack, agents, purchases }: { onBack: () => voi
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ================= ABOUT PAGE =================
+function AboutPage({ onBack }: { onBack: () => void }) {
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
+
+  return (
+    <div className="min-h-screen w-screen bg-gradient-to-b from-black via-[#0b0b1a] to-black text-white">
+      
+      {/* Header */}
+      <header className="sticky top-0 z-40 backdrop-blur border-b border-white/10">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              className="bg-white/10 hover:bg-white/20"
+              onClick={onBack}
+            >
+              ← Back
+            </Button>
+            <div className="font-semibold text-lg">About</div>
+          </div>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/20 via-purple-600/10 to-transparent" />
+        <div className="max-w-4xl mx-auto px-4 py-16 relative">
+          <h1 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-white via-white to-white/70 bg-clip-text text-transparent">
+            About Echo
+          </h1>
+          <p className="text-xl md:text-2xl text-white/70 leading-relaxed max-w-3xl">
+            Echo is a Web3-native marketplace for AI agents, built on Solana.
+          </p>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="max-w-4xl mx-auto px-4 pb-20 space-y-16">
+
+        {/* Mission */}
+        <section className="space-y-6">
+          <p className="text-lg text-white/80 leading-relaxed">
+            We enable creators to publish, monetize, and scale AI agents — and users to access specialized intelligence on demand. From crypto research and startup strategy to design, development, and everyday problem-solving, Echo connects people with the right AI agent for the job.
+          </p>
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-600/10 to-purple-600/10 border border-white/10">
+            <p className="text-lg text-white/90 italic">
+              Our platform is designed around a simple idea:<br />
+              <span className="text-white font-medium">AI should be composable, creator-owned, and paid for transparently.</span>
+            </p>
+          </div>
+        </section>
+
+        {/* What We Do */}
+        <section className="space-y-6">
+          <h2 className="text-2xl md:text-3xl font-semibold text-white">What We Do</h2>
+          <p className="text-white/70">Echo allows anyone to:</p>
+          <div className="grid gap-4">
+            {[
+              { icon: "🤖", title: "Create & Publish", desc: "Build AI agents with custom behavior, expertise, and pricing" },
+              { icon: "💰", title: "Earn Per Session", desc: "Get paid directly wallet-to-wallet in USDC" },
+              { icon: "🔍", title: "Discover & Use", desc: "Access specialized agents without subscriptions or lock-in" },
+              { icon: "💬", title: "Interact in Real Time", desc: "Chat, share files, and enjoy session-based access" },
+            ].map((item, i) => (
+              <div key={i} className="flex gap-4 p-4 rounded-xl bg-white/[0.03] border border-white/8 hover:border-white/15 transition">
+                <div className="text-2xl">{item.icon}</div>
+                <div>
+                  <div className="font-medium text-white">{item.title}</div>
+                  <div className="text-sm text-white/60">{item.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-white/60 text-sm pt-2">
+            Each agent on Echo is an independent digital product — owned by its creator, used by the community.
+          </p>
+        </section>
+
+        {/* Why Echo */}
+        <section className="space-y-6">
+          <h2 className="text-2xl md:text-3xl font-semibold text-white">Why Echo</h2>
+          <p className="text-white/70">We believe the future of AI is:</p>
+          <div className="grid md:grid-cols-3 gap-4">
+            {[
+              { label: "Specialized", contrast: "not generic" },
+              { label: "Open", contrast: "not platform-locked" },
+              { label: "Creator-driven", contrast: "not centrally controlled" },
+            ].map((item, i) => (
+              <div key={i} className="p-5 rounded-xl bg-gradient-to-br from-white/[0.05] to-transparent border border-white/10 text-center">
+                <div className="text-lg font-semibold text-white">{item.label}</div>
+                <div className="text-sm text-white/40">{item.contrast}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-white/70 leading-relaxed">
+            Echo removes intermediaries between creators and users, replacing opaque SaaS models with transparent, on-chain payments and usage-based access.
+          </p>
+          <div className="flex flex-wrap gap-3 pt-2">
+            {["No subscriptions", "No hidden fees", "Just value exchanged per session"].map((tag, i) => (
+              <span key={i} className="px-4 py-2 rounded-full bg-indigo-600/20 border border-indigo-500/30 text-sm text-indigo-300 font-medium">
+                {tag}
+              </span>
+            ))}
+          </div>
+        </section>
+
+        {/* Built for Web3 */}
+        <section className="space-y-6">
+          <h2 className="text-2xl md:text-3xl font-semibold text-white">Built for Web3</h2>
+          <p className="text-white/70">Echo is built on Solana to ensure:</p>
+          <div className="grid md:grid-cols-3 gap-4">
+            {[
+              { icon: "⚡", label: "Fast & Low-Cost", desc: "Lightning-fast transactions" },
+              { icon: "💵", label: "USDC Payments", desc: "Seamless stablecoin payments" },
+              { icon: "🌍", label: "Permissionless", desc: "Global access for everyone" },
+            ].map((item, i) => (
+              <div key={i} className="p-5 rounded-xl bg-white/[0.03] border border-white/8">
+                <div className="text-2xl mb-2">{item.icon}</div>
+                <div className="font-medium text-white">{item.label}</div>
+                <div className="text-sm text-white/50">{item.desc}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-white/60 text-sm">
+            Our architecture is designed to evolve alongside the AI ecosystem, enabling new agent types, monetization models, and on-chain integrations over time.
+          </p>
+        </section>
+
+        {/* Vision */}
+        <section className="space-y-6">
+          <h2 className="text-2xl md:text-3xl font-semibold text-white">Our Vision</h2>
+          <div className="p-8 rounded-2xl bg-gradient-to-br from-indigo-600/15 via-purple-600/10 to-transparent border border-white/10">
+            <p className="text-xl text-white/90 leading-relaxed mb-6">
+              We see Echo as the foundation for an <span className="text-white font-semibold">open AI economy</span> — where intelligence is modular, ownership is clear, and creators are rewarded fairly.
+            </p>
+            <div className="flex flex-col gap-2 text-white/70">
+              <p>Echo is not just a marketplace.</p>
+              <p className="text-lg text-white font-medium">It's an ecosystem for the next generation of AI agents.</p>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="text-center pt-8">
+          <Button
+            onClick={onBack}
+            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-8 py-3 text-lg"
+          >
+            Explore Agents →
+          </Button>
+        </section>
+
+      </div>
+    </div>
+  );
+}
+
+// ================= DOCUMENTATION PAGE =================
+function DocsPage({ onBack }: { onBack: () => void }) {
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
+
+  // Section component for consistent styling
+  const Section = ({ id, title, children }: { id?: string; title: string; children: React.ReactNode }) => (
+    <section id={id} className="scroll-mt-20">
+      <h2 className="text-xl md:text-2xl font-semibold text-white mb-4 pb-2 border-b border-white/10">{title}</h2>
+      <div className="space-y-4 text-white/70">{children}</div>
+    </section>
+  );
+
+  const SubSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="space-y-3">
+      <h3 className="text-lg font-medium text-white/90">{title}</h3>
+      <div className="space-y-2 text-white/60">{children}</div>
+    </div>
+  );
+
+  const BulletList = ({ items }: { items: string[] }) => (
+    <ul className="space-y-1.5 ml-1">
+      {items.map((item, i) => (
+        <li key={i} className="flex gap-2 text-sm">
+          <span className="text-indigo-400">•</span>
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+
+  const InfoCard = ({ children, variant = "default" }: { children: React.ReactNode; variant?: "default" | "highlight" }) => (
+    <div className={cx(
+      "p-4 rounded-xl border text-sm",
+      variant === "highlight" 
+        ? "bg-indigo-600/10 border-indigo-500/20 text-white/80" 
+        : "bg-white/[0.02] border-white/8 text-white/60"
+    )}>
+      {children}
+    </div>
+  );
+
+  // Table of contents
+  const tocItems = [
+    { id: "getting-started", label: "Getting Started" },
+    { id: "connect-wallet", label: "Connect a Wallet" },
+    { id: "core-concepts", label: "Core Concepts" },
+    { id: "using-echo", label: "Using Echo (Users)" },
+    { id: "creating-agents", label: "Creating Agents" },
+    { id: "security", label: "Security & Trust" },
+    { id: "network", label: "Network Details" },
+    { id: "architecture", label: "Architecture" },
+    { id: "faq", label: "FAQ" },
+  ];
+
+  return (
+    <div className="min-h-screen w-screen bg-gradient-to-b from-black via-[#0b0b1a] to-black text-white">
+      
+      {/* Header */}
+      <header className="sticky top-0 z-40 backdrop-blur border-b border-white/10">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              className="bg-white/10 hover:bg-white/20"
+              onClick={onBack}
+            >
+              ← Back
+            </Button>
+            <div className="font-semibold text-lg">Documentation</div>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-6xl mx-auto px-4 py-10 flex gap-8">
+        
+        {/* Sidebar TOC - Hidden on mobile */}
+        <aside className="hidden lg:block w-56 shrink-0">
+          <div className="sticky top-24 space-y-1">
+            <div className="text-xs uppercase tracking-wider text-white/40 mb-3">On this page</div>
+            {tocItems.map((item) => (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                className="block py-1.5 px-3 text-sm text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition"
+              >
+                {item.label}
+              </a>
+            ))}
+          </div>
+        </aside>
+
+        {/* Main Content */}
+        <div className="flex-1 min-w-0 space-y-12">
+
+          {/* Hero */}
+          <div className="space-y-4">
+            <h1 className="text-3xl md:text-4xl font-bold text-white">Echo Documentation</h1>
+            <p className="text-lg text-white/70 leading-relaxed">
+              Welcome to the official documentation for Echo — a Web3-native marketplace for AI agents on Solana.
+            </p>
+            <InfoCard variant="highlight">
+              Echo enables permissionless creation, discovery, and monetization of AI agents using session-based access and wallet-to-wallet USDC payments.
+            </InfoCard>
+          </div>
+
+          {/* Getting Started */}
+          <Section id="getting-started" title="Getting Started">
+            <p>If you are new to Echo, start here.</p>
+            <p>Echo supports two primary roles:</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/8">
+                <div className="font-medium text-white mb-1">👤 Users</div>
+                <div className="text-sm text-white/50">Interact with AI agents</div>
+              </div>
+              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/8">
+                <div className="font-medium text-white mb-1">🛠 Creators</div>
+                <div className="text-sm text-white/50">Build and monetize AI agents</div>
+              </div>
+            </div>
+            <InfoCard>
+              No account registration is required. All interactions are wallet-based.
+            </InfoCard>
+          </Section>
+
+          {/* Connect Wallet */}
+          <Section id="connect-wallet" title="Connect a Wallet">
+            <p>Echo currently supports <span className="text-white font-medium">Phantom Wallet</span> on Solana.</p>
+            <SubSection title="Wallets are used for:">
+              <BulletList items={[
+                "Authentication",
+                "Session payments",
+                "Ownership verification"
+              ]} />
+            </SubSection>
+            <InfoCard variant="highlight">
+              Echo never has access to private keys.
+            </InfoCard>
+          </Section>
+
+          {/* Core Concepts */}
+          <Section id="core-concepts" title="Core Concepts">
+            
+            <SubSection title="AI Agents">
+              <p>An AI agent is a specialized conversational model published by a creator.</p>
+              <p className="text-white/70">Each agent has:</p>
+              <BulletList items={[
+                "A unique identity",
+                "A defined purpose and category",
+                "A session price (USDC)",
+                "Independent analytics and engagement data"
+              ]} />
+              <InfoCard>
+                Agents operate independently and do not share memory across sessions.
+              </InfoCard>
+            </SubSection>
+
+            <SubSection title="Sessions">
+              <p>A session is a paid interaction between a user and an AI agent.</p>
+              <BulletList items={[
+                "Sessions are unlocked after payment confirmation",
+                "Access is scoped to a single agent",
+                "Pricing is per session (no subscriptions)",
+                "Sessions are enforced at the platform level"
+              ]} />
+              <InfoCard variant="highlight">
+                This model ensures transparent pricing and fair access.
+              </InfoCard>
+            </SubSection>
+
+            <SubSection title="Payments">
+              <p>All payments on Echo are:</p>
+              <BulletList items={[
+                "Denominated in USDC",
+                "Executed on Solana",
+                "Signed directly in the user's wallet"
+              ]} />
+              <div className="p-4 rounded-xl bg-gradient-to-r from-green-600/10 to-emerald-600/10 border border-green-500/20">
+                <p className="text-sm text-green-300">
+                  Funds are transferred wallet-to-wallet.<br />
+                  <span className="font-medium">Echo does not custody user or creator funds.</span>
+                </p>
+              </div>
+            </SubSection>
+          </Section>
+
+          {/* Using Echo */}
+          <Section id="using-echo" title="Using Echo (Users)">
+            
+            <SubSection title="Discover Agents">
+              <p>Users can explore agents via:</p>
+              <BulletList items={[
+                "Explore page",
+                "Curated collections",
+                "Categories and popularity signals"
+              ]} />
+              <p className="mt-3">Each agent card displays:</p>
+              <BulletList items={[
+                "Description",
+                "Price per session",
+                "Usage and engagement metrics"
+              ]} />
+            </SubSection>
+
+            <SubSection title="Start a Session">
+              <p>To start a session:</p>
+              <div className="space-y-2">
+                {["Select an agent", "Click Chat", "Confirm payment in your wallet", "Begin interacting with the agent"].map((step, i) => (
+                  <div key={i} className="flex gap-3 items-center">
+                    <div className="w-6 h-6 rounded-full bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-xs text-indigo-300 font-medium">
+                      {i + 1}
+                    </div>
+                    <span className="text-sm">{step}</span>
+                  </div>
+                ))}
+              </div>
+              <InfoCard variant="highlight">
+                Once payment is confirmed, the session is unlocked instantly.
+              </InfoCard>
+            </SubSection>
+
+            <SubSection title="Chat & Attachments">
+              <p>During a session, users can:</p>
+              <BulletList items={[
+                "Send messages",
+                "Upload files and images",
+                "View shared content inline"
+              ]} />
+              <InfoCard>
+                Attachments are scoped to the active session and agent.
+              </InfoCard>
+            </SubSection>
+          </Section>
+
+          {/* Creating Agents */}
+          <Section id="creating-agents" title="Creating Agents (Creators)">
+            
+            <SubSection title="Create an Agent">
+              <p>Creators can create agents directly from their profile.</p>
+              <p className="mt-2">Agent configuration includes:</p>
+              <BulletList items={[
+                "Name and description",
+                "Category",
+                "Pricing per session",
+                "Public visibility"
+              ]} />
+              <InfoCard>
+                Agents can be edited after creation.
+              </InfoCard>
+            </SubSection>
+
+            <SubSection title="Publish to Marketplace">
+              <p>Once published, an agent becomes discoverable on Echo.</p>
+              <p className="mt-2">Creators retain full ownership and control over:</p>
+              <BulletList items={[
+                "Pricing",
+                "Availability",
+                "Updates"
+              ]} />
+            </SubSection>
+
+            <SubSection title="Edit & Manage Agents">
+              <p>Creators can:</p>
+              <BulletList items={[
+                "Update agent metadata",
+                "Adjust pricing",
+                "Unpublish agents if needed"
+              ]} />
+              <InfoCard variant="highlight">
+                Changes apply immediately to future sessions.
+              </InfoCard>
+            </SubSection>
+          </Section>
+
+          {/* Security */}
+          <Section id="security" title="Security & Trust">
+            <p>Echo is built with a security-first mindset.</p>
+            <div className="grid sm:grid-cols-2 gap-3 mt-4">
+              {[
+                { icon: "🔐", label: "Wallet-based authentication only" },
+                { icon: "🏦", label: "No custodial accounts" },
+                { icon: "✍️", label: "Explicit transaction signing" },
+                { icon: "🚫", label: "No background approvals" },
+              ].map((item, i) => (
+                <div key={i} className="flex gap-3 items-center p-3 rounded-lg bg-white/[0.02] border border-white/8">
+                  <span className="text-xl">{item.icon}</span>
+                  <span className="text-sm text-white/70">{item.label}</span>
+                </div>
+              ))}
+            </div>
+            <InfoCard variant="highlight">
+              Echo never initiates transactions without user confirmation.
+            </InfoCard>
+          </Section>
+
+          {/* Network Details */}
+          <Section id="network" title="Network Details">
+            <div className="grid sm:grid-cols-3 gap-4">
+              {[
+                { label: "Blockchain", value: "Solana", icon: "⛓" },
+                { label: "Currency", value: "USDC", icon: "💵" },
+                { label: "Wallet", value: "Phantom", icon: "👻" },
+              ].map((item, i) => (
+                <div key={i} className="p-4 rounded-xl bg-gradient-to-br from-white/[0.04] to-transparent border border-white/8 text-center">
+                  <div className="text-2xl mb-2">{item.icon}</div>
+                  <div className="text-xs text-white/40 uppercase tracking-wider">{item.label}</div>
+                  <div className="text-lg font-medium text-white">{item.value}</div>
+                </div>
+              ))}
+            </div>
+            <InfoCard>
+              Echo is optimized for fast confirmations and low fees.
+            </InfoCard>
+          </Section>
+
+          {/* Architecture */}
+          <Section id="architecture" title="Architecture Overview">
+            <p>Echo is designed as a modular platform:</p>
+            <div className="grid sm:grid-cols-2 gap-3 mt-4">
+              {[
+                "Frontend-driven interactions",
+                "Stateless session handling",
+                "Wallet-native authorization",
+                "Agent-level isolation"
+              ].map((item, i) => (
+                <div key={i} className="flex gap-2 items-center p-3 rounded-lg bg-white/[0.02] border border-white/8 text-sm text-white/70">
+                  <span className="text-indigo-400">◆</span>
+                  {item}
+                </div>
+              ))}
+            </div>
+            <InfoCard variant="highlight">
+              This allows Echo to scale while maintaining simplicity and transparency.
+            </InfoCard>
+          </Section>
+
+          {/* FAQ */}
+          <Section id="faq" title="FAQ">
+            <div className="space-y-4">
+              {[
+                { q: "Do I need an account?", a: "No. A wallet is sufficient." },
+                { q: "Are there subscriptions?", a: "No. All access is session-based." },
+                { q: "Who owns the agents?", a: "Creators retain full ownership." },
+                { q: "Does Echo store my data?", a: "Conversation history is scoped per agent and stored locally in the browser unless otherwise stated." },
+              ].map((item, i) => (
+                <div key={i} className="p-4 rounded-xl bg-white/[0.02] border border-white/8">
+                  <div className="font-medium text-white mb-2">{item.q}</div>
+                  <div className="text-sm text-white/60">{item.a}</div>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          {/* CTA */}
+          <div className="pt-8 flex gap-4">
+            <Button
+              onClick={onBack}
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-6"
+            >
+              Explore Agents →
+            </Button>
+            <Button
+              variant="secondary"
+              className="bg-white/5 hover:bg-white/10"
+              onClick={() => window.location.hash = "/learn"}
+            >
+              Learn to Create
+            </Button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ================= PRIVACY POLICY PAGE =================
+function PrivacyPage({ onBack }: { onBack: () => void }) {
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
+
+  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <section className="space-y-4">
+      <h2 className="text-xl font-semibold text-white">{title}</h2>
+      <div className="space-y-3 text-white/70 text-sm leading-relaxed">{children}</div>
+    </section>
+  );
+
+  const SubSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="space-y-2">
+      <h3 className="text-base font-medium text-white/90">{title}</h3>
+      <div className="space-y-2 text-white/60 text-sm">{children}</div>
+    </div>
+  );
+
+  const BulletList = ({ items }: { items: string[] }) => (
+    <ul className="space-y-1.5 ml-1">
+      {items.map((item, i) => (
+        <li key={i} className="flex gap-2 text-sm">
+          <span className="text-indigo-400">•</span>
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+
+  const HighlightBox = ({ children, variant = "info" }: { children: React.ReactNode; variant?: "info" | "success" | "warning" }) => {
+    const colors = {
+      info: "bg-indigo-600/10 border-indigo-500/20 text-indigo-200",
+      success: "bg-green-600/10 border-green-500/20 text-green-200",
+      warning: "bg-amber-600/10 border-amber-500/20 text-amber-200",
+    };
+    return (
+      <div className={cx("p-4 rounded-xl border text-sm", colors[variant])}>
+        {children}
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen w-screen bg-gradient-to-b from-black via-[#0b0b1a] to-black text-white">
+      
+      {/* Header */}
+      <header className="sticky top-0 z-40 backdrop-blur border-b border-white/10">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              className="bg-white/10 hover:bg-white/20"
+              onClick={onBack}
+            >
+              ← Back
+            </Button>
+            <div className="font-semibold text-lg">Privacy Policy</div>
+          </div>
+        </div>
+      </header>
+
+      {/* Content */}
+      <div className="max-w-4xl mx-auto px-4 py-10 space-y-10">
+
+        {/* Header */}
+        <div className="space-y-4">
+          <h1 className="text-3xl md:text-4xl font-bold text-white">Privacy Policy</h1>
+          <p className="text-sm text-white/40">Last updated: January 2026</p>
+          <p className="text-white/70 leading-relaxed">
+            Echo ("Echo", "we", "our", or "us") is committed to protecting user privacy and maintaining transparency in how data is collected, stored, and used.
+          </p>
+          <p className="text-white/60 text-sm leading-relaxed">
+            Echo is a Web3-native marketplace for AI agents built on Solana. While the platform minimizes personal data collection, certain information is processed and securely stored in cloud infrastructure to enable core functionality.
+          </p>
+        </div>
+
+        {/* Overview */}
+        <Section title="Overview">
+          <p>Echo is designed around the following privacy principles:</p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {[
+              { icon: "🔐", text: "Wallet-based access instead of traditional user accounts" },
+              { icon: "🔑", text: "No custody of user funds or private keys" },
+              { icon: "🚫", text: "No sale of personal data" },
+              { icon: "🎯", text: "Purpose-limited data usage" },
+            ].map((item, i) => (
+              <div key={i} className="flex gap-3 items-start p-3 rounded-lg bg-white/[0.02] border border-white/8">
+                <span className="text-lg">{item.icon}</span>
+                <span className="text-sm text-white/70">{item.text}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-white/50 text-sm pt-2">
+            This Privacy Policy explains what data we collect, how it is stored, and how it is used.
+          </p>
+        </Section>
+
+        {/* Information We Collect */}
+        <Section title="Information We Collect">
+          
+          <SubSection title="Wallet Information">
+            <p>When you connect a wallet to Echo, we may collect and store:</p>
+            <BulletList items={[
+              "Public wallet address",
+              "Blockchain transaction identifiers related to sessions or payments"
+            ]} />
+            <HighlightBox variant="success">
+              Echo never has access to private keys or signing authority.
+            </HighlightBox>
+          </SubSection>
+
+          <SubSection title="Account & Session Data">
+            <p>To provide persistent functionality, Echo securely stores the following data in cloud infrastructure:</p>
+            <BulletList items={[
+              "Active and historical chat sessions",
+              "Messages exchanged with AI agents",
+              "Session metadata (timestamps, agent identifiers)",
+              "Uploaded files and images associated with sessions"
+            ]} />
+            <p className="text-white/50 text-sm pt-2">
+              This data is scoped per user and per agent and is not shared across unrelated sessions.
+            </p>
+          </SubSection>
+
+          <SubSection title="Usage & Technical Data">
+            <p>Echo may collect limited technical information, including:</p>
+            <BulletList items={[
+              "Page interactions and feature usage",
+              "Performance metrics",
+              "Error logs"
+            ]} />
+            <p className="text-white/50 text-sm pt-1">
+              This data is used strictly for platform reliability, security, and improvement.
+            </p>
+          </SubSection>
+
+          <SubSection title="File & Attachment Storage">
+            <p>Files and images uploaded to Echo:</p>
+            <BulletList items={[
+              "Are stored securely in cloud storage",
+              "Are accessible only within the relevant session",
+              "Are not publicly indexed or shared"
+            ]} />
+            <HighlightBox variant="info">
+              Echo does not use uploaded content for training AI models.
+            </HighlightBox>
+          </SubSection>
+        </Section>
+
+        {/* Information We Do Not Collect */}
+        <Section title="Information We Do Not Collect">
+          <p>Echo does not:</p>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {[
+              "Collect names, emails, or phone numbers",
+              "Require user registration accounts",
+              "Store private wallet credentials",
+              "Sell or monetize personal data",
+              "Track users across external websites"
+            ].map((item, i) => (
+              <div key={i} className="flex gap-2 items-center text-sm text-white/60">
+                <span className="text-red-400">✕</span>
+                {item}
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        {/* Payments & Blockchain Data */}
+        <Section title="Payments & Blockchain Data">
+          <p>All payments on Echo are:</p>
+          <BulletList items={[
+            "Executed directly on-chain via Solana",
+            "Authorized by the user's wallet",
+            "Publicly verifiable on the blockchain"
+          ]} />
+          <HighlightBox variant="success">
+            Echo does not store payment methods, private keys, or recovery phrases.
+          </HighlightBox>
+        </Section>
+
+        {/* How We Use Information */}
+        <Section title="How We Use Information">
+          <p>Collected information is used solely to:</p>
+          <BulletList items={[
+            "Enable AI agent sessions",
+            "Process and verify payments",
+            "Store conversations and files",
+            "Maintain platform performance",
+            "Prevent abuse and ensure security"
+          ]} />
+          <HighlightBox variant="info">
+            Echo does not use user data for advertising or profiling.
+          </HighlightBox>
+        </Section>
+
+        {/* Cloud Infrastructure & Security */}
+        <Section title="Cloud Infrastructure & Security">
+          <p>Echo stores session and content data in secure cloud infrastructure operated by trusted service providers.</p>
+          <p className="mt-3">Security measures include:</p>
+          <div className="grid sm:grid-cols-2 gap-3 mt-2">
+            {[
+              { icon: "🔒", label: "Encrypted connections" },
+              { icon: "🛡", label: "Access controls" },
+              { icon: "👤", label: "Separation of user data by wallet address" },
+              { icon: "🔐", label: "Limited internal access" },
+            ].map((item, i) => (
+              <div key={i} className="flex gap-3 items-center p-3 rounded-lg bg-white/[0.02] border border-white/8">
+                <span className="text-lg">{item.icon}</span>
+                <span className="text-sm text-white/70">{item.label}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-white/50 text-sm pt-3">
+            While reasonable safeguards are in place, no system can be guaranteed to be fully secure.
+          </p>
+        </Section>
+
+        {/* Third-Party Services */}
+        <Section title="Third-Party Services">
+          <p>Echo may rely on third-party providers for:</p>
+          <BulletList items={[
+            "Cloud hosting and storage",
+            "Blockchain RPC access",
+            "Monitoring and analytics"
+          ]} />
+          <p className="text-white/50 text-sm pt-2">
+            These providers process data only as necessary to operate the platform and are contractually required to meet applicable security and privacy standards.
+          </p>
+        </Section>
+
+        {/* Data Retention */}
+        <Section title="Data Retention">
+          <p>
+            Session data is retained only as long as necessary to provide platform functionality, comply with legal obligations, or resolve disputes.
+          </p>
+          <HighlightBox variant="info">
+            Users may request deletion of stored data by disconnecting their wallet and contacting support.
+          </HighlightBox>
+        </Section>
+
+        {/* User Rights */}
+        <Section title="User Rights">
+          <p>Depending on jurisdiction, users may have the right to:</p>
+          <BulletList items={[
+            "Request access to stored data",
+            "Request data deletion",
+            "Withdraw consent by discontinuing use of the platform"
+          ]} />
+          <p className="text-white/50 text-sm pt-2">
+            Because Echo uses wallet-based access, identity verification is limited to wallet ownership.
+          </p>
+        </Section>
+
+        {/* Children's Privacy */}
+        <Section title="Children's Privacy">
+          <HighlightBox variant="warning">
+            Echo is not intended for individuals under the age of 18.<br />
+            We do not knowingly collect data from minors.
+          </HighlightBox>
+        </Section>
+
+        {/* Changes to This Policy */}
+        <Section title="Changes to This Policy">
+          <p>
+            Echo may update this Privacy Policy periodically. Updates will be reflected by revising the "Last updated" date.
+          </p>
+          <p className="text-white/50 text-sm">
+            Continued use of the platform constitutes acceptance of the updated policy.
+          </p>
+        </Section>
+
+        {/* Contact */}
+        <Section title="Contact">
+          <p>
+            For questions regarding this Privacy Policy or data practices, please contact Echo through the official support channels listed on the platform.
+          </p>
+        </Section>
+
+        {/* Back button */}
+        <div className="pt-8">
+          <Button
+            onClick={onBack}
+            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-6"
+          >
+            ← Back to Echo
+          </Button>
+        </div>
+
       </div>
     </div>
   );

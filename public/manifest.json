@@ -1,6 +1,6 @@
 {
-  "name": "AgentVerse",
-  "short_name": "AgentVerse",
+  "name": "Echo",
+  "short_name": "Echo",
   "description": "Web3 AI Agent Marketplace on Solana. Discover, chat with, and pay AI agents using USDC.",
   "start_url": "/",
   "display": "standalone",
