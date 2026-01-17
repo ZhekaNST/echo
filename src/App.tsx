@@ -805,17 +805,49 @@ useEffect(() => {
     const [agents, setAgents] = useState<Agent[]>(() => {
     const storedAgents = loadLS<Agent[]>(LS.AGENTS, []);
     
-    // Merge: ensure all INITIAL_AGENTS exist (add missing built-in agents)
-    const storedIds = new Set(storedAgents.map(a => a.id));
-    const missingBuiltIn = INITIAL_AGENTS.filter(a => !storedIds.has(a.id));
+    // Create a map of INITIAL_AGENTS by ID for quick lookup
+    const initialAgentsMap = new Map(INITIAL_AGENTS.map(a => [a.id, a]));
+    const initialAgentIds = new Set(INITIAL_AGENTS.map(a => a.id));
+
+    // Merge strategy:
+    // 1. For built-in agents (in INITIAL_AGENTS): always use latest INITIAL_AGENTS data
+    //    but preserve user-modifiable fields like likes, sessions from stored version
+    // 2. For user-created agents: keep stored version as-is
+    // 3. Add any missing built-in agents
     
-    if (missingBuiltIn.length > 0) {
-      // Add missing built-in agents at the beginning
-      return [...missingBuiltIn, ...storedAgents];
+    const mergedAgents: Agent[] = [];
+    const processedIds = new Set<string>();
+
+    // First, process stored agents
+    for (const stored of storedAgents) {
+      if (initialAgentIds.has(stored.id)) {
+        // This is a built-in agent - merge with latest INITIAL_AGENTS data
+        const initial = initialAgentsMap.get(stored.id)!;
+        mergedAgents.push({
+          ...initial, // Use latest built-in config (name, description, creatorWallet, etc.)
+          // Preserve dynamic/user-modifiable fields from stored version
+          likes: stored.likes ?? initial.likes,
+          sessions: stored.sessions ?? initial.sessions,
+          likes24h: stored.likes24h ?? initial.likes24h,
+          sessions24h: stored.sessions24h ?? initial.sessions24h,
+          lastActiveAt: stored.lastActiveAt ?? initial.lastActiveAt,
+        });
+      } else {
+        // User-created agent - keep as-is
+        mergedAgents.push(stored);
+      }
+      processedIds.add(stored.id);
     }
-    
-    return storedAgents.length > 0 ? storedAgents : INITIAL_AGENTS;
-  });  
+
+    // Add any missing built-in agents (not in stored)
+    for (const initial of INITIAL_AGENTS) {
+      if (!processedIds.has(initial.id)) {
+        mergedAgents.push(initial);
+      }
+    }
+
+    return mergedAgents.length > 0 ? mergedAgents : INITIAL_AGENTS;
+  });
   const [query, setQuery] = useState("");
   type SortBy =
   | "recommended"
@@ -1311,16 +1343,19 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
     // This is the ONLY place where we set payModalOpen = true
     setSelected(agent);
     setPayModalOpen(true);
-    
+
     // Determine initial modal state based on current agent properties
-    const isFreeAgent = !agent.creator && !agent.creatorWallet;
+    // FREE agent = priceUSDC is 0 or undefined (no payment required)
+    const isFreeAgent = agent.priceUSDC === 0 || agent.priceUSDC === undefined;
+    
     if (isFreeAgent) {
+      // Free agents don't need payment - auto-unlock
       setModalState("free");
     } else if (!agent.creatorWallet) {
-      // Agent is payable but has no payout wallet configured
+      // Paid agent but has no payout wallet configured
       setModalState("missing_payout_wallet");
     } else {
-      // Agent is ready to accept payment
+      // Paid agent ready to accept payment
       setModalState("ready");
     }
     
