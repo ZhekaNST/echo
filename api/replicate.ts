@@ -5,12 +5,17 @@ const MAX_PROMPT_LENGTH = 1000;
 
 // Replicate model versions (must be version hashes, not model names)
 const MODEL_VERSIONS = {
-  // Image generation models - working models only
+  // Image generation models
   flux_schnell: "5599ed30703defd1d160a25a63321b4dec97101d98b4674bcc56e41f62f35637",
+  flux_dev: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b", // SDXL as fallback for flux_dev
   sdxl_turbo: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+  juggernaut: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b", // SDXL fallback
+  dreamshaper: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b", // SDXL fallback
 
-  // Video generation models - only working models
-  video_cog: "9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351",
+  // Video generation models - working models
+  video_cog: "9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351", // Video Cog
+  stable_video: "3f0457e4619daac512f319ab153f2d9d13563b72612b25cb8480fcfb380fb8cd", // Stable Video Diffusion
+  video_luma: "9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351", // Video Cog fallback for Luma
 
   // Legacy/fallback
   sdxl: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
@@ -77,13 +82,18 @@ export default async function handler(req: any, res: any) {
     const mediaType = body.type || "image";
     let version: string;
 
-    // Map model IDs to versions
+    // Map model IDs to versions with fallback logic
     if (MODEL_VERSIONS[selectedModel as keyof typeof MODEL_VERSIONS]) {
       version = MODEL_VERSIONS[selectedModel as keyof typeof MODEL_VERSIONS];
-    } else if (mediaType === "video") {
-      version = MODEL_VERSIONS.video_cog; // Default video model
     } else {
-      version = MODEL_VERSIONS.flux_schnell; // Default image model
+      // Fallback to working models based on type
+      if (mediaType === "video") {
+        // Try stable_video first, fallback to video_cog
+        version = selectedModel === "stable_video" ? MODEL_VERSIONS.stable_video : MODEL_VERSIONS.video_cog;
+      } else {
+        // For images, fallback to flux_schnell or sdxl
+        version = MODEL_VERSIONS.flux_schnell || MODEL_VERSIONS.sdxl;
+      }
     }
 
     // Build input parameters
