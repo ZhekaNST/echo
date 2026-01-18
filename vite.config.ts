@@ -468,18 +468,35 @@ function apiRoutes() {
               input.output_format = "webp";
             }
 
-            const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                model: model.includes(":") ? undefined : model,
-                version: model.includes(":") ? model.split(":")[1] : undefined,
-                input,
-              }),
-            });
+            // Different endpoints for versioned vs official models
+            let createResponse: Response;
+            
+            if (model.includes(":")) {
+              // Versioned model
+              createResponse = await fetch("https://api.replicate.com/v1/predictions", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${apiKey}`,
+                  "Content-Type": "application/json",
+                  "Prefer": "wait",
+                },
+                body: JSON.stringify({
+                  version: model.split(":")[1],
+                  input,
+                }),
+              });
+            } else {
+              // Official model (flux-schnell)
+              createResponse = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${apiKey}`,
+                  "Content-Type": "application/json",
+                  "Prefer": "wait",
+                },
+                body: JSON.stringify({ input }),
+              });
+            }
 
             if (!createResponse.ok) {
               const errorText = await createResponse.text();

@@ -104,19 +104,35 @@ export default async function handler(req: any, res: any) {
 
     console.log(`[Replicate] Request: type=${mediaType}, model=${modelVersion}, promptLength=${prompt.length}`);
 
-    // Create prediction
-    const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        version: modelVersion.includes(":") ? modelVersion.split(":")[1] : undefined,
-        model: modelVersion.includes(":") ? undefined : modelVersion,
-        input,
-      }),
-    });
+    // Create prediction - different endpoints for versioned vs official models
+    let createResponse: Response;
+    
+    if (modelVersion.includes(":")) {
+      // Versioned model - use /v1/predictions with version
+      createResponse = await fetch("https://api.replicate.com/v1/predictions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "Prefer": "wait",
+        },
+        body: JSON.stringify({
+          version: modelVersion.split(":")[1],
+          input,
+        }),
+      });
+    } else {
+      // Official model (like flux-schnell) - use /v1/models/{owner}/{name}/predictions
+      createResponse = await fetch(`https://api.replicate.com/v1/models/${modelVersion}/predictions`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "Prefer": "wait",
+        },
+        body: JSON.stringify({ input }),
+      });
+    }
 
     if (!createResponse.ok) {
       const errorText = await createResponse.text();
