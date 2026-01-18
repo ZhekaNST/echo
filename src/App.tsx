@@ -429,17 +429,12 @@ const TTS_VOICES = [
 // 🎨 Available Image Generation Models (Replicate)
 const IMAGE_MODELS = [
   { id: "flux_schnell", name: "FLUX Schnell", description: "Ultra-fast, photorealistic images", speed: "Ultra Fast", type: "photorealistic" },
-  { id: "flux_dev", name: "FLUX Dev", description: "High-quality artistic images", speed: "Fast", type: "artistic" },
-  { id: "sdxl_turbo", name: "SDXL Turbo", description: "Fast, creative and detailed", speed: "Fast", type: "creative" },
-  { id: "juggernaut", name: "Juggernaut XL", description: "Photorealistic portraits & scenes", speed: "Medium", type: "portrait" },
-  { id: "dreamshaper", name: "DreamShaper XL", description: "Anime and fantasy styles", speed: "Medium", type: "anime" },
+  { id: "sdxl_turbo", name: "SDXL Turbo", description: "Fast, creative and detailed images", speed: "Fast", type: "creative" },
 ];
 
 // 🎬 Available Video Generation Models (Replicate)
 const VIDEO_MODELS = [
   { id: "video_cog", name: "Video Cog", description: "High-quality video animations", speed: "Medium", type: "animation" },
-  { id: "stable_video", name: "Stable Video", description: "Consistent video generation", speed: "Medium", type: "stable" },
-  { id: "video_luma", name: "Luma Video", description: "Creative and dynamic videos", speed: "Slow", type: "creative" },
 ];
 
 // 🔊 TTS Models (ElevenLabs)
