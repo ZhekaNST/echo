@@ -3,15 +3,16 @@
 
 const MAX_PROMPT_LENGTH = 1000;
 
-// Popular Replicate models
-const MODELS = {
-  // Image generation
-  flux_schnell: "black-forest-labs/flux-schnell", // Fast, high quality
-  flux_dev: "black-forest-labs/flux-dev", // Best quality
-  sdxl: "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+// Replicate model versions (must be version hashes, not model names)
+const MODEL_VERSIONS = {
+  // Image generation - FLUX Schnell (latest version)
+  flux_schnell: "5599ed30703defd1d160a25a63321b4dec97101d98b4674bcc56e41f62f35637",
   
   // Video generation  
-  video: "anotherjesse/zeroscope-v2-xl:9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351",
+  video: "9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351",
+  
+  // Fallback SDXL
+  sdxl: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
 };
 
 interface ReplicateRequest {
@@ -70,15 +71,15 @@ export default async function handler(req: any, res: any) {
       );
     }
 
-    // Determine model based on type
+    // Determine model version based on type
     const mediaType = body.type || "image";
-    let modelVersion: string;
+    let version: string;
     
     if (mediaType === "video") {
-      modelVersion = MODELS.video;
+      version = MODEL_VERSIONS.video;
     } else {
       // Use FLUX Schnell for fast, high-quality images
-      modelVersion = body.model || MODELS.flux_schnell;
+      version = MODEL_VERSIONS.flux_schnell;
     }
 
     // Build input parameters
@@ -102,37 +103,24 @@ export default async function handler(req: any, res: any) {
       input.num_frames = 24;
     }
 
-    console.log(`[Replicate] Request: type=${mediaType}, model=${modelVersion}, promptLength=${prompt.length}`);
+    console.log(`[Replicate] Request: type=${mediaType}, version=${version.slice(0, 12)}..., promptLength=${prompt.length}`);
 
-    // Create prediction - different endpoints for versioned vs official models
-    let createResponse: Response;
-    
-    if (modelVersion.includes(":")) {
-      // Versioned model - use /v1/predictions with version
-      createResponse = await fetch("https://api.replicate.com/v1/predictions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-          "Prefer": "wait",
-        },
-        body: JSON.stringify({
-          version: modelVersion.split(":")[1],
-          input,
-        }),
-      });
-    } else {
-      // Official model (like flux-schnell) - use /v1/models/{owner}/{name}/predictions
-      createResponse = await fetch(`https://api.replicate.com/v1/models/${modelVersion}/predictions`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-          "Prefer": "wait",
-        },
-        body: JSON.stringify({ input }),
-      });
-    }
+    // Create prediction - Replicate API requires version hash
+    const requestBody = {
+      version,
+      input,
+    };
+
+    console.log(`[Replicate] Payload:`, JSON.stringify(requestBody, null, 2));
+
+    const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
 
     if (!createResponse.ok) {
       const errorText = await createResponse.text();

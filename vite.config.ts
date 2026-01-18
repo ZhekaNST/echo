@@ -453,50 +453,43 @@ function apiRoutes() {
             }
 
             const mediaType = type || "image";
-            const model = mediaType === "video" 
-              ? "anotherjesse/zeroscope-v2-xl:9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351"
-              : "black-forest-labs/flux-schnell";
+            
+            // Model versions (use version hashes only)
+            const MODEL_VERSIONS: any = {
+              flux_schnell: "5599ed30703defd1d160a25a63321b4dec97101d98b4674bcc56e41f62f35637",
+              video: "9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351",
+            };
+            
+            const version = mediaType === "video" ? MODEL_VERSIONS.video : MODEL_VERSIONS.flux_schnell;
 
-            console.log(`[Replicate] Request: type=${mediaType}, prompt=${trimmedPrompt.slice(0, 50)}...`);
+            console.log(`[Replicate] Request: type=${mediaType}, version=${version.slice(0, 12)}..., prompt=${trimmedPrompt.slice(0, 50)}...`);
 
-            // Create prediction
+            // Build input
             const input: any = { prompt: trimmedPrompt };
             if (mediaType === "image") {
               input.width = width || 1024;
               input.height = height || 1024;
               input.num_outputs = 1;
               input.output_format = "webp";
+              input.output_quality = 90;
+            }
+            if (mediaType === "video") {
+              input.width = width || 576;
+              input.height = height || 320;
+              input.num_frames = 24;
             }
 
-            // Different endpoints for versioned vs official models
-            let createResponse: Response;
+            // Create prediction - always use /v1/predictions with version
+            const requestBody = { version, input };
             
-            if (model.includes(":")) {
-              // Versioned model
-              createResponse = await fetch("https://api.replicate.com/v1/predictions", {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${apiKey}`,
-                  "Content-Type": "application/json",
-                  "Prefer": "wait",
-                },
-                body: JSON.stringify({
-                  version: model.split(":")[1],
-                  input,
-                }),
-              });
-            } else {
-              // Official model (flux-schnell)
-              createResponse = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${apiKey}`,
-                  "Content-Type": "application/json",
-                  "Prefer": "wait",
-                },
-                body: JSON.stringify({ input }),
-              });
-            }
+            const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(requestBody),
+            });
 
             if (!createResponse.ok) {
               const errorText = await createResponse.text();
