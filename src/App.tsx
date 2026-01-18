@@ -426,6 +426,13 @@ const TTS_VOICES = [
   { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", description: "Strong, female", language: "English" },
 ];
 
+// 🎨 Available Media Generation Models (Replicate)
+const MEDIA_MODELS = [
+  { id: "flux_schnell", name: "FLUX Schnell", description: "Fast, high-quality images", speed: "Fast", type: "image" },
+  { id: "video", name: "Video Generator", description: "Create short animated videos", speed: "Medium", type: "video" },
+  { id: "sdxl", name: "Stable Diffusion XL", description: "High-quality images (fallback)", speed: "Medium", type: "image" },
+];
+
 // 🔊 TTS Models (ElevenLabs)
 const TTS_MODELS = [
   { id: "eleven_multilingual_v2", name: "Multilingual v2", description: "Best quality, 29 languages", speed: "Normal" },
@@ -4785,13 +4792,17 @@ function ChatView({
   const [showVoiceSelector, setShowVoiceSelector] = useState(false);
   const [showTtsSettings, setShowTtsSettings] = useState(false);
 
+  // 🎨 Media model selection state
+  const [selectedMediaModel, setSelectedMediaModel] = useState(MEDIA_MODELS[0]);
+  const [showMediaModelSelector, setShowMediaModelSelector] = useState(false);
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
       content: selectedAgent?.engineProvider === "tts"
         ? `🔊 Welcome to Voice Generator!\n\nI convert text to natural-sounding speech using AI. Just type or paste any text (up to 2000 characters) and I'll generate audio for you.\n\n**Current voice: ${TTS_VOICES[0].name}** (${TTS_VOICES[0].description})\n\nClick the 🎤 button to change voices. Try it now — send me something to say!`
         : selectedAgent?.engineProvider === "replicate"
-        ? `🎨 Welcome to Media Generator!\n\nI create stunning **images** and **videos** from your text descriptions using AI.\n\n**Tips for best results:**\n• Be descriptive: "A majestic lion with golden mane at sunset"\n• Include style: "in watercolor style" or "photorealistic"\n• For video, include words like "video" or "animate"\n\n**Examples:**\n• "A cozy cabin in snowy mountains, warm light in windows"\n• "Abstract flowing colors, purple and cyan, video"\n• "Cyberpunk city street at night, neon signs, rain"\n\nWhat would you like me to create?`
+        ? `🎨 Welcome to Media Generator!\n\nI create stunning **images** and **videos** from your text descriptions using AI.\n\n**Current model: ${MEDIA_MODELS[0].name}** (${MEDIA_MODELS[0].description})\n\nClick the 🎨 button to change models. Try it now!\n\n**Tips for best results:**\n• Be descriptive: "A majestic lion with golden mane at sunset"\n• Include style: "in watercolor style" or "photorealistic"\n• For video, include words like "video" or "animate"\n\n**Examples:**\n• "A cozy cabin in snowy mountains, warm light in windows"\n• "Abstract flowing colors, purple and cyan, video"\n• "Cyberpunk city street at night, neon signs, rain"\n\nWhat would you like me to create?`
         : `Hi! ${
             selectedAgent ? `I'm ${selectedAgent.name}` : "I'm your agent"
           }. Ask me anything.`,
@@ -5350,6 +5361,7 @@ function ChatView({
             body: JSON.stringify({
               prompt: text.slice(0, 1000),
               type: wantsVideo ? "video" : "image",
+              model: selectedMediaModel.id,
             }),
           });
 
@@ -6137,6 +6149,56 @@ function ChatView({
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 🎨 Media Model Selector for Replicate Agent */}
+          {selectedAgent?.engineProvider === "replicate" && (
+            <div className="mb-3 space-y-2">
+              {/* Model Selection Row */}
+              <div className="flex flex-wrap gap-2">
+                {/* Media Model Selector */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowMediaModelSelector(!showMediaModelSelector)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                  >
+                    <span>🎨</span>
+                    <span>Model: <strong>{selectedMediaModel.name}</strong></span>
+                    <svg className={`w-4 h-4 transition-transform ${showMediaModelSelector ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {showMediaModelSelector && (
+                    <div className="absolute bottom-full left-0 mb-2 w-72 max-h-64 overflow-y-auto rounded-xl bg-[#1a1a2e] border border-white/10 shadow-xl z-50">
+                      <div className="p-2 border-b border-white/10 text-xs text-white/50 uppercase tracking-wide">
+                        Select Model
+                      </div>
+                      {MEDIA_MODELS.map((model) => (
+                        <button
+                          key={model.id}
+                          onClick={() => {
+                            setSelectedMediaModel(model);
+                            setShowMediaModelSelector(false);
+                          }}
+                          className={`w-full px-3 py-2 text-left hover:bg-white/5 transition-colors flex items-center justify-between ${
+                            selectedMediaModel.id === model.id ? 'bg-emerald-500/20 text-emerald-300' : 'text-white/80'
+                          }`}
+                        >
+                          <div>
+                            <div className="font-medium">{model.name}</div>
+                            <div className="text-xs text-white/50">{model.description} • {model.speed} • {model.type}</div>
+                          </div>
+                          {selectedMediaModel.id === model.id && (
+                            <span className="text-emerald-400">✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

@@ -71,14 +71,18 @@ export default async function handler(req: any, res: any) {
       );
     }
 
-    // Determine model version based on type
+    // Determine model version based on selected model
+    const selectedModel = body.model || "flux_schnell";
     const mediaType = body.type || "image";
     let version: string;
-    
-    if (mediaType === "video") {
+
+    // Use selected model or fallback based on type
+    if (selectedModel === "video" || (selectedModel === "flux_schnell" && mediaType === "video")) {
       version = MODEL_VERSIONS.video;
+    } else if (selectedModel === "sdxl") {
+      version = MODEL_VERSIONS.sdxl;
     } else {
-      // Use FLUX Schnell for fast, high-quality images
+      // Default to FLUX Schnell for images
       version = MODEL_VERSIONS.flux_schnell;
     }
 
