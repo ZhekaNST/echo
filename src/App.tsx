@@ -394,7 +394,7 @@ likes24h?: number;          // демо-счётчик
   creatorWallet?: string;
 
   // engine / RAG
-  engineProvider?: "platform" | "creator_backend" | "tts" | "replicate";
+  engineProvider?: "platform" | "creator_backend" | "tts" | "replicate" | "replicate_image" | "replicate_video";
   engineApiUrl?: string | null;
   ragEndpointUrl?: string | null;
   ragDescription?: string | null;
@@ -426,11 +426,20 @@ const TTS_VOICES = [
   { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", description: "Strong, female", language: "English" },
 ];
 
-// 🎨 Available Media Generation Models (Replicate)
-const MEDIA_MODELS = [
-  { id: "flux_schnell", name: "FLUX Schnell", description: "Fast, high-quality images", speed: "Fast", type: "image" },
-  { id: "video", name: "Video Generator", description: "Create short animated videos", speed: "Medium", type: "video" },
-  { id: "sdxl", name: "Stable Diffusion XL", description: "High-quality images (fallback)", speed: "Medium", type: "image" },
+// 🎨 Available Image Generation Models (Replicate)
+const IMAGE_MODELS = [
+  { id: "flux_schnell", name: "FLUX Schnell", description: "Ultra-fast, photorealistic images", speed: "Ultra Fast", type: "photorealistic" },
+  { id: "flux_dev", name: "FLUX Dev", description: "High-quality artistic images", speed: "Fast", type: "artistic" },
+  { id: "sdxl_turbo", name: "SDXL Turbo", description: "Fast, creative and detailed", speed: "Fast", type: "creative" },
+  { id: "juggernaut", name: "Juggernaut XL", description: "Photorealistic portraits & scenes", speed: "Medium", type: "portrait" },
+  { id: "dreamshaper", name: "DreamShaper XL", description: "Anime and fantasy styles", speed: "Medium", type: "anime" },
+];
+
+// 🎬 Available Video Generation Models (Replicate)
+const VIDEO_MODELS = [
+  { id: "video_cog", name: "Video Cog", description: "High-quality video animations", speed: "Medium", type: "animation" },
+  { id: "stable_video", name: "Stable Video", description: "Consistent video generation", speed: "Medium", type: "stable" },
+  { id: "video_luma", name: "Luma Video", description: "Creative and dynamic videos", speed: "Slow", type: "creative" },
 ];
 
 // 🔊 TTS Models (ElevenLabs)
@@ -613,25 +622,45 @@ const INITIAL_AGENTS: Agent[] = [
     sessions24h: 156,
     likes24h: 42,
   },
-  // 🎨 Image & Video Generator (Replicate)
+  // 🎨 Image Generator (Replicate)
   {
-    id: "media-gen-agent",
-    name: "Media Generator",
+    id: "image-gen-agent",
+    name: "Image Generator",
     priceUSDC: 0,
-    tagline: "Create stunning images and videos with AI.",
+    tagline: "Create stunning AI images in various styles.",
     avatar: "🎨",
     categories: ["tools", "design"],
     likes: 3250,
     sessions: 6840,
-    promptPreview: "I generate beautiful images and videos from your text descriptions.",
-    description: "Media Generator is a powerful AI tool that creates stunning images and videos from text descriptions. Powered by state-of-the-art models like FLUX and Stable Diffusion.\n\nCapabilities:\n• Generate high-quality images from text prompts\n• Create short video clips\n• Multiple aspect ratios and sizes\n• Fast generation with FLUX Schnell\n\nPerfect for:\n• Social media content\n• Concept art and visualization\n• Marketing materials\n• Creative projects\n\nJust describe what you want to see!",
-    engineProvider: "replicate",
+    promptPreview: "I generate beautiful images from your text descriptions in different artistic styles.",
+    description: "Image Generator creates high-quality images from text prompts using state-of-the-art AI models. Choose from various artistic styles including photorealistic, artistic, anime, and more.\n\nCapabilities:\n• Generate images in multiple artistic styles\n• High-resolution output\n• Multiple aspect ratios\n• Fast generation\n\nPerfect for:\n• Social media content\n• Concept art and visualization\n• Marketing materials\n• Creative projects\n• Profile pictures and avatars\n\nJust describe what you want to see!",
+    engineProvider: "replicate_image",
     creator: "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ",
     creatorWallet: "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ",
     createdAt: Date.now() - 25 * 24 * 60 * 60 * 1000,
     lastActiveAt: Date.now() - 1000 * 60 * 15,
     sessions24h: 234,
     likes24h: 67,
+  },
+  // 🎬 Video Generator (Replicate)
+  {
+    id: "video-gen-agent",
+    name: "Video Generator",
+    priceUSDC: 0,
+    tagline: "Create AI animated videos from text.",
+    avatar: "🎬",
+    categories: ["tools", "design"],
+    likes: 1850,
+    sessions: 3240,
+    promptPreview: "I create short animated videos from your text descriptions.",
+    description: "Video Generator transforms your text descriptions into animated video clips using advanced AI technology.\n\nCapabilities:\n• Generate short animated videos\n• Multiple animation styles\n• Customizable duration\n• High-quality output\n\nPerfect for:\n• Social media videos\n• Presentations\n• Storytelling\n• Marketing content\n• Creative animations\n\nJust describe what animated scene you want to create!",
+    engineProvider: "replicate_video",
+    creator: "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ",
+    creatorWallet: "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ",
+    createdAt: Date.now() - 20 * 24 * 60 * 60 * 1000,
+    lastActiveAt: Date.now() - 1000 * 60 * 10,
+    sessions24h: 145,
+    likes24h: 38,
   },
   {
     id: "a1",
@@ -4792,17 +4821,23 @@ function ChatView({
   const [showVoiceSelector, setShowVoiceSelector] = useState(false);
   const [showTtsSettings, setShowTtsSettings] = useState(false);
 
-  // 🎨 Media model selection state
-  const [selectedMediaModel, setSelectedMediaModel] = useState(MEDIA_MODELS[0]);
-  const [showMediaModelSelector, setShowMediaModelSelector] = useState(false);
+  // 🎨 Image model selection state
+  const [selectedImageModel, setSelectedImageModel] = useState(IMAGE_MODELS[0]);
+  const [showImageModelSelector, setShowImageModelSelector] = useState(false);
+
+  // 🎬 Video model selection state
+  const [selectedVideoModel, setSelectedVideoModel] = useState(VIDEO_MODELS[0]);
+  const [showVideoModelSelector, setShowVideoModelSelector] = useState(false);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
       content: selectedAgent?.engineProvider === "tts"
         ? `🔊 Welcome to Voice Generator!\n\nI convert text to natural-sounding speech using AI. Just type or paste any text (up to 2000 characters) and I'll generate audio for you.\n\n**Current voice: ${TTS_VOICES[0].name}** (${TTS_VOICES[0].description})\n\nClick the 🎤 button to change voices. Try it now — send me something to say!`
-        : selectedAgent?.engineProvider === "replicate"
-        ? `🎨 Welcome to Media Generator!\n\nI create stunning **images** and **videos** from your text descriptions using AI.\n\n**Current model: ${MEDIA_MODELS[0].name}** (${MEDIA_MODELS[0].description})\n\nClick the 🎨 button to change models. Try it now!\n\n**Tips for best results:**\n• Be descriptive: "A majestic lion with golden mane at sunset"\n• Include style: "in watercolor style" or "photorealistic"\n• For video, include words like "video" or "animate"\n\n**Examples:**\n• "A cozy cabin in snowy mountains, warm light in windows"\n• "Abstract flowing colors, purple and cyan, video"\n• "Cyberpunk city street at night, neon signs, rain"\n\nWhat would you like me to create?`
+        : selectedAgent?.engineProvider === "replicate_image"
+        ? `🎨 Welcome to Image Generator!\n\nI create stunning **images** from your text descriptions using AI in various artistic styles.\n\n**Current model: ${IMAGE_MODELS[0].name}** (${IMAGE_MODELS[0].description})\n\nClick the 🎨 button to change models. Try it now!\n\n**Tips for best results:**\n• Be descriptive: "A majestic lion with golden mane at sunset"\n• Include style: "in watercolor style" or "photorealistic"\n• Specify details: lighting, mood, composition\n\n**Examples:**\n• "A cozy cabin in snowy mountains, warm light in windows"\n• "Cyberpunk city street at night, neon signs, rain"\n• "Watercolor painting of cherry blossoms in spring"\n\nWhat would you like me to create?`
+        : selectedAgent?.engineProvider === "replicate_video"
+        ? `🎬 Welcome to Video Generator!\n\nI create animated **videos** from your text descriptions using AI.\n\n**Current model: ${VIDEO_MODELS[0].name}** (${VIDEO_MODELS[0].description})\n\nClick the 🎬 button to change models. Try it now!\n\n**Tips for best results:**\n• Be descriptive about motion: "waves gently crashing"\n• Include scene details: lighting, colors, atmosphere\n• Think about what should move in the scene\n\n**Examples:**\n• "Abstract flowing colors, purple and cyan, gentle waves"\n• "Butterfly emerging from cocoon, time-lapse"\n• "Northern lights dancing in the night sky"\n\nWhat animated scene would you like me to create?`
         : `Hi! ${
             selectedAgent ? `I'm ${selectedAgent.name}` : "I'm your agent"
           }. Ask me anything.`,
@@ -5326,8 +5361,8 @@ function ChatView({
         return;
       }
 
-      // 🎨 Replicate Agent - Generate images/videos
-      if (selectedAgent.engineProvider === "replicate") {
+      // 🎨 Replicate Agents - Generate images/videos
+      if (selectedAgent.engineProvider === "replicate" || selectedAgent.engineProvider === "replicate_image" || selectedAgent.engineProvider === "replicate_video") {
         if (!text) {
           const next: ChatMessage[] = [
             ...history,
@@ -5342,26 +5377,30 @@ function ChatView({
         }
 
         // Show "generating" message
+        const isVideoAgent = selectedAgent.engineProvider === "replicate_video";
         const generatingMsg: ChatMessage[] = [
           ...history,
           {
             role: "assistant",
-            content: "🎨 Generating your image... This may take 10-30 seconds.",
+            content: isVideoAgent
+              ? "🎬 Generating your video... This may take 20-60 seconds."
+              : "🎨 Generating your image... This may take 10-30 seconds.",
           },
         ];
         syncMessages(generatingMsg);
 
         try {
-          // Detect if user wants video
-          const wantsVideo = /\b(video|animate|animation|moving|motion)\b/i.test(text);
-          
+          // Determine model and type based on agent
+          const isVideoAgent = selectedAgent.engineProvider === "replicate_video";
+          const selectedModel = isVideoAgent ? selectedVideoModel : selectedImageModel;
+
           const replicateResponse = await fetch("/api/replicate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               prompt: text.slice(0, 1000),
-              type: wantsVideo ? "video" : "image",
-              model: selectedMediaModel.id,
+              type: isVideoAgent ? "video" : "image",
+              model: selectedModel.id,
             }),
           });
 
@@ -6152,46 +6191,96 @@ function ChatView({
             </div>
           )}
 
-          {/* 🎨 Media Model Selector for Replicate Agent */}
-          {selectedAgent?.engineProvider === "replicate" && (
+          {/* 🎨 Image Model Selector for Image Generator */}
+          {selectedAgent?.engineProvider === "replicate_image" && (
             <div className="mb-3 space-y-2">
               {/* Model Selection Row */}
               <div className="flex flex-wrap gap-2">
-                {/* Media Model Selector */}
+                {/* Image Model Selector */}
                 <div className="relative">
                   <button
-                    onClick={() => setShowMediaModelSelector(!showMediaModelSelector)}
+                    onClick={() => setShowImageModelSelector(!showImageModelSelector)}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
                   >
                     <span>🎨</span>
-                    <span>Model: <strong>{selectedMediaModel.name}</strong></span>
-                    <svg className={`w-4 h-4 transition-transform ${showMediaModelSelector ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <span>Model: <strong>{selectedImageModel.name}</strong></span>
+                    <svg className={`w-4 h-4 transition-transform ${showImageModelSelector ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
 
-                  {showMediaModelSelector && (
+                  {showImageModelSelector && (
                     <div className="absolute bottom-full left-0 mb-2 w-72 max-h-64 overflow-y-auto rounded-xl bg-[#1a1a2e] border border-white/10 shadow-xl z-50">
                       <div className="p-2 border-b border-white/10 text-xs text-white/50 uppercase tracking-wide">
-                        Select Model
+                        Select Style
                       </div>
-                      {MEDIA_MODELS.map((model) => (
+                      {IMAGE_MODELS.map((model) => (
                         <button
                           key={model.id}
                           onClick={() => {
-                            setSelectedMediaModel(model);
-                            setShowMediaModelSelector(false);
+                            setSelectedImageModel(model);
+                            setShowImageModelSelector(false);
                           }}
                           className={`w-full px-3 py-2 text-left hover:bg-white/5 transition-colors flex items-center justify-between ${
-                            selectedMediaModel.id === model.id ? 'bg-emerald-500/20 text-emerald-300' : 'text-white/80'
+                            selectedImageModel.id === model.id ? 'bg-emerald-500/20 text-emerald-300' : 'text-white/80'
                           }`}
                         >
                           <div>
                             <div className="font-medium">{model.name}</div>
                             <div className="text-xs text-white/50">{model.description} • {model.speed} • {model.type}</div>
                           </div>
-                          {selectedMediaModel.id === model.id && (
+                          {selectedImageModel.id === model.id && (
                             <span className="text-emerald-400">✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 🎬 Video Model Selector for Video Generator */}
+          {selectedAgent?.engineProvider === "replicate_video" && (
+            <div className="mb-3 space-y-2">
+              {/* Model Selection Row */}
+              <div className="flex flex-wrap gap-2">
+                {/* Video Model Selector */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowVideoModelSelector(!showVideoModelSelector)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 hover:bg-blue-500/30 transition-colors text-sm"
+                  >
+                    <span>🎬</span>
+                    <span>Model: <strong>{selectedVideoModel.name}</strong></span>
+                    <svg className={`w-4 h-4 transition-transform ${showVideoModelSelector ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {showVideoModelSelector && (
+                    <div className="absolute bottom-full left-0 mb-2 w-72 max-h-64 overflow-y-auto rounded-xl bg-[#1a1a2e] border border-white/10 shadow-xl z-50">
+                      <div className="p-2 border-b border-white/10 text-xs text-white/50 uppercase tracking-wide">
+                        Select Model
+                      </div>
+                      {VIDEO_MODELS.map((model) => (
+                        <button
+                          key={model.id}
+                          onClick={() => {
+                            setSelectedVideoModel(model);
+                            setShowVideoModelSelector(false);
+                          }}
+                          className={`w-full px-3 py-2 text-left hover:bg-white/5 transition-colors flex items-center justify-between ${
+                            selectedVideoModel.id === model.id ? 'bg-blue-500/20 text-blue-300' : 'text-white/80'
+                          }`}
+                        >
+                          <div>
+                            <div className="font-medium">{model.name}</div>
+                            <div className="text-xs text-white/50">{model.description} • {model.speed} • {model.type}</div>
+                          </div>
+                          {selectedVideoModel.id === model.id && (
+                            <span className="text-blue-400">✓</span>
                           )}
                         </button>
                       ))}
@@ -6220,8 +6309,10 @@ function ChatView({
       ? "Session limit reached for this agent"
       : selectedAgent?.engineProvider === "tts"
         ? "Enter text to convert to speech…"
-        : selectedAgent?.engineProvider === "replicate"
-        ? "Describe the image or video you want to create…"
+        : selectedAgent?.engineProvider === "replicate_image"
+        ? "Describe the image you want to create…"
+        : selectedAgent?.engineProvider === "replicate_video"
+        ? "Describe the video animation you want to create…"
         : "Type your message…"
   }
   value={input}

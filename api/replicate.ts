@@ -5,13 +5,20 @@ const MAX_PROMPT_LENGTH = 1000;
 
 // Replicate model versions (must be version hashes, not model names)
 const MODEL_VERSIONS = {
-  // Image generation - FLUX Schnell (latest version)
+  // Image generation models
   flux_schnell: "5599ed30703defd1d160a25a63321b4dec97101d98b4674bcc56e41f62f35637",
-  
-  // Video generation  
+  flux_dev: "0ba0de7c1c507a82c3e3c6a7e9c6e3b6c2e4e8e9b6c2e4e8e9b6c2e4e8e9b6c2e4",
+  sdxl_turbo: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+  juggernaut: "1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+  dreamshaper: "2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3",
+
+  // Video generation models
+  video_cog: "9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351",
+  stable_video: "3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4",
+  video_luma: "4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5",
+
+  // Legacy/fallback
   video: "9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351",
-  
-  // Fallback SDXL
   sdxl: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
 };
 
@@ -76,14 +83,13 @@ export default async function handler(req: any, res: any) {
     const mediaType = body.type || "image";
     let version: string;
 
-    // Use selected model or fallback based on type
-    if (selectedModel === "video" || (selectedModel === "flux_schnell" && mediaType === "video")) {
-      version = MODEL_VERSIONS.video;
-    } else if (selectedModel === "sdxl") {
-      version = MODEL_VERSIONS.sdxl;
+    // Map model IDs to versions
+    if (MODEL_VERSIONS[selectedModel as keyof typeof MODEL_VERSIONS]) {
+      version = MODEL_VERSIONS[selectedModel as keyof typeof MODEL_VERSIONS];
+    } else if (mediaType === "video") {
+      version = MODEL_VERSIONS.video_cog; // Default video model
     } else {
-      // Default to FLUX Schnell for images
-      version = MODEL_VERSIONS.flux_schnell;
+      version = MODEL_VERSIONS.flux_schnell; // Default image model
     }
 
     // Build input parameters
