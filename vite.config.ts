@@ -415,6 +415,127 @@ function apiRoutes() {
           }
         });
       });
+
+      // ✅ Replicate Proxy (Image/Video Generation)
+      server.middlewares.use("/api/replicate", async (req: any, res: any) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+        if (req.method === "OPTIONS") {
+          res.statusCode = 200;
+          return res.end();
+        }
+        if (req.method !== "POST") {
+          res.statusCode = 405;
+          res.setHeader("Content-Type", "application/json");
+          return res.end(JSON.stringify({ error: { message: "Method not allowed", code: "METHOD_NOT_ALLOWED" } }));
+        }
+
+        const apiKey = process.env.REPLICATE_API_KEY;
+        if (!apiKey) {
+          res.statusCode = 500;
+          res.setHeader("Content-Type", "application/json");
+          return res.end(JSON.stringify({ error: { message: "Replicate service not configured. Set REPLICATE_API_KEY in .env.local", code: "SERVICE_NOT_CONFIGURED" } }));
+        }
+
+        let body = "";
+        req.on("data", (chunk: any) => (body += chunk));
+        req.on("end", async () => {
+          try {
+            const { prompt, type, width, height } = JSON.parse(body || "{}");
+            const trimmedPrompt = typeof prompt === "string" ? prompt.trim() : "";
+
+            if (!trimmedPrompt) {
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              return res.end(JSON.stringify({ error: { message: "Prompt is required", code: "PROMPT_REQUIRED" } }));
+            }
+
+            const mediaType = type || "image";
+            const model = mediaType === "video" 
+              ? "anotherjesse/zeroscope-v2-xl:9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351"
+              : "black-forest-labs/flux-schnell";
+
+            console.log(`[Replicate] Request: type=${mediaType}, prompt=${trimmedPrompt.slice(0, 50)}...`);
+
+            // Create prediction
+            const input: any = { prompt: trimmedPrompt };
+            if (mediaType === "image") {
+              input.width = width || 1024;
+              input.height = height || 1024;
+              input.num_outputs = 1;
+              input.output_format = "webp";
+            }
+
+            const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model: model.includes(":") ? undefined : model,
+                version: model.includes(":") ? model.split(":")[1] : undefined,
+                input,
+              }),
+            });
+
+            if (!createResponse.ok) {
+              const errorText = await createResponse.text();
+              console.error(`[Replicate] Create error: ${createResponse.status} - ${errorText}`);
+              res.statusCode = 502;
+              res.setHeader("Content-Type", "application/json");
+              return res.end(JSON.stringify({ error: { message: `Failed to start: ${errorText}`, code: "REPLICATE_ERROR" } }));
+            }
+
+            const prediction = await createResponse.json();
+            console.log(`[Replicate] Prediction created: ${prediction.id}`);
+
+            // Poll for completion
+            const maxWaitTime = 120000;
+            const pollInterval = 2000;
+            const startTime = Date.now();
+
+            while (Date.now() - startTime < maxWaitTime) {
+              const statusResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+                headers: { "Authorization": `Bearer ${apiKey}` },
+              });
+
+              if (statusResponse.ok) {
+                const status = await statusResponse.json();
+                
+                if (status.status === "succeeded") {
+                  const urls = Array.isArray(status.output) ? status.output : [status.output];
+                  console.log(`[Replicate] ✅ Success`);
+                  res.statusCode = 200;
+                  res.setHeader("Content-Type", "application/json");
+                  return res.end(JSON.stringify({ success: true, type: mediaType, urls }));
+                }
+
+                if (status.status === "failed" || status.status === "canceled") {
+                  console.error(`[Replicate] ❌ Failed: ${status.error}`);
+                  res.statusCode = 500;
+                  res.setHeader("Content-Type", "application/json");
+                  return res.end(JSON.stringify({ error: { message: status.error || "Generation failed", code: "GENERATION_FAILED" } }));
+                }
+              }
+
+              await new Promise(r => setTimeout(r, pollInterval));
+            }
+
+            res.statusCode = 504;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: { message: "Generation timed out", code: "TIMEOUT" } }));
+
+          } catch (e: any) {
+            console.error("[Replicate] Error:", e.message);
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: { message: e.message || "Internal error", code: "INTERNAL_ERROR" } }));
+          }
+        });
+      });
     },
   };
 }

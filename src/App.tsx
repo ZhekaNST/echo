@@ -394,7 +394,7 @@ likes24h?: number;          // демо-счётчик
   creatorWallet?: string;
 
   // engine / RAG
-  engineProvider?: "platform" | "creator_backend" | "tts";
+  engineProvider?: "platform" | "creator_backend" | "tts" | "replicate";
   engineApiUrl?: string | null;
   ragEndpointUrl?: string | null;
   ragDescription?: string | null;
@@ -605,6 +605,26 @@ const INITIAL_AGENTS: Agent[] = [
     lastActiveAt: Date.now() - 1000 * 60 * 30,
     sessions24h: 156,
     likes24h: 42,
+  },
+  // 🎨 Image & Video Generator (Replicate)
+  {
+    id: "media-gen-agent",
+    name: "Media Generator",
+    priceUSDC: 0,
+    tagline: "Create stunning images and videos with AI.",
+    avatar: "🎨",
+    categories: ["tools", "design"],
+    likes: 3250,
+    sessions: 6840,
+    promptPreview: "I generate beautiful images and videos from your text descriptions.",
+    description: "Media Generator is a powerful AI tool that creates stunning images and videos from text descriptions. Powered by state-of-the-art models like FLUX and Stable Diffusion.\n\nCapabilities:\n• Generate high-quality images from text prompts\n• Create short video clips\n• Multiple aspect ratios and sizes\n• Fast generation with FLUX Schnell\n\nPerfect for:\n• Social media content\n• Concept art and visualization\n• Marketing materials\n• Creative projects\n\nJust describe what you want to see!",
+    engineProvider: "replicate",
+    creator: "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ",
+    creatorWallet: "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ",
+    createdAt: Date.now() - 25 * 24 * 60 * 60 * 1000,
+    lastActiveAt: Date.now() - 1000 * 60 * 15,
+    sessions24h: 234,
+    likes24h: 67,
   },
   {
     id: "a1",
@@ -4745,6 +4765,8 @@ type ChatMessage = {
   content: string;
   attachments?: ChatAttachment[];
   audioUrl?: string; // For TTS agent responses
+  generatedMediaUrl?: string; // For Replicate image/video generation
+  generatedMediaType?: "image" | "video"; // Type of generated media
 };
 
 function ChatView({
@@ -4768,6 +4790,8 @@ function ChatView({
       role: "assistant",
       content: selectedAgent?.engineProvider === "tts"
         ? `🔊 Welcome to Voice Generator!\n\nI convert text to natural-sounding speech using AI. Just type or paste any text (up to 2000 characters) and I'll generate audio for you.\n\n**Current voice: ${TTS_VOICES[0].name}** (${TTS_VOICES[0].description})\n\nClick the 🎤 button to change voices. Try it now — send me something to say!`
+        : selectedAgent?.engineProvider === "replicate"
+        ? `🎨 Welcome to Media Generator!\n\nI create stunning **images** and **videos** from your text descriptions using AI.\n\n**Tips for best results:**\n• Be descriptive: "A majestic lion with golden mane at sunset"\n• Include style: "in watercolor style" or "photorealistic"\n• For video, include words like "video" or "animate"\n\n**Examples:**\n• "A cozy cabin in snowy mountains, warm light in windows"\n• "Abstract flowing colors, purple and cyan, video"\n• "Cyberpunk city street at night, neon signs, rain"\n\nWhat would you like me to create?`
         : `Hi! ${
             selectedAgent ? `I'm ${selectedAgent.name}` : "I'm your agent"
           }. Ask me anything.`,
@@ -5291,6 +5315,87 @@ function ChatView({
         return;
       }
 
+      // 🎨 Replicate Agent - Generate images/videos
+      if (selectedAgent.engineProvider === "replicate") {
+        if (!text) {
+          const next: ChatMessage[] = [
+            ...history,
+            {
+              role: "assistant",
+              content: "Please describe what you'd like me to create. For example:\n• \"A sunset over mountains with purple clouds\"\n• \"A cute robot playing guitar\"\n• \"Abstract art with flowing colors\"",
+            },
+          ];
+          syncMessages(next);
+          setLoading(false);
+          return;
+        }
+
+        // Show "generating" message
+        const generatingMsg: ChatMessage[] = [
+          ...history,
+          {
+            role: "assistant",
+            content: "🎨 Generating your image... This may take 10-30 seconds.",
+          },
+        ];
+        syncMessages(generatingMsg);
+
+        try {
+          // Detect if user wants video
+          const wantsVideo = /\b(video|animate|animation|moving|motion)\b/i.test(text);
+          
+          const replicateResponse = await fetch("/api/replicate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              prompt: text.slice(0, 1000),
+              type: wantsVideo ? "video" : "image",
+            }),
+          });
+
+          if (!replicateResponse.ok) {
+            const errorData = await replicateResponse.json().catch(() => ({}));
+            throw new Error(errorData?.error?.message || `Generation failed: ${replicateResponse.status}`);
+          }
+
+          const result = await replicateResponse.json();
+          
+          if (result.success && result.urls && result.urls.length > 0) {
+            const mediaUrl = result.urls[0];
+            const isVideo = result.type === "video" || mediaUrl.includes(".mp4");
+            
+            const next: ChatMessage[] = [
+              ...history,
+              {
+                role: "assistant",
+                content: isVideo 
+                  ? `🎬 Here's your generated video:\n\n"${text.length > 80 ? text.slice(0, 80) + '...' : text}"`
+                  : `🎨 Here's your generated image:\n\n"${text.length > 80 ? text.slice(0, 80) + '...' : text}"`,
+                generatedMediaUrl: mediaUrl,
+                generatedMediaType: isVideo ? "video" : "image",
+              },
+            ];
+            syncMessages(next);
+          } else {
+            throw new Error("No output received from generation");
+          }
+
+        } catch (replicateError: any) {
+          console.error("Replicate Error:", replicateError);
+          const next: ChatMessage[] = [
+            ...history,
+            {
+              role: "assistant",
+              content: `Sorry, I couldn't generate the ${/video/i.test(text) ? 'video' : 'image'}. ${replicateError?.message || "Please try again."}`,
+            },
+          ];
+          syncMessages(next);
+        }
+
+        setLoading(false);
+        return;
+      }
+
       // Messages for backend — only role + content + attachment metadata
       const backendMessages = history.map((m) => ({
         role: m.role,
@@ -5626,6 +5731,58 @@ function ChatView({
                           Download MP3
                         </a>
                       </div>
+                    </div>
+                  )}
+
+                  {/* 🎨 Generated image/video for Replicate agent */}
+                  {m.generatedMediaUrl && (
+                    <div className="mt-3">
+                      {m.generatedMediaType === "video" ? (
+                        <div className="rounded-xl overflow-hidden border border-cyan-500/30 bg-black/40">
+                          <video
+                            controls
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            src={m.generatedMediaUrl}
+                            className="w-full max-w-md rounded-xl"
+                          />
+                          <div className="p-2 flex items-center justify-between bg-gradient-to-r from-cyan-600/20 to-purple-600/20">
+                            <span className="text-xs text-white/60">🎬 Generated Video</span>
+                            <a
+                              href={m.generatedMediaUrl}
+                              download={`generated-video-${Date.now()}.mp4`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] text-cyan-300 hover:text-cyan-200 underline transition"
+                            >
+                              Download
+                            </a>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl overflow-hidden border border-emerald-500/30">
+                          <img
+                            src={m.generatedMediaUrl}
+                            alt="Generated image"
+                            className="w-full max-w-md rounded-t-xl cursor-pointer hover:opacity-90 transition"
+                            onClick={() => window.open(m.generatedMediaUrl, '_blank')}
+                          />
+                          <div className="p-2 flex items-center justify-between bg-gradient-to-r from-emerald-600/20 to-cyan-600/20">
+                            <span className="text-xs text-white/60">🎨 Generated Image</span>
+                            <a
+                              href={m.generatedMediaUrl}
+                              download={`generated-image-${Date.now()}.webp`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] text-emerald-300 hover:text-emerald-200 underline transition"
+                            >
+                              Download
+                            </a>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -5999,8 +6156,10 @@ function ChatView({
   placeholder={
     sessionBlocked && !isCreator
       ? "Session limit reached for this agent"
-      : selectedAgent?.engineProvider === "tts" 
+      : selectedAgent?.engineProvider === "tts"
         ? "Enter text to convert to speech…"
+        : selectedAgent?.engineProvider === "replicate"
+        ? "Describe the image or video you want to create…"
         : "Type your message…"
   }
   value={input}
