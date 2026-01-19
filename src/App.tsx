@@ -1870,7 +1870,8 @@ const canPublish =
   // базовые поля (оставь минимум что тебе надо)
   !!newAgent.name?.trim() &&
   !!newAgent.tagline?.trim() &&
-  !!newAgent.avatar?.trim() &&
+  !!newAgent.avatar &&
+  (typeof newAgent.avatar === 'string' ? !!newAgent.avatar.trim() : true) &&
   newAgent.priceUSDC >= 0.05 &&
   // если custom — обязателен endpoint
   (runtimeMode !== "custom" || (apiUrlTrimmed.length > 0 && isValidHttpUrl(apiUrlTrimmed)));
