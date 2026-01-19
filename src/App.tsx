@@ -11,18 +11,36 @@ if (typeof window !== "undefined" && typeof (window as any).Buffer === "undefine
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import heic2any from "heic2any";
 import { motion } from "framer-motion";
-import {  
-  Bot, 
-  Wallet, 
-  Play, 
-  Heart, 
-  X, 
-  Sparkles, 
-  Plus, 
-  Twitter, 
+import {
+  Bot,
+  Wallet,
+  Play,
+  Heart,
+  X,
+  Sparkles,
+  Plus,
+  Twitter,
   User,
   Paperclip,
-  MessageCircle
+  MessageCircle,
+  Palette,
+  Rocket,
+  TrendingUp,
+  BarChart,
+  Code,
+  Zap,
+  Settings,
+  Target,
+  Lock,
+  Video,
+  DollarSign,
+  Search,
+  Shield,
+  Globe,
+  Wrench,
+  Key,
+  Ban,
+  ShieldCheck
 } from "lucide-react";
 
 import { Connection, PublicKey, clusterApiUrl, LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
@@ -377,7 +395,7 @@ type Agent = {
   name: string;
   priceUSDC: number;
   tagline: string;
-  avatar: string;
+  avatar: React.ReactNode;
   categories: string[];
   likes: number;
   sessions: number;
@@ -628,7 +646,7 @@ const INITIAL_AGENTS: Agent[] = [
     name: "Image Generator",
     priceUSDC: 0,
     tagline: "Create stunning AI images in various styles.",
-    avatar: "🎨",
+    avatar: <Palette className="w-6 h-6" />,
     categories: ["tools", "design"],
     likes: 3250,
     sessions: 6840,
@@ -648,7 +666,7 @@ const INITIAL_AGENTS: Agent[] = [
     name: "Video Generator",
     priceUSDC: 0,
     tagline: "Create AI animated videos from text.",
-    avatar: "🎬",
+    avatar: <Video className="w-6 h-6" />,
     categories: ["tools", "design"],
     likes: 1850,
     sessions: 3240,
@@ -667,7 +685,7 @@ const INITIAL_AGENTS: Agent[] = [
     name: "AI Startup Mentor",
     priceUSDC: 0.30,
     tagline: "Pitch, tokenomics & GTM in minutes.",
-    avatar: "🚀",
+    avatar: <Rocket className="w-6 h-6" />,
     categories: ["startup", "strategy"],
     likes: 1560,
     sessions: 1842,
@@ -684,7 +702,7 @@ likes24h: 5,
     name: "Crypto Analyst",
     priceUSDC: 0.25,
     tagline: "On-chain metrics & narratives.",
-    avatar: "📈",
+    avatar: <TrendingUp className="w-6 h-6" />,
     categories: ["crypto", "finance"],
     likes: 1825,
     sessions: 2205,
@@ -701,7 +719,7 @@ likes24h: 5,
     name: "AI Designer Mentor",
     priceUSDC: 0.20,
     tagline: "Brand, layout, and critique.",
-    avatar: "🎨",
+    avatar: <Palette className="w-6 h-6" />,
     categories: ["design", "brand"],
     likes: 940,
     sessions: 1610,
@@ -718,7 +736,7 @@ likes24h: 5,
     name: "Virtual Companion",
     priceUSDC: 0.15,
     tagline: "Talk, reflect, decompress.",
-    avatar: "✨",
+    avatar: <Sparkles className="w-6 h-6" />,
     categories: ["companion"],
     likes: 2110,
     sessions: 3401,
@@ -737,7 +755,7 @@ const homeCollections = [
     id: "cozy-crypto",
     title: "Top crypto research agents",
     subtitle: "Narratives, perps, on-chain data & funding",
-    emoji: "📊",
+    emoji: <BarChart className="w-12 h-12" />,
     accent: "from-cyan-500/60 via-sky-500/40 to-indigo-500/60",
     query: "crypto",
   },
@@ -745,7 +763,7 @@ const homeCollections = [
     id: "design-lab",
     title: "Design & branding lab",
     subtitle: "UX audit, landing pages, brand systems",
-    emoji: "🎨",
+    emoji: <Palette className="w-12 h-12" />,
     accent: "from-fuchsia-500/60 via-pink-500/40 to-purple-500/60",
     query: "design",
   },
@@ -753,7 +771,7 @@ const homeCollections = [
     id: "founder-stack",
     title: "Founder playbook",
     subtitle: "Pitch, GTM, tokenomics & fundraising",
-    emoji: "🚀",
+    emoji: <Rocket className="w-12 h-12" />,
     accent: "from-emerald-500/60 via-teal-500/40 to-cyan-500/60",
     query: "founder",
   },
@@ -761,7 +779,7 @@ const homeCollections = [
     id: "companion",
     title: "Safe companion agents",
     subtitle: "Talk, reflect and decompress",
-    emoji: "💬",
+    emoji: <MessageCircle className="w-12 h-12" />,
     accent: "from-amber-500/60 via-orange-500/40 to-rose-500/60",
     query: "companion",
   },
@@ -769,7 +787,7 @@ const homeCollections = [
     id: "builders",
     title: "For on-chain builders",
     subtitle: "Docs copilots, code reviewers, devrel",
-    emoji: "👨‍💻",
+    emoji: <Code className="w-12 h-12" />,
     accent: "from-indigo-500/60 via-blue-500/40 to-cyan-500/60",
     query: "builder",
   },
@@ -2890,7 +2908,7 @@ return (
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 text-xs text-white/60">
             <span className="h-6 w-6 rounded-full bg-cyan-500/15 border border-cyan-300/40 grid place-items-center">
-              👤
+              <User className="w-3 h-3" />
             </span>
             <span className="uppercase tracking-[0.18em] text-[10px] text-white/45">
               USERS
@@ -2969,7 +2987,7 @@ return (
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 text-xs text-white/60">
             <span className="h-6 w-6 rounded-full bg-emerald-500/15 border border-emerald-300/40 grid place-items-center">
-              ⚡
+              <Zap className="w-3 h-3" />
             </span>
             <span className="uppercase tracking-[0.18em] text-[10px] text-white/45">
               ON SOLANA
@@ -4725,7 +4743,7 @@ function MarketplaceTopTags({
   onPick,
 }: {
   activeId: string | null;
-  tags: { id: string; label: string; emoji?: string }[];
+  tags: { id: string; label: string; emoji?: React.ReactNode }[];
   onPick: (id: string) => void;
 }) {
   return (
@@ -6086,7 +6104,7 @@ function ChatView({
                       : 'bg-white/5 border-white/20 text-white/70 hover:bg-white/10'
                   }`}
                 >
-                  <span>⚙️</span>
+                  <Settings className="w-4 h-4" />
                   <span>Settings</span>
                 </button>
               </div>
@@ -6095,7 +6113,7 @@ function ChatView({
               {showTtsSettings && (
                 <div className="p-4 rounded-xl bg-[#1a1a2e] border border-white/10 space-y-4">
                   <div className="text-sm font-medium text-white/80 flex items-center gap-2">
-                    <span>⚙️</span> Voice Settings
+                    <Settings className="w-4 h-4" /> Voice Settings
                   </div>
                   
                   {/* Stability Slider */}
@@ -7002,10 +7020,10 @@ function AboutPage({ onBack }: { onBack: () => void }) {
           <p className="text-white/70">Echo allows anyone to:</p>
           <div className="grid gap-4">
             {[
-              { icon: "🤖", title: "Create & Publish", desc: "Build AI agents with custom behavior, expertise, and pricing" },
-              { icon: "💰", title: "Earn Per Session", desc: "Get paid directly wallet-to-wallet in USDC" },
-              { icon: "🔍", title: "Discover & Use", desc: "Access specialized agents without subscriptions or lock-in" },
-              { icon: "💬", title: "Interact in Real Time", desc: "Chat, share files, and enjoy session-based access" },
+              { icon: <Bot className="w-6 h-6" />, title: "Create & Publish", desc: "Build AI agents with custom behavior, expertise, and pricing" },
+              { icon: <DollarSign className="w-6 h-6" />, title: "Earn Per Session", desc: "Get paid directly wallet-to-wallet in USDC" },
+              { icon: <Search className="w-6 h-6" />, title: "Discover & Use", desc: "Access specialized agents without subscriptions or lock-in" },
+              { icon: <MessageCircle className="w-6 h-6" />, title: "Interact in Real Time", desc: "Chat, share files, and enjoy session-based access" },
             ].map((item, i) => (
               <div key={i} className="flex gap-4 p-4 rounded-xl bg-white/[0.03] border border-white/8 hover:border-white/15 transition">
                 <div className="text-2xl">{item.icon}</div>
@@ -7055,9 +7073,9 @@ function AboutPage({ onBack }: { onBack: () => void }) {
           <p className="text-white/70">Echo is built on Solana to ensure:</p>
           <div className="grid md:grid-cols-3 gap-4">
             {[
-              { icon: "⚡", label: "Fast & Low-Cost", desc: "Lightning-fast transactions" },
-              { icon: "💵", label: "USDC Payments", desc: "Seamless stablecoin payments" },
-              { icon: "🌍", label: "Permissionless", desc: "Global access for everyone" },
+              { icon: <Zap className="w-6 h-6" />, label: "Fast & Low-Cost", desc: "Lightning-fast transactions" },
+              { icon: <DollarSign className="w-6 h-6" />, label: "USDC Payments", desc: "Seamless stablecoin payments" },
+              { icon: <Globe className="w-6 h-6" />, label: "Permissionless", desc: "Global access for everyone" },
             ].map((item, i) => (
               <div key={i} className="p-5 rounded-xl bg-white/[0.03] border border-white/8">
                 <div className="text-2xl mb-2">{item.icon}</div>
@@ -7213,11 +7231,11 @@ function DocsPage({ onBack }: { onBack: () => void }) {
             <p>Echo supports two primary roles:</p>
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="p-4 rounded-xl bg-white/[0.03] border border-white/8">
-                <div className="font-medium text-white mb-1">👤 Users</div>
+                <div className="font-medium text-white mb-1 flex items-center gap-2"><User className="w-4 h-4" /> Users</div>
                 <div className="text-sm text-white/50">Interact with AI agents</div>
               </div>
               <div className="p-4 rounded-xl bg-white/[0.03] border border-white/8">
-                <div className="font-medium text-white mb-1">🛠 Creators</div>
+                <div className="font-medium text-white mb-1 flex items-center gap-2"><Wrench className="w-4 h-4" /> Creators</div>
                 <div className="text-sm text-white/50">Build and monetize AI agents</div>
               </div>
             </div>
@@ -7560,10 +7578,10 @@ function PrivacyPage({ onBack }: { onBack: () => void }) {
           <p>Echo is designed around the following privacy principles:</p>
           <div className="grid sm:grid-cols-2 gap-3">
             {[
-              { icon: "🔐", text: "Wallet-based access instead of traditional user accounts" },
-              { icon: "🔑", text: "No custody of user funds or private keys" },
-              { icon: "🚫", text: "No sale of personal data" },
-              { icon: "🎯", text: "Purpose-limited data usage" },
+              { icon: <ShieldCheck className="w-5 h-5" />, text: "Wallet-based access instead of traditional user accounts" },
+              { icon: <Key className="w-5 h-5" />, text: "No custody of user funds or private keys" },
+              { icon: <Ban className="w-5 h-5" />, text: "No sale of personal data" },
+              { icon: <Target className="w-5 h-5" />, text: "Purpose-limited data usage" },
             ].map((item, i) => (
               <div key={i} className="flex gap-3 items-start p-3 rounded-lg bg-white/[0.02] border border-white/8">
                 <span className="text-lg">{item.icon}</span>
@@ -7681,10 +7699,10 @@ function PrivacyPage({ onBack }: { onBack: () => void }) {
           <p className="mt-3">Security measures include:</p>
           <div className="grid sm:grid-cols-2 gap-3 mt-2">
             {[
-              { icon: "🔒", label: "Encrypted connections" },
-              { icon: "🛡", label: "Access controls" },
-              { icon: "👤", label: "Separation of user data by wallet address" },
-              { icon: "🔐", label: "Limited internal access" },
+              { icon: <Lock className="w-5 h-5" />, label: "Encrypted connections" },
+              { icon: <Shield className="w-5 h-5" />, label: "Access controls" },
+              { icon: <User className="w-5 h-5" />, label: "Separation of user data by wallet address" },
+              { icon: <ShieldCheck className="w-5 h-5" />, label: "Limited internal access" },
             ].map((item, i) => (
               <div key={i} className="flex gap-3 items-center p-3 rounded-lg bg-white/[0.02] border border-white/8">
                 <span className="text-lg">{item.icon}</span>
