@@ -13,6 +13,7 @@ import heic2any from "heic2any";
 import { motion } from "framer-motion";
 import {
   Bot,
+  Cpu,
   Wallet,
   Play,
   Heart,
@@ -40,7 +41,12 @@ import {
   Wrench,
   Key,
   Ban,
-  ShieldCheck
+  ShieldCheck,
+  Image,
+  Film,
+  ArrowUp,
+  PenTool,
+  Building2
 } from "lucide-react";
 
 import { Connection, PublicKey, clusterApiUrl, LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
@@ -1070,7 +1076,7 @@ useEffect(() => {
     name: "",
     priceUSDC: 0.2,
     tagline: "",
-    avatar: "🤖",
+    avatar: <Cpu className="w-6 h-6" />,
     categories: [],
     likes: 0,
     sessions: 0,
@@ -1545,7 +1551,7 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
       priceUSDC: 0.2,
       tagline: "",
 description: "",
-avatar: "🤖",
+avatar: <Cpu className="w-6 h-6" />,
       categories: [],
       likes: 0,
       sessions: 0,
@@ -1584,7 +1590,7 @@ setCreating(true);
       priceUSDC: 0.2,
       tagline: "",
 description: "",
-avatar: "🤖",
+avatar: <Cpu className="w-6 h-6" />,
       categories: [],
       likes: 0,
       sessions: 0,
@@ -1890,7 +1896,7 @@ const canPublish =
                     setNewAgent(a => ({ ...a, avatar: e.target.value }))
                   }                  
                   className="bg-white/5 border-white/10"
-                  placeholder="📈 or https://..."
+                  placeholder="Icon URL or emoji..."
                 />
               </div>
 
@@ -6220,7 +6226,7 @@ function ChatView({
                     onClick={() => setShowImageModelSelector(!showImageModelSelector)}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
                   >
-                    <span>🎨</span>
+                    <Image className="w-4 h-4" />
                     <span>Model: <strong>{selectedImageModel.name}</strong></span>
                     <svg className={`w-4 h-4 transition-transform ${showImageModelSelector ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -6270,7 +6276,7 @@ function ChatView({
                     onClick={() => setShowVideoModelSelector(!showVideoModelSelector)}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 hover:bg-blue-500/30 transition-colors text-sm"
                   >
-                    <span>🎬</span>
+                    <Film className="w-4 h-4" />
                     <span>Model: <strong>{selectedVideoModel.name}</strong></span>
                     <svg className={`w-4 h-4 transition-transform ${showVideoModelSelector ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -7398,10 +7404,10 @@ function DocsPage({ onBack }: { onBack: () => void }) {
             <p>Echo is built with a security-first mindset.</p>
             <div className="grid sm:grid-cols-2 gap-3 mt-4">
               {[
-                { icon: "🔐", label: "Wallet-based authentication only" },
-                { icon: "🏦", label: "No custodial accounts" },
-                { icon: "✍️", label: "Explicit transaction signing" },
-                { icon: "🚫", label: "No background approvals" },
+                { icon: <ShieldCheck className="w-5 h-5" />, label: "Wallet-based authentication only" },
+                { icon: <Building2 className="w-5 h-5" />, label: "No custodial accounts" },
+                { icon: <PenTool className="w-5 h-5" />, label: "Explicit transaction signing" },
+                { icon: <Ban className="w-5 h-5" />, label: "No background approvals" },
               ].map((item, i) => (
                 <div key={i} className="flex gap-3 items-center p-3 rounded-lg bg-white/[0.02] border border-white/8">
                   <span className="text-xl">{item.icon}</span>

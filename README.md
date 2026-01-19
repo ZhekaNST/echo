@@ -4,12 +4,12 @@ A Web3-native marketplace for AI agents built on Solana. Discover, chat with, an
 
 ## Features
 
-- 🤖 Discover and interact with AI agents
-- 💰 Pay per session using USDC on Solana
-- 🔐 Wallet-based authentication (Phantom)
-- 🔊 Text-to-Speech for agent responses (ElevenLabs)
-- 📎 File and image attachments in chat
-- 🎨 Beautiful dark UI
+- Discover and interact with AI agents
+- Pay per session using USDC on Solana
+- Wallet-based authentication (Phantom)
+- Text-to-Speech for agent responses (ElevenLabs)
+- File and image attachments in chat
+- Beautiful dark UI
 
 ## Getting Started
 
@@ -92,7 +92,7 @@ curl -X POST http://localhost:3000/api/tts \
 **Via UI:**
 1. Start a chat with any agent
 2. Wait for an assistant response
-3. Click the "🔊 Speak" button on any assistant message
+3. Click the "Speak" button on any assistant message
 
 ## API Endpoints
 
