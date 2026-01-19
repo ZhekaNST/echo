@@ -625,6 +625,50 @@ async function verifyPaymentOnServer(
 
 
 
+// Agent Image Library - predefined images with keywords
+const AGENT_IMAGE_LIBRARY = [
+  {
+    url: "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=150&h=150&fit=crop&crop=face",
+    keywords: ["robot", "android", "machine", "tech", "cyber", "future", "ai", "automation"]
+  },
+  {
+    url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+    keywords: ["wizard", "magic", "mystical", "wise", "elder", "sage", "magician", "sorcerer"]
+  },
+  {
+    url: "https://images.unsplash.com/photo-1556157382-97eda2d62296?w=150&h=150&fit=crop&crop=center",
+    keywords: ["scientist", "lab", "research", "chemistry", "physics", "experiment", "doctor"]
+  },
+  {
+    url: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=150&h=150&fit=crop&crop=center",
+    keywords: ["astronaut", "space", "cosmos", "universe", "galaxy", "nasa", "explorer"]
+  },
+  {
+    url: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&h=150&fit=crop&crop=center",
+    keywords: ["detective", "investigator", "mystery", "clue", "sleuth", "private eye", "spy"]
+  },
+  {
+    url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=150&h=150&fit=crop&crop=center",
+    keywords: ["nature", "forest", "tree", "green", "earth", "environment", "eco", "wildlife"]
+  },
+  {
+    url: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=150&h=150&fit=crop&crop=center",
+    keywords: ["business", "corporate", "suit", "professional", "executive", "manager", "ceo"]
+  },
+  {
+    url: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&h=150&fit=crop&crop=center",
+    keywords: ["artist", "creative", "painter", "design", "colorful", "artistic", "creator"]
+  },
+  {
+    url: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=150&h=150&fit=crop&crop=center",
+    keywords: ["chef", "cook", "kitchen", "food", "culinary", "restaurant", "gourmet"]
+  },
+  {
+    url: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=150&h=150&fit=crop&crop=center",
+    keywords: ["teacher", "education", "school", "learning", "professor", "academic", "student"]
+  }
+];
+
 const INITIAL_AGENTS: Agent[] = [
   // 🔊 Text-to-Speech Agent (ElevenLabs)
   {
@@ -1071,6 +1115,10 @@ useEffect(() => {
   const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
   const [shouldScrollToForm, setShouldScrollToForm] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // agent image library selection
+  const [imageSearchTerm, setImageSearchTerm] = useState("");
+  const [selectedLibraryImage, setSelectedLibraryImage] = useState<string | null>(null);
   const [newAgent, setNewAgent] = useState<Agent>({
     id: "",
     name: "",
@@ -1190,6 +1238,18 @@ async function testChatEndpoint() {
     clearTimeout(t);
   }
 }
+
+  // search agent image library
+  const searchAgentImages = (searchTerm: string) => {
+    if (!searchTerm.trim()) return [];
+
+    const term = searchTerm.toLowerCase().trim();
+    return AGENT_IMAGE_LIBRARY.filter(image =>
+      image.keywords.some(keyword =>
+        keyword.toLowerCase().includes(term) || term.includes(keyword.toLowerCase())
+      )
+    );
+  };
 
 
 
@@ -1566,6 +1626,9 @@ avatar: <Cpu className="w-6 h-6" />,
       maxMessagesPerSession: null,
       maxDurationMinutes: null,
     });     
+    // Reset image library state
+    setImageSearchTerm("");
+    setSelectedLibraryImage(null);
     setAutoPrice(true);
 setCreating(true);
 
@@ -1575,7 +1638,10 @@ setCreating(true);
     // режим "редактирования" — подставляем данные агента в форму
     setEditingAgentId(agent.id);
     setNewAgent({ ...agent });
-    setAutoPrice(false); // при редактировании обычно руками правим цену  
+    // Reset image library state for editing
+    setImageSearchTerm("");
+    setSelectedLibraryImage(null);
+    setAutoPrice(false); // при редактировании обычно руками правим цену
     setCreating(true);
     setShouldScrollToForm(true); // trigger scroll after form renders
   }
@@ -1584,6 +1650,9 @@ setCreating(true);
     setCreating(false);
     setEditingAgentId(null);
     setShouldScrollToForm(false);
+    // Reset image library state
+    setImageSearchTerm("");
+    setSelectedLibraryImage(null);
     setNewAgent({
       id: "",
       name: "",
@@ -1888,16 +1957,88 @@ const canPublish =
   />
 </div>
                 <label className="text-sm text-white/70">
-                  Avatar (emoji or URL)
+                  Avatar (emoji, URL, or select from library)
                 </label>
                 <Input
                   value={newAgent.avatar}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setNewAgent(a => ({ ...a, avatar: e.target.value }))
-                  }                  
+                  }
                   className="bg-white/5 border-white/10"
                   placeholder="Icon URL or emoji..."
                 />
+
+                {/* Agent Image Library */}
+                <div className="space-y-3 mt-4">
+                  <label className="text-sm text-white/70">
+                    Or select from image library
+                  </label>
+                  <Input
+                    value={imageSearchTerm}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      setImageSearchTerm(e.target.value);
+                      // Auto-select first match if found
+                      const matches = searchAgentImages(e.target.value);
+                      if (matches.length > 0 && !selectedLibraryImage) {
+                        setSelectedLibraryImage(matches[0].url);
+                        setNewAgent(a => ({ ...a, avatar: matches[0].url }));
+                      }
+                    }}
+                    className="bg-white/5 border-white/10"
+                    placeholder="Type a theme (e.g., 'robot', 'wizard', 'scientist')..."
+                  />
+
+                  {/* Search Results */}
+                  {imageSearchTerm.trim() && (
+                    <div className="grid grid-cols-5 gap-2 max-h-32 overflow-y-auto">
+                      {searchAgentImages(imageSearchTerm).map((image, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => {
+                            setSelectedLibraryImage(image.url);
+                            setNewAgent(a => ({ ...a, avatar: image.url }));
+                          }}
+                          className={`relative p-1 rounded-lg border-2 transition-all ${
+                            selectedLibraryImage === image.url
+                              ? 'border-purple-400 bg-purple-500/20'
+                              : 'border-white/20 hover:border-white/40'
+                          }`}
+                        >
+                          <img
+                            src={image.url}
+                            alt={`Theme: ${image.keywords.join(', ')}`}
+                            className="w-12 h-12 rounded object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Selected Image Preview */}
+                  {selectedLibraryImage && (
+                    <div className="mt-3">
+                      <div className="text-xs text-white/60 mb-2">Selected image:</div>
+                      <div className="relative inline-block">
+                        <img
+                          src={selectedLibraryImage}
+                          alt="Selected agent avatar"
+                          className="w-16 h-16 rounded-xl border border-white/20 object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedLibraryImage(null);
+                            setImageSearchTerm("");
+                          }}
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white text-xs"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* PRICE / LIMITS */}
