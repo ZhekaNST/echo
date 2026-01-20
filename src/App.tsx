@@ -6365,6 +6365,7 @@ function ChatView({
                             let responseType: ExampleOutputType = "text";
                             let responseContent = m.content;
                             let responseAttachments = m.attachments;
+                            let ttsParams: any = undefined;
 
                             // Handle different response types
                             if (m.audioUrl) {
@@ -6375,7 +6376,7 @@ function ChatView({
                                 m.content; // Extract the actual spoken text
 
                               // Store TTS parameters for regeneration
-                              exampleResponse.ttsParams = {
+                              ttsParams = {
                                 text: responseContent,
                                 voiceId: selectedVoice.id,
                                 modelId: selectedModel.id,
@@ -6401,7 +6402,8 @@ function ChatView({
                               exampleResponse: {
                                 type: responseType,
                                 content: responseContent,
-                                attachments: responseAttachments
+                                attachments: responseAttachments,
+                                ttsParams: ttsParams
                               },
                               createdAt: Date.now(),
                               isPrimary: true
