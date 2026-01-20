@@ -86,7 +86,6 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
               modelName={example.exampleResponse.ttsParams.modelId ? "Model Name" : undefined} // Could map modelId to name
               downloadFilename="example-audio"
               isExample={true}
-              onSaveAsExample={!ttsAudioUrl ? generateTtsAudio : undefined}
             />
           );
         }
@@ -5303,7 +5302,6 @@ function ChatView({
   isCreator?: boolean;
   onSaveExample?: (agentId: string, example: ExampleOutput) => void;
 }) {
-  const [justSavedMessageIndex, setJustSavedMessageIndex] = useState<number | null>(null);
   // 🔊 TTS Voice selection state
   const [selectedVoice, setSelectedVoice] = useState(TTS_VOICES[0]);
   const [selectedModel, setSelectedModel] = useState(TTS_MODELS[0]);
@@ -6429,85 +6427,6 @@ function ChatView({
                     </div>
                   )}
 
-                  {/* Save as Example Button - Only for creators and assistant messages */}
-                  {isCreator && !isUser && (
-                    <div className="flex justify-start mt-2">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          // Find the corresponding user message (previous message)
-                          const userMessageIndex = i - 1;
-                          const userMessage = userMessageIndex >= 0 && messages[userMessageIndex].role === "user"
-                            ? messages[userMessageIndex]
-                            : null;
-
-                          if (userMessage && selectedAgent && onSaveExample) {
-                            let responseType: ExampleOutputType = "text";
-                            let responseContent = m.content;
-                            let responseAttachments = m.attachments;
-                            let ttsParams: any = undefined;
-
-                            // Handle different response types
-                            if (m.audioUrl) {
-                              // For TTS agents, store the original text and TTS parameters for regeneration
-                              responseType = "audio";
-                              responseContent = m.originalTtsText || m.content; // Use original TTS text if available
-
-                              // Store TTS parameters for regeneration
-                              ttsParams = {
-                                text: responseContent,
-                                voiceId: selectedVoice.id,
-                                modelId: selectedModel.id,
-                                voiceSettings: {
-                                  stability: voiceSettings.stability,
-                                  similarity_boost: voiceSettings.similarityBoost,
-                                  style: voiceSettings.style,
-                                  use_speaker_boost: voiceSettings.speakerBoost,
-                                }
-                              };
-                            } else if (m.generatedMediaUrl && m.generatedMediaType === "video") {
-                              responseType = "video";
-                              responseContent = m.generatedMediaUrl;
-                            } else if (m.generatedMediaUrl && m.generatedMediaType === "image") {
-                              responseType = "image";
-                              responseContent = m.generatedMediaUrl;
-                            }
-
-                            // Create the example
-                            const example: ExampleOutput = {
-                              id: `example-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                              examplePrompt: userMessage.content,
-                              exampleResponse: {
-                                type: responseType,
-                                content: responseContent,
-                                attachments: responseAttachments,
-                                ttsParams: ttsParams
-                              },
-                              createdAt: Date.now(),
-                              isPrimary: true
-                            };
-
-                            // Save the example
-                            onSaveExample(selectedAgent.id, example);
-
-                            // Provide visual feedback
-                            setJustSavedMessageIndex(i);
-                            setTimeout(() => setJustSavedMessageIndex(null), 3000); // Clear after 3 seconds
-                          }
-                        }}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
-                          justSavedMessageIndex === i ?
-                          'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300' :
-                          'bg-white/10 border border-white/20 text-white/60 hover:bg-emerald-500/20 hover:border-emerald-400/40 hover:text-emerald-300'
-                        }`}
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        Save as example
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             );
