@@ -39,14 +39,16 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
       case "audio":
         return (
           <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
-            <audio
-              controls
-              className="w-full max-w-xs"
-              style={{ height: "40px" }}
-            >
-              <source src={example.exampleResponse.content} type="audio/mpeg" />
-              Your browser does not support the audio element.
-            </audio>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">🔊</span>
+              <span className="text-xs text-white/60">Audio Response</span>
+            </div>
+            <p className="text-sm text-white/70 leading-relaxed">
+              {example.exampleResponse.content}
+            </p>
+            <div className="mt-2 text-xs text-white/50">
+              Audio playback not available in examples
+            </div>
           </div>
         );
 
@@ -5165,6 +5167,7 @@ function ChatView({
   isCreator?: boolean;
   onSaveExample?: (agentId: string, example: ExampleOutput) => void;
 }) {
+  const [justSavedMessageIndex, setJustSavedMessageIndex] = useState<number | null>(null);
   // 🔊 TTS Voice selection state
   const [selectedVoice, setSelectedVoice] = useState(TTS_VOICES[0]);
   const [selectedModel, setSelectedModel] = useState(TTS_MODELS[0]);
@@ -6253,7 +6256,7 @@ function ChatView({
                     <div className="flex justify-start mt-2">
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           // Find the corresponding user message (previous message)
                           const userMessageIndex = i - 1;
                           const userMessage = userMessageIndex >= 0 && messages[userMessageIndex].role === "user"
@@ -6261,14 +6264,18 @@ function ChatView({
                             : null;
 
                           if (userMessage && selectedAgent && onSaveExample) {
-                            // Determine response type and content
                             let responseType: ExampleOutputType = "text";
                             let responseContent = m.content;
                             let responseAttachments = m.attachments;
 
+                            // Handle different response types
                             if (m.audioUrl) {
+                              // For TTS agents, store the text content and mark as audio type
+                              // The audio will be generated dynamically when displayed
                               responseType = "audio";
-                              responseContent = m.audioUrl;
+                              responseContent = m.content.includes('🔊') ?
+                                m.content.split('\n\n')[2]?.replace(/"/g, '') || m.content :
+                                m.content; // Extract the actual spoken text
                             } else if (m.generatedMediaUrl && m.generatedMediaType === "video") {
                               responseType = "video";
                               responseContent = m.generatedMediaUrl;
@@ -6292,9 +6299,17 @@ function ChatView({
 
                             // Save the example
                             onSaveExample(selectedAgent.id, example);
+
+                            // Provide visual feedback
+                            setJustSavedMessageIndex(i);
+                            setTimeout(() => setJustSavedMessageIndex(null), 3000); // Clear after 3 seconds
                           }
                         }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/30 hover:border-emerald-400/60 transition-colors text-xs font-medium"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
+                          justSavedMessageIndex === i ?
+                          'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300' :
+                          'bg-white/10 border border-white/20 text-white/60 hover:bg-emerald-500/20 hover:border-emerald-400/40 hover:text-emerald-300'
+                        }`}
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
