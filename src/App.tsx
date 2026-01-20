@@ -2510,8 +2510,20 @@ return (
     </button>
   </div>
 
-  {/* RIGHT: можно добавить что-то сбоку */}
+  {/* RIGHT: secondary actions */}
   <div className="flex items-center gap-4">
+    <button
+      type="button"
+      onClick={handleStartCreate}
+      className="
+        bg-transparent border-0 p-0 appearance-none
+        text-sm text-white/60 hover:text-white transition
+        focus:outline-none
+      "
+    >
+      Become a creator
+    </button>
+
     <span className="text-xs text-white/40 hidden sm:inline">
       beta
     </span>
@@ -2704,9 +2716,9 @@ return (
       transition={{ duration: 0.4 }}
       className="text-5xl md:text-7xl lg:text-8xl font-semibold leading-tight tracking-tight"
     >
-      <span className="block pb-1">Web3 marketplace</span>
+      <span className="block pb-1">Chat with AI agents</span>
       <span className="block mt-3 pb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-emerald-300 to-indigo-300 drop-shadow-[0_0_45px_rgba(34,211,238,0.7)]">
-        for AI agents on Solana.
+        instantly. Pay per session.
       </span>
     </motion.h1>
 
@@ -2717,10 +2729,47 @@ return (
       transition={{ delay: 0.1, duration: 0.35 }}
       className="mt-4 max-w-2xl text-lg md:text-xl text-white/70 leading-relaxed"
     >
-      Create, publish and earn from your own AI agents — or chat with 
-      the best agents in crypto, design and startup strategy. 
-      Pay per session directly wallet-to-wallet in USDC.
+      Chat with AI agents for crypto analysis, design feedback, image generation,
+      and voice synthesis. No subscriptions. Pay only when you use it.
     </motion.p>
+
+    {/* VISUAL EXAMPLE - Chat Interface Mockup */}
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.15, duration: 0.35 }}
+      className="mt-8 mb-2"
+    >
+      <div className="max-w-md mx-auto">
+        {/* Chat Container */}
+        <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 backdrop-blur-sm">
+          {/* User Message */}
+          <div className="flex justify-end mb-3">
+            <div className="bg-cyan-500/20 border border-cyan-400/30 rounded-2xl px-4 py-2 max-w-[80%]">
+              <p className="text-sm text-white/90">Analyze this crypto token for me</p>
+            </div>
+          </div>
+
+          {/* AI Response */}
+          <div className="flex justify-start mb-2">
+            <div className="bg-white/[0.05] border border-white/20 rounded-2xl px-4 py-3 max-w-[85%]">
+              <p className="text-sm text-white/80 leading-relaxed">
+                This token shows strong fundamentals with a $50M market cap and growing developer activity.
+                The 24h volume is healthy at $2.3M. I'd recommend monitoring the next resistance level at $1.25.
+              </p>
+            </div>
+          </div>
+
+          {/* Cost Badge */}
+          <div className="flex justify-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-400/30 rounded-full">
+              <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
+              <span className="text-xs text-emerald-100 font-medium">Cost: 0.25 USDC</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
 
     {/* CTA */}
     <motion.div
@@ -2737,27 +2786,40 @@ return (
         }}
       >
         <Play className="h-5 w-5" />
-        Explore agents
+        Try an agent
       </Button>
 
       <Button
         variant="secondary"
         className="bg-white/10 hover:bg-white/20 gap-3 px-6 py-3 text-lg"
-        onClick={handleStartCreate}
+        onClick={() => {
+          push("/explore");
+          requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+        }}
       >
-        <Sparkles className="h-5 w-5" />
-        Become a creator
+        Browse all agents
       </Button>
     </motion.div>
 
-    {/* Маленький бейдж */}
+    {/* TRUST / CLARITY MICRO-COPY */}
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.26, duration: 0.35 }}
-      className="mt-3 text-xs md:text-sm text-white/40 tracking-[0.25em]"
+      className="mt-6 grid grid-cols-2 gap-3 max-w-sm mx-auto"
     >
-      ECHO • BUILT ON SOLANA • PAY-PER-SESSION
+      <div className="text-center">
+        <div className="text-xs text-white/60">Pay per session</div>
+      </div>
+      <div className="text-center">
+        <div className="text-xs text-white/60">No subscriptions</div>
+      </div>
+      <div className="text-center">
+        <div className="text-xs text-white/60">Instant access</div>
+      </div>
+      <div className="text-center">
+        <div className="text-xs text-white/60">Wallet-to-wallet payments</div>
+      </div>
     </motion.div>
   </div>
 </section>
