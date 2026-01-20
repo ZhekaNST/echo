@@ -5252,6 +5252,7 @@ type ChatMessage = {
   audioUrl?: string; // For TTS agent responses
   generatedMediaUrl?: string; // For Replicate image/video generation
   generatedMediaType?: "image" | "video"; // Type of generated media
+  originalTtsText?: string; // Original text used for TTS generation
 };
 
 function ChatView({
@@ -5787,6 +5788,7 @@ function ChatView({
               role: "assistant",
               content: `🔊 Here's your audio:\n• Voice: **${selectedVoice.name}**\n• Model: ${selectedModel.name}\n\n"${text.length > 100 ? text.slice(0, 100) + '...' : text}"`,
               audioUrl,
+              originalTtsText: text, // Store the original text used for TTS
             },
           ];
           syncMessages(next);
@@ -6369,11 +6371,9 @@ function ChatView({
 
                             // Handle different response types
                             if (m.audioUrl) {
-                              // For TTS agents, store the text content and TTS parameters for regeneration
+                              // For TTS agents, store the original text and TTS parameters for regeneration
                               responseType = "audio";
-                              responseContent = m.content.includes('🔊') ?
-                                m.content.split('\n\n')[2]?.replace(/"/g, '') || m.content :
-                                m.content; // Extract the actual spoken text
+                              responseContent = m.originalTtsText || m.content; // Use original TTS text if available
 
                               // Store TTS parameters for regeneration
                               ttsParams = {
