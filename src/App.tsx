@@ -12,6 +12,46 @@ import React, { useMemo, useState, useEffect, useRef, useCallback } from "react"
 
 // Example Output Display Component - Shows real chat interactions
 function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
+  const [ttsAudioUrl, setTtsAudioUrl] = React.useState<string | null>(null);
+  const [isGeneratingAudio, setIsGeneratingAudio] = React.useState(false);
+
+  // Generate TTS audio for examples
+  const generateTtsAudio = async () => {
+    if (!example.exampleResponse.ttsParams || isGeneratingAudio) return;
+
+    setIsGeneratingAudio(true);
+    try {
+      const ttsResponse = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: example.exampleResponse.ttsParams.text.slice(0, 2000),
+          voiceId: example.exampleResponse.ttsParams.voiceId,
+          modelId: example.exampleResponse.ttsParams.modelId,
+          voiceSettings: example.exampleResponse.ttsParams.voiceSettings,
+        }),
+      });
+
+      if (!ttsResponse.ok) {
+        throw new Error(`TTS failed: ${ttsResponse.status}`);
+      }
+
+      const audioBlob = await ttsResponse.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      setTtsAudioUrl(audioUrl);
+
+      // Auto-play the audio
+      const audio = new Audio(audioUrl);
+      audio.play().catch(() => {
+        // Autoplay blocked, user will use the player
+      });
+    } catch (error) {
+      console.warn('Failed to generate TTS audio for example:', error);
+    } finally {
+      setIsGeneratingAudio(false);
+    }
+  };
+
   const renderResponse = () => {
     switch (example.exampleResponse.type) {
       case "text":
@@ -37,18 +77,66 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
         );
 
       case "audio":
+        // If we have TTS params, show full TTS interface
+        if (example.exampleResponse.ttsParams) {
+          return (
+            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">🔊</span>
+                <span className="text-xs text-white/60">Generated Audio</span>
+              </div>
+
+              {/* Audio player or generate button */}
+              {ttsAudioUrl ? (
+                <audio
+                  controls
+                  className="w-full max-w-xs"
+                  style={{ height: "40px" }}
+                  src={ttsAudioUrl}
+                />
+              ) : (
+                <button
+                  onClick={generateTtsAudio}
+                  disabled={isGeneratingAudio}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/40 rounded-lg text-blue-300 text-xs transition-colors disabled:opacity-50"
+                >
+                  {isGeneratingAudio ? (
+                    <>
+                      <div className="w-3 h-3 border border-blue-300 border-t-transparent rounded-full animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <span>▶️</span>
+                      Play Audio
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Text content */}
+              <p className="text-sm text-white/70 leading-relaxed mt-2">
+                {example.exampleResponse.content}
+              </p>
+            </div>
+          );
+        }
+
+        // Fallback for non-TTS audio
         return (
           <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">🔊</span>
               <span className="text-xs text-white/60">Audio Response</span>
             </div>
-            <p className="text-sm text-white/70 leading-relaxed">
-              {example.exampleResponse.content}
-            </p>
-            <div className="mt-2 text-xs text-white/50">
-              Audio playback not available in examples
-            </div>
+            <audio
+              controls
+              className="w-full max-w-xs"
+              style={{ height: "40px" }}
+            >
+              <source src={example.exampleResponse.content} type="audio/mpeg" />
+              Your browser does not support the audio element.
+            </audio>
           </div>
         );
 
@@ -478,14 +566,24 @@ function pushExplore(
 // Example Output types - Real chat interactions
 type ExampleOutputType = "text" | "image" | "audio" | "video";
 
+type ExampleResponse = {
+  type: ExampleOutputType;
+  content: string; // text content or media URL
+  attachments?: ChatAttachment[]; // for complex responses
+
+  // For TTS audio - store parameters to regenerate
+  ttsParams?: {
+    text: string;
+    voiceId: string;
+    modelId: string;
+    voiceSettings: any;
+  };
+};
+
 type ExampleOutput = {
   id: string; // unique identifier
   examplePrompt: string; // the actual user prompt used (max 300 chars)
-  exampleResponse: {
-    type: ExampleOutputType;
-    content: string; // actual response content (text or media URL)
-    attachments?: ChatAttachment[]; // for media responses
-  };
+  exampleResponse: ExampleResponse;
   createdAt: number; // timestamp when saved as example
   isPrimary: boolean; // only one primary example per agent
 };
@@ -6270,12 +6368,24 @@ function ChatView({
 
                             // Handle different response types
                             if (m.audioUrl) {
-                              // For TTS agents, store the text content and mark as audio type
-                              // The audio will be generated dynamically when displayed
+                              // For TTS agents, store the text content and TTS parameters for regeneration
                               responseType = "audio";
                               responseContent = m.content.includes('🔊') ?
                                 m.content.split('\n\n')[2]?.replace(/"/g, '') || m.content :
                                 m.content; // Extract the actual spoken text
+
+                              // Store TTS parameters for regeneration
+                              exampleResponse.ttsParams = {
+                                text: responseContent,
+                                voiceId: selectedVoice.id,
+                                modelId: selectedModel.id,
+                                voiceSettings: {
+                                  stability: voiceSettings.stability,
+                                  similarity_boost: voiceSettings.similarityBoost,
+                                  style: voiceSettings.style,
+                                  use_speaker_boost: voiceSettings.speakerBoost,
+                                }
+                              };
                             } else if (m.generatedMediaUrl && m.generatedMediaType === "video") {
                               responseType = "video";
                               responseContent = m.generatedMediaUrl;
