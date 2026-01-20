@@ -9,6 +9,88 @@ if (typeof window !== "undefined" && typeof (window as any).Buffer === "undefine
 }
 
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
+
+// Example Output Display Component
+function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
+  const renderResponse = () => {
+    switch (example.responseType) {
+      case "text":
+        return (
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 max-w-[85%]">
+            <p className="text-sm text-white/70 leading-relaxed">
+              {example.responseText}
+            </p>
+          </div>
+        );
+
+      case "image":
+        return (
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
+            {example.responseMediaUrl && (
+              <img
+                src={example.responseMediaUrl}
+                alt={example.responseMediaAlt || "Example image response"}
+                className="rounded-xl max-w-full h-auto"
+                style={{ maxHeight: "200px" }}
+              />
+            )}
+          </div>
+        );
+
+      case "audio":
+        return (
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
+            {example.responseMediaUrl && (
+              <audio
+                controls
+                className="w-full max-w-xs"
+                style={{ height: "40px" }}
+              >
+                <source src={example.responseMediaUrl} type="audio/mpeg" />
+                Your browser does not support the audio element.
+              </audio>
+            )}
+          </div>
+        );
+
+      case "video":
+        return (
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
+            {example.responseMediaUrl && (
+              <video
+                controls
+                className="rounded-xl max-w-full h-auto"
+                style={{ maxHeight: "200px" }}
+                preload="metadata"
+              >
+                <source src={example.responseMediaUrl} type="video/mp4" />
+                Your browser does not support the video element.
+              </video>
+            )}
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* User Message */}
+      <div className="flex justify-end">
+        <div className="bg-cyan-500/20 border border-cyan-400/30 rounded-2xl px-4 py-2 max-w-[80%]">
+          <p className="text-sm text-white/90">{example.userMessage}</p>
+        </div>
+      </div>
+
+      {/* Agent Response */}
+      <div className="flex justify-start">
+        {renderResponse()}
+      </div>
+    </div>
+  );
+}
 import heic2any from "heic2any";
 import { motion } from "framer-motion";
 import {
@@ -396,6 +478,17 @@ function pushExplore(
 }
 
 
+// Example Output types
+type ExampleOutputType = "text" | "image" | "audio" | "video";
+
+type ExampleOutput = {
+  userMessage: string; // max 300 chars
+  responseType: ExampleOutputType;
+  responseText?: string; // max 500 chars, for text responses
+  responseMediaUrl?: string; // for image/audio/video
+  responseMediaAlt?: string; // alt text for images
+};
+
 type Agent = {
   id: string;
   name: string;
@@ -412,6 +505,8 @@ lastActiveAt?: number;      // последнее взаимодействие (
 sessions24h?: number;       // демо-счётчик
 likes24h?: number;          // демо-счётчик
 
+  // Example Output - optional demo chat
+  exampleOutput?: ExampleOutput;
 
   // creator / payments
   creator?: string;
@@ -689,6 +784,11 @@ const INITIAL_AGENTS: Agent[] = [
     lastActiveAt: Date.now() - 1000 * 60 * 30,
     sessions24h: 156,
     likes24h: 42,
+    exampleOutput: {
+      userMessage: "Convert this text to speech: Hello, welcome to our AI marketplace.",
+      responseType: "audio",
+      responseMediaUrl: "https://example.com/sample-voice.mp3"
+    }
   },
   // 🎨 Image Generator (Replicate)
   {
@@ -2042,6 +2142,174 @@ const canPublish =
                 </div>
               </div>
 
+              {/* EXAMPLE OUTPUT */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-white/70">Example Output</label>
+                  <span className="text-xs text-white/40">(Optional - Recommended)</span>
+                </div>
+
+                <div className="bg-white/[0.02] border border-white/10 rounded-lg p-4 space-y-4">
+                  {/* User Message Input */}
+                  <div className="space-y-2">
+                    <label className="text-xs text-white/60">User Message (max 300 characters)</label>
+                    <Textarea
+                      value={newAgent.exampleOutput?.userMessage || ""}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                        const value = e.target.value.slice(0, 300);
+                        setNewAgent(a => ({
+                          ...a,
+                          exampleOutput: {
+                            ...a.exampleOutput,
+                            userMessage: value,
+                            responseType: a.exampleOutput?.responseType || "text"
+                          } as ExampleOutput
+                        }));
+                      }}
+                      rows={2}
+                      placeholder="What would a user ask your agent?"
+                      className="bg-white/5 border-white/10 text-sm"
+                    />
+                    <div className="text-xs text-white/40">
+                      {(newAgent.exampleOutput?.userMessage || "").length}/300
+                    </div>
+                  </div>
+
+                  {/* Response Type Selector */}
+                  <div className="space-y-2">
+                    <label className="text-xs text-white/60">Response Type</label>
+                    <div className="flex gap-2">
+                      {(["text", "image", "audio", "video"] as ExampleOutputType[]).map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => {
+                            setNewAgent(a => ({
+                              ...a,
+                              exampleOutput: {
+                                ...a.exampleOutput,
+                                responseType: type,
+                                userMessage: a.exampleOutput?.userMessage || ""
+                              } as ExampleOutput
+                            }));
+                          }}
+                          className={`px-3 py-1 rounded text-xs capitalize transition-colors ${
+                            newAgent.exampleOutput?.responseType === type
+                              ? "bg-cyan-500/20 border border-cyan-400/40 text-cyan-100"
+                              : "bg-white/5 border border-white/10 text-white/60 hover:bg-white/10"
+                          }`}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Response Content */}
+                  {newAgent.exampleOutput?.responseType === "text" && (
+                    <div className="space-y-2">
+                      <label className="text-xs text-white/60">Agent Response (max 500 characters)</label>
+                      <Textarea
+                        value={newAgent.exampleOutput?.responseText || ""}
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                          const value = e.target.value.slice(0, 500);
+                          setNewAgent(a => ({
+                            ...a,
+                            exampleOutput: {
+                              ...a.exampleOutput,
+                              responseText: value,
+                              userMessage: a.exampleOutput?.userMessage || "",
+                              responseType: "text"
+                            } as ExampleOutput
+                          }));
+                        }}
+                        rows={4}
+                        placeholder="What would your agent respond?"
+                        className="bg-white/5 border-white/10 text-sm"
+                      />
+                      <div className="text-xs text-white/40">
+                        {(newAgent.exampleOutput?.responseText || "").length}/500
+                      </div>
+                    </div>
+                  )}
+
+                  {(newAgent.exampleOutput?.responseType === "image" ||
+                    newAgent.exampleOutput?.responseType === "audio" ||
+                    newAgent.exampleOutput?.responseType === "video") && (
+                    <div className="space-y-2">
+                      <label className="text-xs text-white/60">
+                        Media URL ({newAgent.exampleOutput.responseType})
+                      </label>
+                      <Input
+                        value={newAgent.exampleOutput?.responseMediaUrl || ""}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          setNewAgent(a => ({
+                            ...a,
+                            exampleOutput: {
+                              ...a.exampleOutput,
+                              responseMediaUrl: e.target.value,
+                              userMessage: a.exampleOutput?.userMessage || "",
+                              responseType: a.exampleOutput?.responseType || "image"
+                            } as ExampleOutput
+                          }));
+                        }}
+                        placeholder={`https://example.com/${newAgent.exampleOutput.responseType}.${
+                          newAgent.exampleOutput.responseType === "video" ? "mp4" :
+                          newAgent.exampleOutput.responseType === "audio" ? "mp3" : "jpg"
+                        }`}
+                        className="bg-white/5 border-white/10 text-sm"
+                      />
+                      {newAgent.exampleOutput.responseType === "image" && (
+                        <div className="space-y-2">
+                          <label className="text-xs text-white/60">Alt Text (Optional)</label>
+                          <Input
+                            value={newAgent.exampleOutput?.responseMediaAlt || ""}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                              setNewAgent(a => ({
+                                ...a,
+                                exampleOutput: {
+                                  ...a.exampleOutput,
+                                  responseMediaAlt: e.target.value,
+                                  userMessage: a.exampleOutput?.userMessage || "",
+                                  responseType: "image"
+                                } as ExampleOutput
+                              }));
+                            }}
+                            placeholder="Describe the image for accessibility"
+                            className="bg-white/5 border-white/10 text-sm"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Preview */}
+                  {newAgent.exampleOutput?.userMessage && (
+                    <div className="space-y-2">
+                      <label className="text-xs text-white/60">Preview</label>
+                      <div className="bg-black/20 border border-white/5 rounded-lg p-3">
+                        <ExampleOutputDisplay example={newAgent.exampleOutput} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Remove Example Button */}
+                  {newAgent.exampleOutput && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setNewAgent(a => ({ ...a, exampleOutput: undefined }));
+                      }}
+                      className="bg-red-500/20 hover:bg-red-500/30 border-red-400/40 text-red-100"
+                    >
+                      Remove Example
+                    </Button>
+                  )}
+                </div>
+              </div>
+
               {/* PRICE / LIMITS */}
               <div className="space-y-3">
                 <label className="text-sm text-white/70 flex items-center justify-between">
@@ -2514,22 +2782,6 @@ return (
   <div className="flex items-center gap-4">
     <button
       type="button"
-      onClick={handleStartCreate}
-      className="
-        bg-transparent border-0 p-0 appearance-none
-        text-sm text-white/60 hover:text-white transition
-        focus:outline-none
-      "
-    >
-      Become a creator
-    </button>
-
-    <span className="text-xs text-white/40 hidden sm:inline">
-      beta
-    </span>
-
-    <button
-      type="button"
       onClick={() => alert("Coming soon")}
       className="
         bg-transparent border-0 p-0 appearance-none
@@ -2538,6 +2790,25 @@ return (
       "
     >
       Docs
+    </button>
+
+    <button
+      type="button"
+      onClick={handleStartCreate}
+      className="
+        bg-gradient-to-r from-purple-500/20 to-pink-500/20
+        border border-purple-400/40
+        rounded-lg px-3 py-1.5
+        text-sm text-purple-100 hover:text-white
+        hover:from-purple-500/30 hover:to-pink-500/30
+        hover:border-purple-400/60
+        transition-all duration-200
+        shadow-[0_0_10px_rgba(147,51,234,0.3)]
+        hover:shadow-[0_0_15px_rgba(147,51,234,0.5)]
+        focus:outline-none
+      "
+    >
+      Become a creator
     </button>
   </div>
 </div>
@@ -2707,7 +2978,52 @@ return (
   <div aria-hidden="true" className="absolute -left-20 top-32 h-96 w-40 bg-gradient-to-b from-transparent via-cyan-400/40 to-transparent blur-3xl opacity-60 -z-10" />
   <div aria-hidden="true" className="absolute -right-20 top-20 h-96 w-40 bg-gradient-to-b from-transparent via-purple-500/40 to-transparent blur-3xl opacity-60 -z-10" />
 
-  <div className="max-w-6xl mx-auto px-4 py-28 md:py-36 flex flex-col items-center text-center gap-8">
+  {/* VISUAL EXAMPLE - Background Chat Interface */}
+  <div className="absolute inset-0 flex items-center justify-center pointer-events-none -z-10">
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: 0.3, duration: 0.6 }}
+      className="w-full max-w-lg mx-auto"
+    >
+      <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-6 backdrop-blur-sm shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-sm font-medium text-white/80">Crypto Analysis Agent</div>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
+            <span className="text-xs text-emerald-100">Online</span>
+          </div>
+        </div>
+
+        {/* User Message */}
+        <div className="flex justify-end mb-4">
+          <div className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-400/20 rounded-2xl px-4 py-3 max-w-[75%]">
+            <p className="text-sm text-white/90">Analyze this crypto token for me</p>
+          </div>
+        </div>
+
+        {/* AI Response */}
+        <div className="flex justify-start mb-3">
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 max-w-[80%]">
+            <p className="text-sm text-white/70 leading-relaxed">
+              This token shows strong fundamentals with a $50M market cap and growing developer activity. I'd recommend monitoring the next resistance level at $1.25.
+            </p>
+          </div>
+        </div>
+
+        {/* Cost Badge - More Prominent */}
+        <div className="flex justify-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/15 border border-emerald-400/40 rounded-full shadow-lg">
+            <div className="w-3 h-3 bg-emerald-400 rounded-full"></div>
+            <span className="text-sm text-emerald-100 font-semibold">Cost: 0.25 USDC</span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  </div>
+
+  <div className="max-w-6xl mx-auto px-4 py-28 md:py-36 flex flex-col items-center text-center gap-8 relative z-10">
     
     {/* КРУПНЕЙШИЙ ЗАГОЛОВОК */}
     <motion.h1
@@ -2716,9 +3032,8 @@ return (
       transition={{ duration: 0.4 }}
       className="text-5xl md:text-7xl lg:text-8xl font-semibold leading-tight tracking-tight"
     >
-      <span className="block pb-1">Chat with AI agents</span>
-      <span className="block mt-3 pb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-emerald-300 to-indigo-300 drop-shadow-[0_0_45px_rgba(34,211,238,0.7)]">
-        instantly. Pay per session.
+      <span className="block pb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-emerald-300 to-indigo-300 drop-shadow-[0_0_45px_rgba(34,211,238,0.7)]">
+        Chat with AI agents instantly.
       </span>
     </motion.h1>
 
@@ -2729,47 +3044,9 @@ return (
       transition={{ delay: 0.1, duration: 0.35 }}
       className="mt-4 max-w-2xl text-lg md:text-xl text-white/70 leading-relaxed"
     >
-      Chat with AI agents for crypto analysis, design feedback, image generation,
-      and voice synthesis. No subscriptions. Pay only when you use it.
+      No subscriptions. Pay only when you use it.
     </motion.p>
 
-    {/* VISUAL EXAMPLE - Chat Interface Mockup */}
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.15, duration: 0.35 }}
-      className="mt-8 mb-2"
-    >
-      <div className="max-w-md mx-auto">
-        {/* Chat Container */}
-        <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 backdrop-blur-sm">
-          {/* User Message */}
-          <div className="flex justify-end mb-3">
-            <div className="bg-cyan-500/20 border border-cyan-400/30 rounded-2xl px-4 py-2 max-w-[80%]">
-              <p className="text-sm text-white/90">Analyze this crypto token for me</p>
-            </div>
-          </div>
-
-          {/* AI Response */}
-          <div className="flex justify-start mb-2">
-            <div className="bg-white/[0.05] border border-white/20 rounded-2xl px-4 py-3 max-w-[85%]">
-              <p className="text-sm text-white/80 leading-relaxed">
-                This token shows strong fundamentals with a $50M market cap and growing developer activity.
-                The 24h volume is healthy at $2.3M. I'd recommend monitoring the next resistance level at $1.25.
-              </p>
-            </div>
-          </div>
-
-          {/* Cost Badge */}
-          <div className="flex justify-center">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-400/30 rounded-full">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
-              <span className="text-xs text-emerald-100 font-medium">Cost: 0.25 USDC</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </motion.div>
 
     {/* CTA */}
     <motion.div
@@ -8307,6 +8584,22 @@ function AgentDetailView({
           </div>
         </div>
       </header>
+
+      {/* Example Output Section */}
+      {agent.exampleOutput && (
+        <div className="max-w-5xl mx-auto px-4 py-6">
+          <div className="space-y-4">
+            <div className="text-sm uppercase tracking-[0.18em] text-white/40">
+              Example Output
+            </div>
+            <Card className="bg-white/[.02] border-white/5">
+              <CardContent className="p-6">
+                <ExampleOutputDisplay example={agent.exampleOutput} />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
 
       {/* Верхний контент: описание + прайс */}
       <div className="max-w-5xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-[2fr,1.4fr] gap-6">
