@@ -80,64 +80,24 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
         // If we have TTS params, show full TTS interface
         if (example.exampleResponse.ttsParams) {
           return (
-            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-lg">🔊</span>
-                <span className="text-xs text-white/60">Generated Audio</span>
-              </div>
-
-              {/* Audio player or generate button */}
-              {ttsAudioUrl ? (
-                <audio
-                  controls
-                  className="w-full max-w-xs"
-                  style={{ height: "40px" }}
-                  src={ttsAudioUrl}
-                />
-              ) : (
-                <button
-                  onClick={generateTtsAudio}
-                  disabled={isGeneratingAudio}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/40 rounded-lg text-blue-300 text-xs transition-colors disabled:opacity-50"
-                >
-                  {isGeneratingAudio ? (
-                    <>
-                      <div className="w-3 h-3 border border-blue-300 border-t-transparent rounded-full animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <span>▶️</span>
-                      Play Audio
-                    </>
-                  )}
-                </button>
-              )}
-
-              {/* Text content */}
-              <p className="text-sm text-white/70 leading-relaxed mt-2">
-                {example.exampleResponse.content}
-              </p>
-            </div>
+            <AudioResult
+              audioUrl={ttsAudioUrl || ""}
+              voiceName={example.exampleResponse.ttsParams.voiceId ? "Voice Name" : undefined} // Could map voiceId to name
+              modelName={example.exampleResponse.ttsParams.modelId ? "Model Name" : undefined} // Could map modelId to name
+              downloadFilename="example-audio"
+              isExample={true}
+              onSaveAsExample={!ttsAudioUrl ? generateTtsAudio : undefined}
+            />
           );
         }
 
         // Fallback for non-TTS audio
         return (
-          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">🔊</span>
-              <span className="text-xs text-white/60">Audio Response</span>
-            </div>
-            <audio
-              controls
-              className="w-full max-w-xs"
-              style={{ height: "40px" }}
-            >
-              <source src={example.exampleResponse.content} type="audio/mpeg" />
-              Your browser does not support the audio element.
-            </audio>
-          </div>
+          <AudioResult
+            audioUrl={example.exampleResponse.content}
+            downloadFilename="example-audio"
+            isExample={true}
+          />
         );
 
       case "video":
@@ -176,6 +136,83 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
     </div>
   );
 }
+
+// AudioResult Component - Clean, minimal audio output display
+function AudioResult({
+  audioUrl,
+  voiceName,
+  modelName,
+  downloadFilename = 'audio',
+  onSaveAsExample,
+  isExample = false
+}: {
+  audioUrl: string;
+  voiceName?: string;
+  modelName?: string;
+  downloadFilename?: string;
+  onSaveAsExample?: () => void;
+  isExample?: boolean;
+}) {
+  return (
+    <div className="w-full max-w-md">
+      {/* Main result card */}
+      <div className="bg-white/[0.02] border border-white/10 rounded-xl overflow-hidden">
+        {/* Top metadata - small and muted */}
+        {(voiceName || modelName) && (
+          <div className="px-4 py-2 border-b border-white/5">
+            <div className="text-xs text-white/40">
+              {voiceName && `Voice: ${voiceName}`}
+              {voiceName && modelName && ' · '}
+              {modelName && `Model: ${modelName}`}
+            </div>
+          </div>
+        )}
+
+        {/* Audio player - main focus */}
+        <div className="px-4 py-3">
+          <audio
+            controls
+            src={audioUrl}
+            className="w-full h-10 rounded-lg"
+            style={{
+              filter: "invert(1) hue-rotate(180deg)",
+              opacity: 0.9
+            }}
+          />
+        </div>
+
+        {/* Actions - subtle and secondary */}
+        <div className="px-4 py-2 border-t border-white/5 flex items-center justify-between">
+          <a
+            href={audioUrl}
+            download={`${downloadFilename}-${Date.now()}.mp3`}
+            className="text-xs text-white/50 hover:text-white/70 transition-colors"
+          >
+            Download MP3
+          </a>
+
+          {isExample && (
+            <span className="text-xs text-white/30">Example</span>
+          )}
+        </div>
+      </div>
+
+      {/* Save as example button - separate from card */}
+      {onSaveAsExample && (
+        <div className="mt-3 flex justify-center">
+          <button
+            type="button"
+            onClick={onSaveAsExample}
+            className="text-xs text-white/60 hover:text-white/80 transition-colors underline"
+          >
+            Save as example
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 import heic2any from "heic2any";
 import { motion } from "framer-motion";
 import {
@@ -5786,7 +5823,7 @@ function ChatView({
             ...history,
             {
               role: "assistant",
-              content: `🔊 Here's your audio:\n• Voice: **${selectedVoice.name}**\n• Model: ${selectedModel.name}\n\n"${text.length > 100 ? text.slice(0, 100) + '...' : text}"`,
+              content: "", // No text content needed - audio speaks for itself
               audioUrl,
               originalTtsText: text, // Store the original text used for TTS
             },
@@ -6213,29 +6250,70 @@ function ChatView({
 
                   {/* 🔊 Audio player for TTS agent responses */}
                   {m.audioUrl && (
-                    <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border border-indigo-500/30">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">🔊</span>
-                        <span className="text-xs text-white/60">Generated Audio</span>
-                      </div>
-                      <audio 
-                        controls 
-                        src={m.audioUrl} 
-                        className="w-full h-10 rounded-lg"
-                        style={{ 
-                          filter: "invert(1) hue-rotate(180deg)",
-                          opacity: 0.9 
-                        }}
+                    <div className="mt-3">
+                      <AudioResult
+                        audioUrl={m.audioUrl}
+                        voiceName={selectedVoice?.name}
+                        modelName={selectedModel?.name}
+                        downloadFilename="tts-audio"
+                        onSaveAsExample={isCreator ? () => {
+                          // Find the corresponding user message (previous message)
+                          const userMessageIndex = i - 1;
+                          const userMessage = userMessageIndex >= 0 && messages[userMessageIndex].role === "user"
+                            ? messages[userMessageIndex]
+                            : null;
+
+                          if (userMessage && selectedAgent && onSaveExample) {
+                            let responseType: ExampleOutputType = "text";
+                            let responseContent = m.content;
+                            let responseAttachments = m.attachments;
+                            let ttsParams: any = undefined;
+
+                            // Handle different response types
+                            if (m.audioUrl) {
+                              // For TTS agents, store the original text and TTS parameters for regeneration
+                              responseType = "audio";
+                              responseContent = m.originalTtsText || m.content; // Use original TTS text
+
+                              // Store TTS parameters for regeneration
+                              ttsParams = {
+                                text: responseContent,
+                                voiceId: selectedVoice.id,
+                                modelId: selectedModel.id,
+                                voiceSettings: {
+                                  stability: voiceSettings.stability,
+                                  similarity_boost: voiceSettings.similarityBoost,
+                                  style: voiceSettings.style,
+                                  use_speaker_boost: voiceSettings.speakerBoost,
+                                }
+                              };
+                            } else if (m.generatedMediaUrl && m.generatedMediaType === "video") {
+                              responseType = "video";
+                              responseContent = m.generatedMediaUrl;
+                            } else if (m.generatedMediaUrl && m.generatedMediaType === "image") {
+                              responseType = "image";
+                              responseContent = m.generatedMediaUrl;
+                            }
+
+                            // Create the example
+                            const example: ExampleOutput = {
+                              id: `example-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                              examplePrompt: userMessage.content,
+                              exampleResponse: {
+                                type: responseType,
+                                content: responseContent,
+                                attachments: responseAttachments,
+                                ttsParams: ttsParams
+                              },
+                              createdAt: Date.now(),
+                              isPrimary: true
+                            };
+
+                            // Save the example
+                            onSaveExample(selectedAgent.id, example);
+                          }
+                        } : undefined}
                       />
-                      <div className="mt-2 flex gap-2">
-                        <a
-                          href={m.audioUrl}
-                          download={`tts-audio-${Date.now()}.mp3`}
-                          className="text-[11px] text-indigo-300 hover:text-indigo-200 underline transition"
-                        >
-                          Download MP3
-                        </a>
-                      </div>
                     </div>
                   )}
 
