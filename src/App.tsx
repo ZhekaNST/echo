@@ -10,15 +10,15 @@ if (typeof window !== "undefined" && typeof (window as any).Buffer === "undefine
 
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 
-// Example Output Display Component
+// Example Output Display Component - Shows real chat interactions
 function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
   const renderResponse = () => {
-    switch (example.responseType) {
+    switch (example.exampleResponse.type) {
       case "text":
         return (
           <div className="bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 max-w-[85%]">
             <p className="text-sm text-white/70 leading-relaxed">
-              {example.responseText}
+              {example.exampleResponse.content}
             </p>
           </div>
         );
@@ -26,47 +26,42 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
       case "image":
         return (
           <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
-            {example.responseMediaUrl && (
-              <img
-                src={example.responseMediaUrl}
-                alt={example.responseMediaAlt || "Example image response"}
-                className="rounded-xl max-w-full h-auto"
-                style={{ maxHeight: "200px" }}
-              />
-            )}
+            <img
+              src={example.exampleResponse.content}
+              alt="Example image response"
+              className="rounded-xl max-w-full h-auto cursor-pointer hover:opacity-90 transition"
+              style={{ maxHeight: "200px" }}
+              onClick={() => window.open(example.exampleResponse.content, '_blank')}
+            />
           </div>
         );
 
       case "audio":
         return (
           <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
-            {example.responseMediaUrl && (
-              <audio
-                controls
-                className="w-full max-w-xs"
-                style={{ height: "40px" }}
-              >
-                <source src={example.responseMediaUrl} type="audio/mpeg" />
-                Your browser does not support the audio element.
-              </audio>
-            )}
+            <audio
+              controls
+              className="w-full max-w-xs"
+              style={{ height: "40px" }}
+            >
+              <source src={example.exampleResponse.content} type="audio/mpeg" />
+              Your browser does not support the audio element.
+            </audio>
           </div>
         );
 
       case "video":
         return (
           <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
-            {example.responseMediaUrl && (
-              <video
-                controls
-                className="rounded-xl max-w-full h-auto"
-                style={{ maxHeight: "200px" }}
-                preload="metadata"
-              >
-                <source src={example.responseMediaUrl} type="video/mp4" />
-                Your browser does not support the video element.
-              </video>
-            )}
+            <video
+              controls
+              className="rounded-xl max-w-full h-auto"
+              style={{ maxHeight: "200px" }}
+              preload="metadata"
+            >
+              <source src={example.exampleResponse.content} type="video/mp4" />
+              Your browser does not support the video element.
+            </video>
           </div>
         );
 
@@ -80,7 +75,7 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
       {/* User Message */}
       <div className="flex justify-end">
         <div className="bg-cyan-500/20 border border-cyan-400/30 rounded-2xl px-4 py-2 max-w-[80%]">
-          <p className="text-sm text-white/90">{example.userMessage}</p>
+          <p className="text-sm text-white/90">{example.examplePrompt}</p>
         </div>
       </div>
 
@@ -478,15 +473,19 @@ function pushExplore(
 }
 
 
-// Example Output types
+// Example Output types - Real chat interactions
 type ExampleOutputType = "text" | "image" | "audio" | "video";
 
 type ExampleOutput = {
-  userMessage: string; // max 300 chars
-  responseType: ExampleOutputType;
-  responseText?: string; // max 500 chars, for text responses
-  responseMediaUrl?: string; // for image/audio/video
-  responseMediaAlt?: string; // alt text for images
+  id: string; // unique identifier
+  examplePrompt: string; // the actual user prompt used (max 300 chars)
+  exampleResponse: {
+    type: ExampleOutputType;
+    content: string; // actual response content (text or media URL)
+    attachments?: ChatAttachment[]; // for media responses
+  };
+  createdAt: number; // timestamp when saved as example
+  isPrimary: boolean; // only one primary example per agent
 };
 
 type Agent = {
@@ -505,7 +504,7 @@ lastActiveAt?: number;      // последнее взаимодействие (
 sessions24h?: number;       // демо-счётчик
 likes24h?: number;          // демо-счётчик
 
-  // Example Output - optional demo chat
+  // Example Output - real chat interaction saved as demo
   exampleOutput?: ExampleOutput;
 
   // creator / payments
@@ -785,9 +784,14 @@ const INITIAL_AGENTS: Agent[] = [
     sessions24h: 156,
     likes24h: 42,
     exampleOutput: {
-      userMessage: "Convert this text to speech: Hello, welcome to our AI marketplace.",
-      responseType: "audio",
-      responseMediaUrl: "https://example.com/sample-voice.mp3"
+      id: "voice-example-1",
+      examplePrompt: "Convert this text to speech: Hello, welcome to our AI marketplace.",
+      exampleResponse: {
+        type: "audio",
+        content: "https://example.com/sample-voice.mp3"
+      },
+      createdAt: Date.now() - 86400000, // 1 day ago
+      isPrimary: true
     }
   },
   // 🎨 Image Generator (Replicate)
@@ -1957,6 +1961,13 @@ avatar: <Cpu className="w-6 h-6" />,
         onBack={() => push("/")}
         selectedAgent={agent}
         isCreator={isCreator}
+        onSaveExample={(agentId, example) => {
+          setAgents(prev => prev.map(agent =>
+            agent.id === agentId
+              ? { ...agent, exampleOutput: example }
+              : agent
+          ));
+        }}
       />
     );
   }
@@ -2142,173 +2153,6 @@ const canPublish =
                 </div>
               </div>
 
-              {/* EXAMPLE OUTPUT */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-white/70">Example Output</label>
-                  <span className="text-xs text-white/40">(Optional - Recommended)</span>
-                </div>
-
-                <div className="bg-white/[0.02] border border-white/10 rounded-lg p-4 space-y-4">
-                  {/* User Message Input */}
-                  <div className="space-y-2">
-                    <label className="text-xs text-white/60">User Message (max 300 characters)</label>
-                    <Textarea
-                      value={newAgent.exampleOutput?.userMessage || ""}
-                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-                        const value = e.target.value.slice(0, 300);
-                        setNewAgent(a => ({
-                          ...a,
-                          exampleOutput: {
-                            ...a.exampleOutput,
-                            userMessage: value,
-                            responseType: a.exampleOutput?.responseType || "text"
-                          } as ExampleOutput
-                        }));
-                      }}
-                      rows={2}
-                      placeholder="What would a user ask your agent?"
-                      className="bg-white/5 border-white/10 text-sm"
-                    />
-                    <div className="text-xs text-white/40">
-                      {(newAgent.exampleOutput?.userMessage || "").length}/300
-                    </div>
-                  </div>
-
-                  {/* Response Type Selector */}
-                  <div className="space-y-2">
-                    <label className="text-xs text-white/60">Response Type</label>
-                    <div className="flex gap-2">
-                      {(["text", "image", "audio", "video"] as ExampleOutputType[]).map((type) => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => {
-                            setNewAgent(a => ({
-                              ...a,
-                              exampleOutput: {
-                                ...a.exampleOutput,
-                                responseType: type,
-                                userMessage: a.exampleOutput?.userMessage || ""
-                              } as ExampleOutput
-                            }));
-                          }}
-                          className={`px-3 py-1 rounded text-xs capitalize transition-colors ${
-                            newAgent.exampleOutput?.responseType === type
-                              ? "bg-cyan-500/20 border border-cyan-400/40 text-cyan-100"
-                              : "bg-white/5 border border-white/10 text-white/60 hover:bg-white/10"
-                          }`}
-                        >
-                          {type}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Response Content */}
-                  {newAgent.exampleOutput?.responseType === "text" && (
-                    <div className="space-y-2">
-                      <label className="text-xs text-white/60">Agent Response (max 500 characters)</label>
-                      <Textarea
-                        value={newAgent.exampleOutput?.responseText || ""}
-                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-                          const value = e.target.value.slice(0, 500);
-                          setNewAgent(a => ({
-                            ...a,
-                            exampleOutput: {
-                              ...a.exampleOutput,
-                              responseText: value,
-                              userMessage: a.exampleOutput?.userMessage || "",
-                              responseType: "text"
-                            } as ExampleOutput
-                          }));
-                        }}
-                        rows={4}
-                        placeholder="What would your agent respond?"
-                        className="bg-white/5 border-white/10 text-sm"
-                      />
-                      <div className="text-xs text-white/40">
-                        {(newAgent.exampleOutput?.responseText || "").length}/500
-                      </div>
-                    </div>
-                  )}
-
-                  {(newAgent.exampleOutput?.responseType === "image" ||
-                    newAgent.exampleOutput?.responseType === "audio" ||
-                    newAgent.exampleOutput?.responseType === "video") && (
-                    <div className="space-y-2">
-                      <label className="text-xs text-white/60">
-                        Media URL ({newAgent.exampleOutput.responseType})
-                      </label>
-                      <Input
-                        value={newAgent.exampleOutput?.responseMediaUrl || ""}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                          setNewAgent(a => ({
-                            ...a,
-                            exampleOutput: {
-                              ...a.exampleOutput,
-                              responseMediaUrl: e.target.value,
-                              userMessage: a.exampleOutput?.userMessage || "",
-                              responseType: a.exampleOutput?.responseType || "image"
-                            } as ExampleOutput
-                          }));
-                        }}
-                        placeholder={`https://example.com/${newAgent.exampleOutput.responseType}.${
-                          newAgent.exampleOutput.responseType === "video" ? "mp4" :
-                          newAgent.exampleOutput.responseType === "audio" ? "mp3" : "jpg"
-                        }`}
-                        className="bg-white/5 border-white/10 text-sm"
-                      />
-                      {newAgent.exampleOutput.responseType === "image" && (
-                        <div className="space-y-2">
-                          <label className="text-xs text-white/60">Alt Text (Optional)</label>
-                          <Input
-                            value={newAgent.exampleOutput?.responseMediaAlt || ""}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                              setNewAgent(a => ({
-                                ...a,
-                                exampleOutput: {
-                                  ...a.exampleOutput,
-                                  responseMediaAlt: e.target.value,
-                                  userMessage: a.exampleOutput?.userMessage || "",
-                                  responseType: "image"
-                                } as ExampleOutput
-                              }));
-                            }}
-                            placeholder="Describe the image for accessibility"
-                            className="bg-white/5 border-white/10 text-sm"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Preview */}
-                  {newAgent.exampleOutput?.userMessage && (
-                    <div className="space-y-2">
-                      <label className="text-xs text-white/60">Preview</label>
-                      <div className="bg-black/20 border border-white/5 rounded-lg p-3">
-                        <ExampleOutputDisplay example={newAgent.exampleOutput} />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Remove Example Button */}
-                  {newAgent.exampleOutput && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        setNewAgent(a => ({ ...a, exampleOutput: undefined }));
-                      }}
-                      className="bg-red-500/20 hover:bg-red-500/30 border-red-400/40 text-red-100"
-                    >
-                      Remove Example
-                    </Button>
-                  )}
-                </div>
-              </div>
 
               {/* PRICE / LIMITS */}
               <div className="space-y-3">
@@ -5314,10 +5158,12 @@ function ChatView({
   onBack,
   selectedAgent,
   isCreator = false, // <- Креатор этого агента? Если да — без лимитов
+  onSaveExample,
 }: {
   onBack: () => void;
   selectedAgent: Agent | null;
   isCreator?: boolean;
+  onSaveExample?: (agentId: string, example: ExampleOutput) => void;
 }) {
   // 🔊 TTS Voice selection state
   const [selectedVoice, setSelectedVoice] = useState(TTS_VOICES[0]);
@@ -6399,6 +6245,62 @@ function ChatView({
                           })}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Save as Example Button - Only for creators and assistant messages */}
+                  {isCreator && !isUser && (
+                    <div className="flex justify-start mt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Find the corresponding user message (previous message)
+                          const userMessageIndex = i - 1;
+                          const userMessage = userMessageIndex >= 0 && messages[userMessageIndex].role === "user"
+                            ? messages[userMessageIndex]
+                            : null;
+
+                          if (userMessage && selectedAgent && onSaveExample) {
+                            // Determine response type and content
+                            let responseType: ExampleOutputType = "text";
+                            let responseContent = m.content;
+                            let responseAttachments = m.attachments;
+
+                            if (m.audioUrl) {
+                              responseType = "audio";
+                              responseContent = m.audioUrl;
+                            } else if (m.generatedMediaUrl && m.generatedMediaType === "video") {
+                              responseType = "video";
+                              responseContent = m.generatedMediaUrl;
+                            } else if (m.generatedMediaUrl && m.generatedMediaType === "image") {
+                              responseType = "image";
+                              responseContent = m.generatedMediaUrl;
+                            }
+
+                            // Create the example
+                            const example: ExampleOutput = {
+                              id: `example-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                              examplePrompt: userMessage.content,
+                              exampleResponse: {
+                                type: responseType,
+                                content: responseContent,
+                                attachments: responseAttachments
+                              },
+                              createdAt: Date.now(),
+                              isPrimary: true
+                            };
+
+                            // Save the example
+                            onSaveExample(selectedAgent.id, example);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/30 hover:border-emerald-400/60 transition-colors text-xs font-medium"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Save as example
+                      </button>
                     </div>
                   )}
                 </div>
@@ -8586,20 +8488,36 @@ function AgentDetailView({
       </header>
 
       {/* Example Output Section */}
-      {agent.exampleOutput && (
-        <div className="max-w-5xl mx-auto px-4 py-6">
-          <div className="space-y-4">
-            <div className="text-sm uppercase tracking-[0.18em] text-white/40">
-              Example Output
-            </div>
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        <div className="space-y-4">
+          <div className="text-sm uppercase tracking-[0.18em] text-white/40">
+            Example Output
+          </div>
+          {agent.exampleOutput ? (
             <Card className="bg-white/[.02] border-white/5">
               <CardContent className="p-6">
                 <ExampleOutputDisplay example={agent.exampleOutput} />
               </CardContent>
             </Card>
-          </div>
+          ) : (
+            <Card className="bg-white/[.02] border-white/5 border-dashed">
+              <CardContent className="p-6 text-center">
+                <div className="text-white/40 mb-2">
+                  <svg className="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div className="text-sm text-white/50">
+                  No example available yet
+                </div>
+                <div className="text-xs text-white/30 mt-1">
+                  Creators can save real chat interactions as examples
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Верхний контент: описание + прайс */}
       <div className="max-w-5xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-[2fr,1.4fr] gap-6">
