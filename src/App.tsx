@@ -142,12 +142,14 @@ function AudioResult({
   voiceName,
   modelName,
   downloadFilename = 'audio',
+  onSaveAsExample,
   isExample = false
 }: {
   audioUrl: string;
   voiceName?: string;
   modelName?: string;
   downloadFilename?: string;
+  onSaveAsExample?: () => void;
   isExample?: boolean;
 }) {
   return (
@@ -193,6 +195,19 @@ function AudioResult({
           )}
         </div>
       </div>
+
+      {/* Save as example button - separate from card */}
+      {onSaveAsExample && (
+        <div className="mt-3 flex justify-center">
+          <button
+            type="button"
+            onClick={onSaveAsExample}
+            className="text-xs text-white/60 hover:text-white/80 transition-colors underline"
+          >
+            Save as example
+          </button>
+        </div>
+      )}
 
     </div>
   );
@@ -6240,6 +6255,63 @@ function ChatView({
                         voiceName={selectedVoice?.name}
                         modelName={selectedModel?.name}
                         downloadFilename="tts-audio"
+                        onSaveAsExample={isCreator ? () => {
+                          // Find the corresponding user message (previous message)
+                          const userMessageIndex = i - 1;
+                          const userMessage = userMessageIndex >= 0 && messages[userMessageIndex].role === "user"
+                            ? messages[userMessageIndex]
+                            : null;
+
+                          if (userMessage && selectedAgent && onSaveExample) {
+                            let responseType: ExampleOutputType = "text";
+                            let responseContent = m.content;
+                            let responseAttachments = m.attachments;
+                            let ttsParams: any = undefined;
+
+                            // Handle different response types
+                            if (m.audioUrl) {
+                              // For TTS agents, store the original text and TTS parameters for regeneration
+                              responseType = "audio";
+                              responseContent = m.originalTtsText || m.content; // Use original TTS text
+
+                              // Store TTS parameters for regeneration
+                              ttsParams = {
+                                text: responseContent,
+                                voiceId: selectedVoice.id,
+                                modelId: selectedModel.id,
+                                voiceSettings: {
+                                  stability: voiceSettings.stability,
+                                  similarity_boost: voiceSettings.similarityBoost,
+                                  style: voiceSettings.style,
+                                  use_speaker_boost: voiceSettings.speakerBoost,
+                                }
+                              };
+                            } else if (m.generatedMediaUrl && m.generatedMediaType === "video") {
+                              responseType = "video";
+                              responseContent = m.generatedMediaUrl;
+                            } else if (m.generatedMediaUrl && m.generatedMediaType === "image") {
+                              responseType = "image";
+                              responseContent = m.generatedMediaUrl;
+                            }
+
+                            // Create the example
+                            const example: ExampleOutput = {
+                              id: `example-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                              examplePrompt: userMessage.content,
+                              exampleResponse: {
+                                type: responseType,
+                                content: responseContent,
+                                attachments: responseAttachments,
+                                ttsParams: ttsParams
+                              },
+                              createdAt: Date.now(),
+                              isPrimary: true
+                            };
+
+                            // Save the example
+                            onSaveExample(selectedAgent.id, example);
+                          }
+                        } : undefined}
                       />
                     </div>
                   )}
