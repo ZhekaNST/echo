@@ -79,14 +79,52 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
       case "audio":
         // If we have TTS params, show full TTS interface
         if (example.exampleResponse.ttsParams) {
+          // If audio is already generated, show the player
+          if (ttsAudioUrl) {
+            return (
+              <AudioResult
+                audioUrl={ttsAudioUrl}
+                voiceName={example.exampleResponse.ttsParams.voiceId ? "Voice Name" : undefined} // Could map voiceId to name
+                modelName={example.exampleResponse.ttsParams.modelId ? "Model Name" : undefined} // Could map modelId to name
+                downloadFilename="example-audio"
+                isExample={true}
+              />
+            );
+          }
+
+          // Otherwise, show generate button
           return (
-            <AudioResult
-              audioUrl={ttsAudioUrl || ""}
-              voiceName={example.exampleResponse.ttsParams.voiceId ? "Voice Name" : undefined} // Could map voiceId to name
-              modelName={example.exampleResponse.ttsParams.modelId ? "Model Name" : undefined} // Could map modelId to name
-              downloadFilename="example-audio"
-              isExample={true}
-            />
+            <div className="w-full max-w-md">
+              <div className="bg-white/[0.02] border border-white/10 rounded-xl overflow-hidden">
+                <div className="px-4 py-2 border-b border-white/5">
+                  <div className="text-xs text-white/40">
+                    Voice: Voice Name · Model: Model Name
+                  </div>
+                </div>
+                <div className="px-4 py-3">
+                  <button
+                    onClick={generateTtsAudio}
+                    disabled={isGeneratingAudio}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/40 rounded-lg text-blue-300 text-xs transition-colors disabled:opacity-50"
+                  >
+                    {isGeneratingAudio ? (
+                      <>
+                        <div className="w-3 h-3 border border-blue-300 border-t-transparent rounded-full animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <span>▶️</span>
+                        Play Audio
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="px-4 py-2 border-t border-white/5 flex items-center justify-between">
+                  <span className="text-xs text-white/30">Example</span>
+                </div>
+              </div>
+            </div>
           );
         }
 
