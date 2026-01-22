@@ -5402,6 +5402,9 @@ function ChatView({
   const [sessionStart, setSessionStart] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
 
+  // Track which messages have been saved as examples
+  const [savedExampleMessageIds, setSavedExampleMessageIds] = useState<Set<string>>(new Set());
+
   // ключ для localStorage по агенту
   const storageKey =
     selectedAgent && selectedAgent.id
@@ -6417,79 +6420,92 @@ function ChatView({
                   )}
 
                 </div>
-
-                {/* Save as Example Button - Below the message, full width */}
-                {isCreator && !isUser && (
-                  <div className="flex justify-start mt-1 ml-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Find the corresponding user message (previous message)
-                        const userMessageIndex = i - 1;
-                        const userMessage = userMessageIndex >= 0 && messages[userMessageIndex].role === "user"
-                          ? messages[userMessageIndex]
-                          : null;
-
-                        if (userMessage && selectedAgent && onSaveExample) {
-                          let responseType: ExampleOutputType = "text";
-                          let responseContent = m.content;
-                          let responseAttachments = m.attachments;
-                          let ttsParams: any = undefined;
-
-                          // Handle different response types
-                          if (m.audioUrl) {
-                            // For TTS agents, store the original text and TTS parameters for regeneration
-                            responseType = "audio";
-                            responseContent = m.originalTtsText || m.content; // Use original TTS text if available
-
-                            // Store TTS parameters for regeneration
-                            ttsParams = {
-                              text: responseContent,
-                              voiceId: selectedVoice.id,
-                              modelId: selectedModel.id,
-                              voiceSettings: {
-                                stability: voiceSettings.stability,
-                                similarity_boost: voiceSettings.similarityBoost,
-                                style: voiceSettings.style,
-                                use_speaker_boost: voiceSettings.speakerBoost,
-                              }
-                            };
-                          } else if (m.generatedMediaUrl && m.generatedMediaType === "video") {
-                            responseType = "video";
-                            responseContent = m.generatedMediaUrl;
-                          } else if (m.generatedMediaUrl && m.generatedMediaType === "image") {
-                            responseType = "image";
-                            responseContent = m.generatedMediaUrl;
-                          }
-
-                          // Create the example
-                          const example: ExampleOutput = {
-                            id: `example-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                            examplePrompt: userMessage.content,
-                            exampleResponse: {
-                              type: responseType,
-                              content: responseContent,
-                              attachments: responseAttachments,
-                              ttsParams: ttsParams
-                            },
-                            createdAt: Date.now(),
-                            isPrimary: true
-                          };
-
-                          // Save the example
-                          onSaveExample(selectedAgent.id, example);
-                        }
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium bg-white/10 border border-white/20 text-white/60 hover:bg-emerald-500/20 hover:border-emerald-400/40 hover:text-emerald-300"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Save as example
-                    </button>
-                  </div>
-                )}
               </div>
+
+              {/* Save as Example Button - Below the message, outside alignment */}
+              {isCreator && !isUser && (
+                <div className="flex justify-start mt-1 ml-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Find the corresponding user message (previous message)
+                      const userMessageIndex = i - 1;
+                      const userMessage = userMessageIndex >= 0 && messages[userMessageIndex].role === "user"
+                        ? messages[userMessageIndex]
+                        : null;
+
+                      if (userMessage && selectedAgent && onSaveExample) {
+                        let responseType: ExampleOutputType = "text";
+                        let responseContent = m.content;
+                        let responseAttachments = m.attachments;
+                        let ttsParams: any = undefined;
+
+                        // Handle different response types
+                        if (m.audioUrl) {
+                          // For TTS agents, store the original text and TTS parameters for regeneration
+                          responseType = "audio";
+                          responseContent = m.originalTtsText || m.content; // Use original TTS text if available
+
+                          // Store TTS parameters for regeneration
+                          ttsParams = {
+                            text: responseContent,
+                            voiceId: selectedVoice.id,
+                            modelId: selectedModel.id,
+                            voiceSettings: {
+                              stability: voiceSettings.stability,
+                              similarity_boost: voiceSettings.similarityBoost,
+                              style: voiceSettings.style,
+                              use_speaker_boost: voiceSettings.speakerBoost,
+                            }
+                          };
+                        } else if (m.generatedMediaUrl && m.generatedMediaType === "video") {
+                          responseType = "video";
+                          responseContent = m.generatedMediaUrl;
+                        } else if (m.generatedMediaUrl && m.generatedMediaType === "image") {
+                          responseType = "image";
+                          responseContent = m.generatedMediaUrl;
+                        }
+
+                        // Create the example
+                        const example: ExampleOutput = {
+                          id: `example-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                          examplePrompt: userMessage.content,
+                          exampleResponse: {
+                            type: responseType,
+                            content: responseContent,
+                            attachments: responseAttachments,
+                            ttsParams: ttsParams
+                          },
+                          createdAt: Date.now(),
+                          isPrimary: true
+                        };
+
+                        // Save the example
+                        onSaveExample(selectedAgent.id, example);
+
+                        // Mark this message as saved
+                        setSavedExampleMessageIds(prev => new Set(prev).add(m.id || `msg-${i}`));
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
+                      savedExampleMessageIds.has(m.id || `msg-${i}`)
+                        ? 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300'
+                        : 'bg-white/10 border border-white/20 text-white/60 hover:bg-emerald-500/20 hover:border-emerald-400/40 hover:text-emerald-300'
+                    }`}
+                  >
+                    <svg
+                      className={`w-3.5 h-3.5 ${savedExampleMessageIds.has(m.id || `msg-${i}`) ? 'text-emerald-400' : ''}`}
+                      fill={savedExampleMessageIds.has(m.id || `msg-${i}`) ? 'currentColor' : 'none'}
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Save as example
+                  </button>
+                </div>
+              )}
+            );
             );
           })}
 
