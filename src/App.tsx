@@ -6211,6 +6211,7 @@ function ChatView({
 
           {messages.map((m, i) => {
             const isUser = m.role === "user";
+            const messageId = `msg-${i}-${m.content?.slice(0, 10) || 'empty'}-${m.role}`;
 
             // Check if message is image-only (no text, only image attachments)
             const images = m.attachments?.filter(att => att.kind === "image") || [];
@@ -6484,18 +6485,18 @@ function ChatView({
                         onSaveExample(selectedAgent.id, example);
 
                         // Clear all previously saved messages and mark only this one as saved
-                        setSavedExampleMessageIds(new Set([m.content]));
+                        setSavedExampleMessageIds(new Set([messageId]));
                       }
                     }}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
-                      savedExampleMessageIds.has(m.content)
+                      savedExampleMessageIds.has(messageId)
                         ? 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300'
                         : 'bg-white/10 border border-white/20 text-white/60 hover:bg-emerald-500/20 hover:border-emerald-400/40 hover:text-emerald-300'
                     }`}
                   >
                     <svg
-                      className={`w-3.5 h-3.5 ${savedExampleMessageIds.has(m.content) ? 'text-emerald-400' : ''}`}
-                      fill={savedExampleMessageIds.has(m.content) ? 'currentColor' : 'none'}
+                      className={`w-3.5 h-3.5 ${savedExampleMessageIds.has(messageId) ? 'text-emerald-400' : ''}`}
+                      fill={savedExampleMessageIds.has(messageId) ? 'currentColor' : 'none'}
                       stroke="currentColor"
                       viewBox="0 0 24 24"
                     >
