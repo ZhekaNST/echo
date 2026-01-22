@@ -6211,7 +6211,7 @@ function ChatView({
 
           {messages.map((m, i) => {
             const isUser = m.role === "user";
-            
+
             // Check if message is image-only (no text, only image attachments)
             const images = m.attachments?.filter(att => att.kind === "image") || [];
             const files = m.attachments?.filter(att => att.kind === "file") || [];
@@ -6277,13 +6277,13 @@ function ChatView({
             
             // Regular message with text (and optional attachments)
             return (
-              <div
-                key={i}
-                className={cx(
-                  "mb-2 flex w-full",
-                  isUser ? "justify-end" : "justify-start"
-                )}
-              >
+              <React.Fragment key={i}>
+                <div
+                  className={cx(
+                    "mb-2 flex w-full",
+                    isUser ? "justify-end" : "justify-start"
+                  )}
+                >
                 <div
                   className={cx(
                     "max-w-[78%] rounded-2xl px-3 py-2 text-sm leading-relaxed",
@@ -6420,9 +6420,9 @@ function ChatView({
                   )}
 
                 </div>
-              </div>
+                </div>
 
-              {/* Save as Example Button - Below the message, outside alignment */}
+                {/* Save as Example Button - Below the message, outside alignment */}
               {isCreator && !isUser && (
                 <div className="flex justify-start mt-1 ml-4">
                   <button
@@ -6484,18 +6484,18 @@ function ChatView({
                         onSaveExample(selectedAgent.id, example);
 
                         // Mark this message as saved
-                        setSavedExampleMessageIds(prev => new Set(prev).add(m.id || `msg-${i}`));
+                        setSavedExampleMessageIds(prev => new Set(prev).add(`msg-${i}`));
                       }
                     }}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
-                      savedExampleMessageIds.has(m.id || `msg-${i}`)
+                      savedExampleMessageIds.has(`msg-${i}`)
                         ? 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300'
                         : 'bg-white/10 border border-white/20 text-white/60 hover:bg-emerald-500/20 hover:border-emerald-400/40 hover:text-emerald-300'
                     }`}
                   >
                     <svg
-                      className={`w-3.5 h-3.5 ${savedExampleMessageIds.has(m.id || `msg-${i}`) ? 'text-emerald-400' : ''}`}
-                      fill={savedExampleMessageIds.has(m.id || `msg-${i}`) ? 'currentColor' : 'none'}
+                      className={`w-3.5 h-3.5 ${savedExampleMessageIds.has(`msg-${i}`) ? 'text-emerald-400' : ''}`}
+                      fill={savedExampleMessageIds.has(`msg-${i}`) ? 'currentColor' : 'none'}
                       stroke="currentColor"
                       viewBox="0 0 24 24"
                     >
@@ -6505,7 +6505,7 @@ function ChatView({
                   </button>
                 </div>
               )}
-            );
+              </React.Fragment>
             );
           })}
 
