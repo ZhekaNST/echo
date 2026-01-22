@@ -6483,8 +6483,8 @@ function ChatView({
                         // Save the example
                         onSaveExample(selectedAgent.id, example);
 
-                        // Mark this message as saved
-                        setSavedExampleMessageIds(prev => new Set(prev).add(`msg-${i}`));
+                        // Clear all previously saved messages and mark only this one as saved
+                        setSavedExampleMessageIds(new Set([`msg-${i}`]));
                       }
                     }}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
