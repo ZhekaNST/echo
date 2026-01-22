@@ -65,14 +65,22 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
 
       case "image":
         return (
-          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
-            <img
-              src={example.exampleResponse.content}
-              alt="Example image response"
-              className="rounded-xl max-w-full h-auto cursor-pointer hover:opacity-90 transition"
-              style={{ maxHeight: "200px" }}
-              onClick={() => window.open(example.exampleResponse.content, '_blank')}
-            />
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 max-w-[85%]">
+            <div className="relative group">
+              <img
+                src={example.exampleResponse.content}
+                alt="Example image response"
+                className="rounded-xl max-w-full h-auto cursor-pointer hover:opacity-90 transition shadow-lg"
+                style={{ maxHeight: "300px" }}
+                onClick={() => window.open(example.exampleResponse.content, '_blank')}
+              />
+              <div className="absolute inset-0 rounded-xl bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none" />
+              <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="bg-black/60 text-white text-xs px-2 py-1 rounded">
+                  Click to view full size
+                </div>
+              </div>
+            </div>
           </div>
         );
 
@@ -139,16 +147,30 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
 
       case "video":
         return (
-          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-3 max-w-[85%]">
-            <video
-              controls
-              className="rounded-xl max-w-full h-auto"
-              style={{ maxHeight: "200px" }}
-              preload="metadata"
-            >
-              <source src={example.exampleResponse.content} type="video/mp4" />
-              Your browser does not support the video element.
-            </video>
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 max-w-[85%]">
+            <div className="relative">
+              <video
+                controls
+                className="rounded-xl max-w-full h-auto shadow-lg"
+                style={{ maxHeight: "300px" }}
+                preload="metadata"
+              >
+                <source src={example.exampleResponse.content} type="video/mp4" />
+                Your browser does not support the video element.
+              </video>
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-xs text-white/50">Click play to view video</span>
+                <a
+                  href={example.exampleResponse.content}
+                  download={`example-video-${Date.now()}.mp4`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-white/50 hover:text-white/70 transition-colors underline"
+                >
+                  Download
+                </a>
+              </div>
+            </div>
           </div>
         );
 
