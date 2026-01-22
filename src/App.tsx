@@ -6418,9 +6418,9 @@ function ChatView({
 
                 </div>
 
-                {/* Save as Example Button - Only for creators and assistant messages */}
+                {/* Save as Example Button - Below the message, full width */}
                 {isCreator && !isUser && (
-                  <div className="flex justify-start mt-2">
+                  <div className="flex justify-start mt-1 ml-2">
                     <button
                       type="button"
                       onClick={() => {
