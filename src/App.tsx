@@ -3193,25 +3193,24 @@ return (
           radial-gradient(circle_at_40%_85%,rgba(16,185,129,0.08),transparent_60%)]"
   />
 
-  <div className="max-w-7xl mx-auto px-4 py-14 space-y-8">
-    {/* App Store style hero showcase */}
+  <div className="max-w-7xl mx-auto px-4 py-14">
     <div className="relative rounded-[30px] overflow-hidden border border-white/10 bg-black min-h-[420px] md:min-h-[500px]">
       <div
         aria-hidden
-        className="absolute inset-0 opacity-85
+        className="absolute inset-0 opacity-90
           bg-[radial-gradient(circle_at_22%_20%,rgba(8,145,178,0.30),transparent_45%),
               radial-gradient(circle_at_70%_35%,rgba(15,23,42,0.85),transparent_50%),
               radial-gradient(circle_at_88%_72%,rgba(79,70,229,0.35),transparent_40%)]"
       />
       <div
         aria-hidden
-        className="absolute inset-0 opacity-25
+        className="absolute inset-0 opacity-20
           [background-image:linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)]
           [background-size:28px_28px]"
       />
 
       <div className="relative z-10 p-8 md:p-10">
-        <div className="max-w-md">
+        <div className="max-w-lg">
           <div className="text-[11px] uppercase tracking-[0.18em] text-white/55">Get Started</div>
           <h2 className="mt-3 text-4xl md:text-5xl font-semibold leading-tight text-white">
             Introducing Echo
@@ -3219,9 +3218,9 @@ return (
             Agent Marketplace
           </h2>
           <p className="mt-4 text-lg text-white/70">
-            Discover AI agents with real examples, unlock sessions with USDC, and chat instantly.
+            Try specialist AI agents with real output previews and pay per session in USDC.
           </p>
-          <div className="mt-6 flex gap-3">
+          <div className="mt-6">
             <Button
               className="gap-2"
               onClick={() => {
@@ -3232,103 +3231,57 @@ return (
               <Search className="h-4 w-4" />
               Explore agents
             </Button>
-            <Button
-              variant="secondary"
-              className="bg-white/10 hover:bg-white/20 gap-2"
-              onClick={() => {
-                push("/profile/agents");
-                requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Create an agent
-            </Button>
           </div>
         </div>
       </div>
 
-      {/* Background collage cards */}
+      {/* Background chat simulation */}
       <div aria-hidden className="absolute inset-0 pointer-events-none">
-        <div className="absolute right-[3%] top-[10%] w-[48%] h-[58%] rounded-2xl border border-white/15 bg-gradient-to-br from-white/[0.16] to-white/[0.02] backdrop-blur-[1px] shadow-2xl rotate-[-3deg] overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(56,189,248,0.30),transparent_45%)]" />
-          <div className="relative p-5">
-            <div className="text-xs uppercase tracking-[0.16em] text-white/60">Featured</div>
-            <div className="mt-2 text-white font-medium">Crypto Strategy Agent</div>
-            <div className="mt-4 rounded-xl bg-black/35 border border-white/10 p-4 text-sm text-white/70">
-              "Analyze this token and suggest a risk-managed entry plan."
+        <div className="absolute right-[4%] top-[14%] w-[45%] rounded-3xl border border-white/10 bg-black/30 backdrop-blur-sm p-5 shadow-2xl">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="h-8 w-8 rounded-lg bg-white/10 grid place-items-center text-sm">🤖</div>
+            <div>
+              <div className="text-sm text-white/85">Growth Strategy Agent</div>
+              <div className="text-[11px] text-white/50">Live preview</div>
+            </div>
+          </div>
+
+          <div className="flex justify-end mb-3">
+            <div className="max-w-[78%] rounded-2xl px-3 py-2 text-xs md:text-sm bg-gradient-to-r from-indigo-600/70 to-cyan-600/70 text-white rounded-br-sm">
+              Build a launch plan for a new AI tool.
+            </div>
+          </div>
+
+          <div className="flex justify-start mb-3">
+            <div className="max-w-[84%] rounded-2xl px-3 py-2 text-xs md:text-sm bg-white/8 border border-white/10 text-white/85 rounded-bl-sm">
+              Week 1: define ICP and value proposition.
+              <br />
+              Week 2: publish 3 comparison posts.
+              <br />
+              Week 3: run waitlist + referral loop.
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-[11px] text-emerald-100">
+              <span className="h-2 w-2 rounded-full bg-emerald-300" />
+              Session price: 0.35 USDC
             </div>
           </div>
         </div>
 
-        <div className="absolute right-[25%] top-[48%] w-[28%] h-[34%] rounded-2xl border border-white/15 bg-gradient-to-br from-cyan-500/25 to-indigo-500/15 backdrop-blur-[1px] rotate-[5deg] overflow-hidden">
-          <div className="h-full w-full p-4 flex flex-col justify-between">
-            <div className="text-xs text-white/70">Voice + Video</div>
-            <div className="text-4xl">🎙️</div>
-            <div className="text-xs text-white/80">Saved examples</div>
+        <div className="absolute right-[30%] top-[58%] w-[24%] rounded-2xl border border-white/10 bg-white/[0.05] backdrop-blur-sm p-3 rotate-[6deg]">
+          <div className="text-[11px] text-white/60">Saved example</div>
+          <div className="mt-1 text-xs text-white/80 line-clamp-3">
+            "Generate a concise GTM brief for a B2B creator tool."
           </div>
         </div>
 
-        <div className="absolute right-[2%] bottom-[7%] w-[22%] h-[30%] rounded-2xl border border-white/15 bg-gradient-to-br from-emerald-500/20 to-sky-500/10 rotate-[-7deg] overflow-hidden">
-          <div className="h-full w-full p-4 flex flex-col justify-between">
-            <div className="text-xs text-white/70">Payments</div>
-            <div className="text-3xl">💸</div>
-            <div className="text-xs text-white/80">USDC per session</div>
-          </div>
+        <div className="absolute right-[9%] top-[70%] w-[18%] rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-sm p-3 rotate-[-5deg]">
+          <div className="text-[11px] text-white/60">Payment</div>
+          <div className="mt-1 text-xs text-white/85">USDC per session</div>
         </div>
       </div>
-    </div>
-
-    {/* Lower promo row */}
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <button
-        type="button"
-        onClick={() => {
-          push("/explore");
-          requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
-        }}
-        className="group relative rounded-[26px] border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-8 text-left overflow-hidden hover:border-white/25 transition"
-      >
-        <div aria-hidden className="absolute -right-10 -bottom-10 h-52 w-52 rounded-full bg-cyan-400/25 blur-3xl" />
-        <div className="relative max-w-md">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-white/45">Apps we love</div>
-          <div className="mt-3 text-4xl leading-tight font-semibold text-white">
-            Do more with
-            <br />
-            specialist agents
-          </div>
-          <div className="mt-3 text-lg text-white/65">
-            Research, copywriting, growth, design and crypto workflows in one place.
-          </div>
-        </div>
-        <div className="absolute right-6 bottom-6 h-28 w-28 rounded-full border border-white/20 bg-gradient-to-br from-cyan-300/80 via-sky-400/70 to-indigo-500/80 grid place-items-center text-3xl shadow-xl">
-          <Bot className="h-9 w-9 text-slate-900" />
-        </div>
-      </button>
-
-      <button
-        type="button"
-        onClick={() => {
-          push("/profile/agents");
-          requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
-        }}
-        className="group relative rounded-[26px] border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-8 text-left overflow-hidden hover:border-white/25 transition"
-      >
-        <div aria-hidden className="absolute -right-10 -bottom-10 h-52 w-52 rounded-full bg-indigo-400/25 blur-3xl" />
-        <div className="relative max-w-md">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-white/45">Creator tools</div>
-          <div className="mt-3 text-4xl leading-tight font-semibold text-white">
-            Publish agents
-            <br />
-            with real previews
-          </div>
-          <div className="mt-3 text-lg text-white/65">
-            Save actual chat outputs as examples so buyers know exactly what they get.
-          </div>
-        </div>
-        <div className="absolute right-6 bottom-6 h-28 w-28 rounded-full border border-white/20 bg-gradient-to-br from-indigo-300/80 via-violet-400/70 to-blue-500/80 grid place-items-center text-3xl shadow-xl">
-          <Sparkles className="h-9 w-9 text-slate-900" />
-        </div>
-      </button>
     </div>
   </div>
 </section>
