@@ -3358,7 +3358,7 @@ return (
 </section>
 
 {/* ================= HOME · MARKETPLACE ROWS ================= */}
-<section className="relative">
+<section className="relative section-grid">
   {/* мягкий фон-переход между секциями */}
   <div
     aria-hidden
@@ -3409,7 +3409,7 @@ return (
 
 
 {/* FEATURED COLLECTIONS — маркетплейс-вкладки как на Pinterest, но в нашем стиле */}
-<section>
+<section className="section-grid">
   <div className="max-w-7xl mx-auto px-4 py-10 space-y-4">
     {/* Заголовок */}
     <div className="flex items-center justify-between gap-2">
@@ -3627,7 +3627,7 @@ return (
 
 
         {/* ТРИ КАРТОЧКИ «USERS / CREATORS / ON SOLANA» — SOLANA FOUNDATION STYLE */}
-<section>
+<section className="section-grid">
   <div className="max-w-7xl mx-auto px-4 py-12 space-y-6">
     {/* Заголовок секции */}
     <div className="flex items-center justify-between gap-2">
@@ -5261,7 +5261,7 @@ function MarketplaceRail({
   }, [items.length]);
 
   return (
-    <section className="relative">
+    <section className="relative section-grid">
       {/* solana-like glow */}
       <div
         aria-hidden
