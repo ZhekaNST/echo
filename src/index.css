@@ -50,19 +50,20 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 5;
-  opacity: 0.34;
+  z-index: 20;
+  opacity: 0.48;
+  mix-blend-mode: screen;
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.11) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.11) 1px, transparent 1px),
-    linear-gradient(to right, rgba(56, 189, 248, 0.14) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(56, 189, 248, 0.14) 1px, transparent 1px);
+    linear-gradient(to right, rgba(255, 255, 255, 0.14) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.14) 1px, transparent 1px),
+    linear-gradient(to right, rgba(56, 189, 248, 0.18) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(56, 189, 248, 0.18) 1px, transparent 1px);
   background-size: 56px 56px, 56px 56px, 224px 224px, 224px 224px;
 }
 
 .app-shell > *:not(.global-grid-overlay) {
   position: relative;
-  z-index: 6;
+  z-index: 1;
 }
 
 .section-grid {
