@@ -46,23 +46,8 @@ body::before {
   min-height: 100vh;
 }
 
-.global-grid-overlay {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.16;
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(to right, rgba(56, 189, 248, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(56, 189, 248, 0.08) 1px, transparent 1px);
-  background-size: 56px 56px, 56px 56px, 224px 224px, 224px 224px;
-}
-
-.app-shell > *:not(.global-grid-overlay) {
+.app-shell > * {
   position: relative;
-  z-index: 1;
 }
 
 .section-grid {
@@ -76,6 +61,21 @@ body::before {
 .section-grid > * {
   position: relative;
   z-index: 1;
+}
+
+.page-grid-bg {
+  background-color: #020617;
+  background-image:
+    radial-gradient(circle at 20% 12%, rgba(56, 189, 248, 0.1), transparent 44%),
+    radial-gradient(circle at 82% 24%, rgba(99, 102, 241, 0.1), transparent 46%),
+    radial-gradient(circle at 45% 88%, rgba(16, 185, 129, 0.08), transparent 50%),
+    linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(to right, rgba(56, 189, 248, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(56, 189, 248, 0.06) 1px, transparent 1px),
+    linear-gradient(180deg, #030712 0%, #020617 52%, #030712 100%);
+  background-size: auto, auto, auto, 48px 48px, 48px 48px, 192px 192px, 192px 192px, 100% 100%;
+  background-repeat: no-repeat, no-repeat, no-repeat, repeat, repeat, repeat, repeat, no-repeat;
 }
 
 a {

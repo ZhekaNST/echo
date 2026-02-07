@@ -3246,7 +3246,7 @@ return (
     {/* ================= HOME ("/") ================= */}
     
     {route === "/" && (
-      <div className="bg-gradient-to-b from-black via-[#020617] to-black">    
+      <div className="page-grid-bg">    
 
 {/* ================= HOME · EXPLAINERS ================= */}
 <section className="relative overflow-hidden">
@@ -3258,7 +3258,7 @@ return (
           radial-gradient(circle_at_25%_72%,rgba(16,185,129,0.10),transparent_56%)]"
   />
 
-  <div className="w-full py-6 md:py-10">
+  <div className="w-full pt-0 pb-6 md:pb-10">
     <div className="relative overflow-hidden bg-black min-h-[480px] md:min-h-[560px]">
       <div
         aria-hidden
@@ -3267,19 +3267,6 @@ return (
               radial-gradient(circle_at_68%_34%,rgba(15,23,42,0.86),transparent_50%),
               radial-gradient(circle_at_86%_78%,rgba(79,70,229,0.30),transparent_40%)]"
       />
-      <div
-        aria-hidden
-        className="absolute inset-0 opacity-22
-          [background-image:linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)]
-          [background-size:30px_30px]"
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0 opacity-15
-          [background-image:radial-gradient(rgba(56,189,248,0.25)_1px,transparent_1px)]
-          [background-size:40px_40px]"
-      />
-
       <div className="relative z-20 flex flex-col items-center text-center px-6 pt-10 md:pt-14">
         <div className="text-[11px] uppercase tracking-[0.20em] text-white/55">Get Started</div>
         <h2 className="mt-3 text-5xl md:text-7xl lg:text-[6.5rem] font-semibold leading-[0.95] text-white max-w-5xl">
