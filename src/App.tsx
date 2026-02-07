@@ -3310,7 +3310,12 @@ return (
 
       {/* Background chat simulation */}
       <div className="relative z-10 px-4 pb-6 md:pb-8 mt-6 md:mt-7">
-        <div className="mx-auto w-[95%] md:w-[76%] rounded-3xl bg-black/40 backdrop-blur-md p-5 md:p-6 shadow-[0_30px_120px_rgba(0,0,0,0.65)]">
+        <div className="relative mx-auto w-[95%] md:w-[76%] rounded-3xl border border-white/12 bg-black/40 backdrop-blur-md p-5 md:p-6 shadow-[0_30px_120px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)]">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-1 -z-10 rounded-[28px] opacity-75 blur-2xl
+              bg-[radial-gradient(circle_at_18%_45%,rgba(99,102,241,0.35),transparent_46%),radial-gradient(circle_at_82%_56%,rgba(34,211,238,0.25),transparent_44%)]"
+          />
           <div className="flex items-center gap-2 mb-4">
             <img
               src={DEFAULT_AGENT_AVATAR_URL}
@@ -4074,7 +4079,7 @@ return (
           {/* Floating Button */}
           <button
             onClick={() => setShowSessionsPanel(true)}
-            className="fixed right-4 bottom-20 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-105 transition-all duration-200 group"
+            className="fixed right-4 bottom-20 z-40 flex items-center gap-2 px-4 py-3 rounded-full border border-indigo-300/35 bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 text-white font-medium shadow-[0_14px_36px_rgba(79,70,229,0.45)] hover:shadow-[0_18px_44px_rgba(34,211,238,0.30)] hover:scale-[1.03] transition-all duration-200 group"
           >
             <div className="relative">
               <Bot className="h-5 w-5" />
