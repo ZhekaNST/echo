@@ -3272,14 +3272,14 @@ return (
         className="absolute inset-0 opacity-24
           [background-image:linear-gradient(to_right,rgba(255,255,255,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.07)_1px,transparent_1px)]
           [background-size:34px_34px]
-          [mask-image:radial-gradient(circle_at_center,black_26%,black_52%,transparent_88%)]"
+          [mask-image:radial-gradient(circle_at_center,rgba(0,0,0,0.98)_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.74)_52%,rgba(0,0,0,0.46)_74%,rgba(0,0,0,0.18)_90%,transparent_100%)]"
       />
       <div
         aria-hidden
         className="absolute inset-0 opacity-12
           [background-image:radial-gradient(rgba(56,189,248,0.24)_1px,transparent_1px)]
           [background-size:44px_44px]
-          [mask-image:radial-gradient(circle_at_center,black_32%,black_58%,transparent_90%)]"
+          [mask-image:radial-gradient(circle_at_center,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.86)_30%,rgba(0,0,0,0.68)_56%,rgba(0,0,0,0.38)_78%,rgba(0,0,0,0.14)_92%,transparent_100%)]"
       />
       <div className="relative z-20 flex flex-col items-center text-center px-6 pt-10 md:pt-14">
         <div className="text-[11px] uppercase tracking-[0.20em] text-white/55">Get Started</div>
