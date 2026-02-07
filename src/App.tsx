@@ -3283,7 +3283,7 @@ return (
       <div className="bg-gradient-to-b from-black via-[#020617] to-black">    
 
 {/* ================= HOME · EXPLAINERS ================= */}
-<section className="relative border-t border-white/10 overflow-hidden">
+<section className="relative overflow-hidden">
   <div
     aria-hidden
     className="pointer-events-none absolute inset-0 -z-10 opacity-80
@@ -3292,8 +3292,8 @@ return (
           radial-gradient(circle_at_25%_72%,rgba(16,185,129,0.10),transparent_56%)]"
   />
 
-  <div className="max-w-7xl mx-auto px-4 py-14">
-    <div className="relative rounded-[30px] overflow-hidden border border-white/10 bg-black min-h-[460px] md:min-h-[560px]">
+  <div className="w-full py-10 md:py-14">
+    <div className="relative overflow-hidden bg-black min-h-[520px] md:min-h-[640px]">
       <div
         aria-hidden
         className="absolute inset-0 opacity-90
@@ -3303,12 +3303,18 @@ return (
       />
       <div
         aria-hidden
-        className="absolute inset-0 opacity-18
+        className="absolute inset-0 opacity-22
           [background-image:linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)]
           [background-size:30px_30px]"
       />
+      <div
+        aria-hidden
+        className="absolute inset-0 opacity-15
+          [background-image:radial-gradient(rgba(56,189,248,0.25)_1px,transparent_1px)]
+          [background-size:40px_40px]"
+      />
 
-      <div className="relative z-20 flex flex-col items-center text-center px-6 pt-14 md:pt-18">
+      <div className="relative z-20 flex flex-col items-center text-center px-6 pt-14 md:pt-20">
         <div className="text-[11px] uppercase tracking-[0.20em] text-white/55">Get Started</div>
         <h2 className="mt-3 text-5xl md:text-7xl lg:text-[6.5rem] font-semibold leading-[0.95] text-white max-w-5xl">
           Chat with AI agents instantly.
@@ -3332,7 +3338,7 @@ return (
 
       {/* Background chat simulation */}
       <div className="relative z-10 px-4 pb-8 md:pb-10 mt-8 md:mt-10">
-        <div className="mx-auto w-[95%] md:w-[76%] rounded-3xl border border-white/12 bg-black/40 backdrop-blur-md p-5 md:p-6 shadow-[0_30px_120px_rgba(0,0,0,0.65)]">
+        <div className="mx-auto w-[95%] md:w-[76%] rounded-3xl bg-black/40 backdrop-blur-md p-5 md:p-6 shadow-[0_30px_120px_rgba(0,0,0,0.65)]">
           <div className="flex items-center gap-2 mb-4">
             <div className="h-8 w-8 rounded-lg bg-white/10 grid place-items-center text-sm">🤖</div>
             <div>
@@ -3354,7 +3360,7 @@ return (
           </div>
 
           <div className="flex justify-start mb-3 min-h-[44px]">
-            <div className="max-w-[84%] rounded-2xl px-3 py-2 text-xs md:text-sm bg-white/8 border border-white/10 text-white/85 rounded-bl-sm">
+            <div className="max-w-[84%] rounded-2xl px-3 py-2 text-xs md:text-sm bg-white/8 text-white/85 rounded-bl-sm">
               {typedHeroAssistant}
               {heroPhase === "typingAssistant" && (
                 <span className="inline-block ml-0.5 align-middle h-3 w-[2px] bg-white/70 animate-pulse" />
@@ -3370,7 +3376,7 @@ return (
           </div>
 
           <div className="flex justify-end">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-[11px] text-emerald-100">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 text-[11px] text-emerald-100">
               <span className="h-2 w-2 rounded-full bg-emerald-300" />
               Session price: {HOME_HERO_PRICE}
             </div>
