@@ -1337,6 +1337,37 @@ function buildTopTags() {
   return [EXTRA_TOP_TAGS[0], ...fromCollections, ...EXTRA_TOP_TAGS.slice(1)];
 }
 
+type HomeHeroExample = {
+  agent: string;
+  user: string;
+  assistant: string;
+  price: string;
+};
+
+const HOME_HERO_EXAMPLES: HomeHeroExample[] = [
+  {
+    agent: "Growth Strategy Agent",
+    user: "Build a launch plan for a new AI tool.",
+    assistant:
+      "Week 1: define ICP and positioning. Week 2: publish 3 comparison posts. Week 3: launch waitlist + referral loop.",
+    price: "0.35 USDC",
+  },
+  {
+    agent: "Design Critique Agent",
+    user: "Review this landing page headline and CTA.",
+    assistant:
+      "Headline is clear but generic. Add concrete outcome. CTA should be action-focused: Try free audit instead of Learn more.",
+    price: "0.20 USDC",
+  },
+  {
+    agent: "Crypto Research Agent",
+    user: "Summarize this token in plain language.",
+    assistant:
+      "Strong on developer activity, weak on revenue clarity. Good short-term momentum, medium risk profile for new users.",
+    price: "0.40 USDC",
+  },
+];
+
 
 
 const formatUSDC = (n: number) => `${n.toFixed(2)} USDC`;
@@ -1371,6 +1402,70 @@ const [usdcLoading, setUsdcLoading] = useState(false);
 // 💰 SOL balance (native)
 const [solBalance, setSolBalance] = useState<number | null>(null);
 const [activeView, setActiveView] = useState<"home" | "learn">("home");
+const [heroExampleIndex, setHeroExampleIndex] = useState(0);
+const [heroPhase, setHeroPhase] = useState<"typingUser" | "typingAssistant" | "done">("typingUser");
+const [heroUserChars, setHeroUserChars] = useState(0);
+const [heroAssistantChars, setHeroAssistantChars] = useState(0);
+
+const currentHeroExample = HOME_HERO_EXAMPLES[heroExampleIndex];
+const typedHeroUser = currentHeroExample.user.slice(0, heroUserChars);
+const typedHeroAssistant = currentHeroExample.assistant.slice(0, heroAssistantChars);
+
+useEffect(() => {
+  if (route !== "/") return;
+  setHeroUserChars(0);
+  setHeroAssistantChars(0);
+  setHeroPhase("typingUser");
+}, [heroExampleIndex, route]);
+
+useEffect(() => {
+  if (route !== "/") return;
+
+  const userDone = heroUserChars >= currentHeroExample.user.length;
+  const assistantDone = heroAssistantChars >= currentHeroExample.assistant.length;
+
+  if (heroPhase === "typingUser" && userDone) {
+    const t = window.setTimeout(() => setHeroPhase("typingAssistant"), 260);
+    return () => window.clearTimeout(t);
+  }
+
+  if (heroPhase === "typingAssistant" && assistantDone) {
+    setHeroPhase("done");
+    const t = window.setTimeout(() => {
+      setHeroExampleIndex((prev) => (prev + 1) % HOME_HERO_EXAMPLES.length);
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }
+}, [
+  route,
+  heroPhase,
+  heroUserChars,
+  heroAssistantChars,
+  currentHeroExample.user.length,
+  currentHeroExample.assistant.length,
+]);
+
+useEffect(() => {
+  if (route !== "/") return;
+  if (heroPhase !== "typingUser") return;
+
+  const id = window.setInterval(() => {
+    setHeroUserChars((prev) => Math.min(prev + 2, currentHeroExample.user.length));
+  }, 20);
+
+  return () => window.clearInterval(id);
+}, [route, heroPhase, currentHeroExample.user.length]);
+
+useEffect(() => {
+  if (route !== "/") return;
+  if (heroPhase !== "typingAssistant") return;
+
+  const id = window.setInterval(() => {
+    setHeroAssistantChars((prev) => Math.min(prev + 2, currentHeroExample.assistant.length));
+  }, 16);
+
+  return () => window.clearInterval(id);
+}, [route, heroPhase, currentHeroExample.assistant.length]);
 
 
   // Подписки на события Phantom + тихая автоподключалка
@@ -3184,43 +3279,40 @@ return (
       <div className="bg-gradient-to-b from-black via-[#020617] to-black">    
 
 {/* ================= HOME · EXPLAINERS ================= */}
-<section className="relative border-t border-white/10">
+<section className="relative border-t border-white/10 overflow-hidden">
   <div
     aria-hidden
-    className="pointer-events-none absolute inset-0 -z-10 opacity-70
-      bg-[radial-gradient(circle_at_20%_10%,rgba(56,189,248,0.10),transparent_55%),
-          radial-gradient(circle_at_85%_25%,rgba(129,140,248,0.12),transparent_55%),
-          radial-gradient(circle_at_40%_85%,rgba(16,185,129,0.08),transparent_60%)]"
+    className="pointer-events-none absolute inset-0 -z-10 opacity-80
+      bg-[radial-gradient(circle_at_50%_18%,rgba(56,189,248,0.14),transparent_50%),
+          radial-gradient(circle_at_78%_30%,rgba(99,102,241,0.14),transparent_52%),
+          radial-gradient(circle_at_25%_72%,rgba(16,185,129,0.10),transparent_56%)]"
   />
 
   <div className="max-w-7xl mx-auto px-4 py-14">
-    <div className="relative rounded-[30px] overflow-hidden border border-white/10 bg-black min-h-[420px] md:min-h-[500px]">
+    <div className="relative rounded-[30px] overflow-hidden border border-white/10 bg-black min-h-[460px] md:min-h-[560px]">
       <div
         aria-hidden
         className="absolute inset-0 opacity-90
-          bg-[radial-gradient(circle_at_22%_20%,rgba(8,145,178,0.30),transparent_45%),
-              radial-gradient(circle_at_70%_35%,rgba(15,23,42,0.85),transparent_50%),
-              radial-gradient(circle_at_88%_72%,rgba(79,70,229,0.35),transparent_40%)]"
+          bg-[radial-gradient(circle_at_20%_20%,rgba(8,145,178,0.28),transparent_42%),
+              radial-gradient(circle_at_68%_34%,rgba(15,23,42,0.86),transparent_50%),
+              radial-gradient(circle_at_86%_78%,rgba(79,70,229,0.30),transparent_40%)]"
       />
       <div
         aria-hidden
-        className="absolute inset-0 opacity-20
+        className="absolute inset-0 opacity-18
           [background-image:linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)]
-          [background-size:28px_28px]"
+          [background-size:30px_30px]"
       />
 
-      <div className="relative z-10 p-8 md:p-10">
-        <div className="max-w-lg">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-white/55">Get Started</div>
-          <h2 className="mt-3 text-4xl md:text-5xl font-semibold leading-tight text-white">
-            Introducing Echo
-            <br />
-            Agent Marketplace
-          </h2>
-          <p className="mt-4 text-lg text-white/70">
-            Try specialist AI agents with real output previews and pay per session in USDC.
-          </p>
-          <div className="mt-6">
+      <div className="relative z-20 flex flex-col items-center text-center px-6 pt-16 md:pt-20">
+        <div className="text-[11px] uppercase tracking-[0.20em] text-white/55">Get Started</div>
+        <h2 className="mt-3 text-4xl md:text-6xl lg:text-7xl font-semibold leading-tight text-white max-w-5xl">
+          Chat with AI agents instantly.
+        </h2>
+        <p className="mt-4 text-base md:text-xl text-white/70 max-w-2xl">
+          Preview real outputs, then pay per session in USDC.
+        </p>
+        <div className="mt-7">
             <Button
               className="gap-2"
               onClick={() => {
@@ -3231,55 +3323,51 @@ return (
               <Search className="h-4 w-4" />
               Explore agents
             </Button>
-          </div>
         </div>
       </div>
 
       {/* Background chat simulation */}
       <div aria-hidden className="absolute inset-0 pointer-events-none">
-        <div className="absolute right-[4%] top-[14%] w-[45%] rounded-3xl border border-white/10 bg-black/30 backdrop-blur-sm p-5 shadow-2xl">
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-8 md:bottom-10 w-[92%] md:w-[72%] rounded-3xl border border-white/10 bg-black/35 backdrop-blur-sm p-5 md:p-6 shadow-2xl">
           <div className="flex items-center gap-2 mb-4">
             <div className="h-8 w-8 rounded-lg bg-white/10 grid place-items-center text-sm">🤖</div>
             <div>
-              <div className="text-sm text-white/85">Growth Strategy Agent</div>
+              <div className="text-sm text-white/85">{currentHeroExample.agent}</div>
               <div className="text-[11px] text-white/50">Live preview</div>
             </div>
           </div>
 
           <div className="flex justify-end mb-3">
             <div className="max-w-[78%] rounded-2xl px-3 py-2 text-xs md:text-sm bg-gradient-to-r from-indigo-600/70 to-cyan-600/70 text-white rounded-br-sm">
-              Build a launch plan for a new AI tool.
+              {typedHeroUser}
+              {heroPhase === "typingUser" && (
+                <span className="inline-block ml-0.5 align-middle h-3 w-[2px] bg-white/80 animate-pulse" />
+              )}
             </div>
           </div>
 
           <div className="flex justify-start mb-3">
             <div className="max-w-[84%] rounded-2xl px-3 py-2 text-xs md:text-sm bg-white/8 border border-white/10 text-white/85 rounded-bl-sm">
-              Week 1: define ICP and value proposition.
-              <br />
-              Week 2: publish 3 comparison posts.
-              <br />
-              Week 3: run waitlist + referral loop.
+              {typedHeroAssistant}
+              {heroPhase === "typingAssistant" && (
+                <span className="inline-block ml-0.5 align-middle h-3 w-[2px] bg-white/70 animate-pulse" />
+              )}
+              {heroPhase === "typingAssistant" && typedHeroAssistant.length === 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white/60 animate-pulse" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-white/40 animate-pulse [animation-delay:150ms]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-white/30 animate-pulse [animation-delay:300ms]" />
+                </span>
+              )}
             </div>
           </div>
 
           <div className="flex justify-end">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-[11px] text-emerald-100">
               <span className="h-2 w-2 rounded-full bg-emerald-300" />
-              Session price: 0.35 USDC
+              Session price: {currentHeroExample.price}
             </div>
           </div>
-        </div>
-
-        <div className="absolute right-[30%] top-[58%] w-[24%] rounded-2xl border border-white/10 bg-white/[0.05] backdrop-blur-sm p-3 rotate-[6deg]">
-          <div className="text-[11px] text-white/60">Saved example</div>
-          <div className="mt-1 text-xs text-white/80 line-clamp-3">
-            "Generate a concise GTM brief for a B2B creator tool."
-          </div>
-        </div>
-
-        <div className="absolute right-[9%] top-[70%] w-[18%] rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-sm p-3 rotate-[-5deg]">
-          <div className="text-[11px] text-white/60">Payment</div>
-          <div className="mt-1 text-xs text-white/85">USDC per session</div>
         </div>
       </div>
     </div>
