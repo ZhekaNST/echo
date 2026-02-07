@@ -1337,58 +1337,34 @@ function buildTopTags() {
   return [EXTRA_TOP_TAGS[0], ...fromCollections, ...EXTRA_TOP_TAGS.slice(1)];
 }
 
-type HomeHeroExample = {
-  agent: string;
-  user1: string;
-  assistant1: string;
-  user2: string;
-  assistant2: string;
-  price: string;
+type HeroTurn = {
+  user: string;
+  assistant: string;
 };
 
-const HOME_HERO_EXAMPLES: HomeHeroExample[] = [
+const HOME_HERO_AGENT = "Growth Strategy Agent";
+const HOME_HERO_PRICE = "0.35 USDC";
+
+const HOME_HERO_TURNS: HeroTurn[] = [
   {
-    agent: "Growth Strategy Agent",
-    user1: "Build a launch plan for a new AI tool.",
-    assistant1:
-      "Week 1: define ICP and positioning. Week 2: publish 3 comparison posts. Week 3: launch waitlist + referral loop.",
-    user2: "Can you make it more budget-friendly?",
-    assistant2: "Yes. Replace paid ads with partner distribution and founder-led content. Keep spend under $300.",
-    price: "0.35 USDC",
+    user: "Build a launch plan for a new AI tool.",
+    assistant: "Week 1: define ICP and positioning. Week 2: publish 3 comparison posts. Week 3: launch waitlist + referral loop.",
   },
   {
-    agent: "Design Critique Agent",
-    user1: "Review this landing page headline and CTA.",
-    assistant1:
-      "Headline is clear but generic. Add concrete outcome. CTA should be action-focused: Try free audit instead of Learn more.",
-    user2: "Give me 2 better headline options.",
-    assistant2: "1) Launch faster with expert AI workflows. 2) Turn ideas into shipped features in 7 days.",
-    price: "0.20 USDC",
+    user: "Can you make it more budget-friendly?",
+    assistant: "Replace paid ads with partner distribution and founder-led content. Keep spend under $300.",
   },
   {
-    agent: "Crypto Research Agent",
-    user1: "Summarize this token in plain language.",
-    assistant1:
-      "Strong on developer activity, weak on revenue clarity. Good short-term momentum, medium risk profile for new users.",
-    user2: "What should I watch this week?",
-    assistant2: "Track unlock schedule, major wallet inflows, and changes in DEX liquidity depth.",
-    price: "0.40 USDC",
+    user: "Now adapt this for solo founder time limits.",
+    assistant: "Prioritize one channel only. Publish two high-signal posts weekly and automate lead capture.",
   },
   {
-    agent: "Content Repurposing Agent",
-    user1: "Turn this podcast topic into short-form ideas.",
-    assistant1: "Create 5 clips: myth busting, quick framework, mistake list, case study, and call-to-action.",
-    user2: "Add hooks for each clip.",
-    assistant2: "Use pattern-interrupt hooks: Nobody tells you this..., Stop doing..., The fastest way to....",
-    price: "0.25 USDC",
+    user: "Give me 3 short ad hooks.",
+    assistant: "1) Ship faster without a full team. 2) Turn one idea into weekly leads. 3) Clear GTM plan in 10 minutes.",
   },
   {
-    agent: "Sales Outreach Agent",
-    user1: "Write a cold message for B2B founders.",
-    assistant1: "Lead with one specific observation, one pain point, and one low-friction next step.",
-    user2: "Make it shorter and less pushy.",
-    assistant2: "Saw your recent launch. We help teams cut onboarding drop-off by 18%. Open to a 10-min teardown?",
-    price: "0.30 USDC",
+    user: "What should I track every week?",
+    assistant: "Track activation rate, qualified replies, and conversion to booked demos. Drop channels under target for 2 weeks.",
   },
 ];
 
@@ -1426,114 +1402,74 @@ const [usdcLoading, setUsdcLoading] = useState(false);
 // 💰 SOL balance (native)
 const [solBalance, setSolBalance] = useState<number | null>(null);
 const [activeView, setActiveView] = useState<"home" | "learn">("home");
-const [heroExampleIndex, setHeroExampleIndex] = useState(0);
-const [heroPhase, setHeroPhase] = useState<"typingUser1" | "typingAssistant1" | "typingUser2" | "typingAssistant2" | "done">("typingUser1");
-const [heroUser1Chars, setHeroUser1Chars] = useState(0);
-const [heroAssistant1Chars, setHeroAssistant1Chars] = useState(0);
-const [heroUser2Chars, setHeroUser2Chars] = useState(0);
-const [heroAssistant2Chars, setHeroAssistant2Chars] = useState(0);
+const [heroTurnIndex, setHeroTurnIndex] = useState(0);
+const [heroPhase, setHeroPhase] = useState<"typingUser" | "typingAssistant" | "pause">("typingUser");
+const [heroUserChars, setHeroUserChars] = useState(0);
+const [heroAssistantChars, setHeroAssistantChars] = useState(0);
 
-const currentHeroExample = HOME_HERO_EXAMPLES[heroExampleIndex];
-const typedHeroUser1 = currentHeroExample.user1.slice(0, heroUser1Chars);
-const typedHeroAssistant1 = currentHeroExample.assistant1.slice(0, heroAssistant1Chars);
-const typedHeroUser2 = currentHeroExample.user2.slice(0, heroUser2Chars);
-const typedHeroAssistant2 = currentHeroExample.assistant2.slice(0, heroAssistant2Chars);
+const currentHeroTurn = HOME_HERO_TURNS[heroTurnIndex];
+const typedHeroUser = currentHeroTurn.user.slice(0, heroUserChars);
+const typedHeroAssistant = currentHeroTurn.assistant.slice(0, heroAssistantChars);
 
 useEffect(() => {
   if (route !== "/") return;
-  setHeroUser1Chars(0);
-  setHeroAssistant1Chars(0);
-  setHeroUser2Chars(0);
-  setHeroAssistant2Chars(0);
-  setHeroPhase("typingUser1");
-}, [heroExampleIndex, route]);
+  setHeroUserChars(0);
+  setHeroAssistantChars(0);
+  setHeroPhase("typingUser");
+}, [heroTurnIndex, route]);
 
 useEffect(() => {
   if (route !== "/") return;
 
-  const user1Done = heroUser1Chars >= currentHeroExample.user1.length;
-  const assistant1Done = heroAssistant1Chars >= currentHeroExample.assistant1.length;
-  const user2Done = heroUser2Chars >= currentHeroExample.user2.length;
-  const assistant2Done = heroAssistant2Chars >= currentHeroExample.assistant2.length;
+  const userDone = heroUserChars >= currentHeroTurn.user.length;
+  const assistantDone = heroAssistantChars >= currentHeroTurn.assistant.length;
 
-  if (heroPhase === "typingUser1" && user1Done) {
-    const t = window.setTimeout(() => setHeroPhase("typingAssistant1"), 220);
+  if (heroPhase === "typingUser" && userDone) {
+    const t = window.setTimeout(() => setHeroPhase("typingAssistant"), 200);
     return () => window.clearTimeout(t);
   }
 
-  if (heroPhase === "typingAssistant1" && assistant1Done) {
-    const t = window.setTimeout(() => setHeroPhase("typingUser2"), 520);
+  if (heroPhase === "typingAssistant" && assistantDone) {
+    const t = window.setTimeout(() => setHeroPhase("pause"), 700);
     return () => window.clearTimeout(t);
   }
 
-  if (heroPhase === "typingUser2" && user2Done) {
-    const t = window.setTimeout(() => setHeroPhase("typingAssistant2"), 220);
-    return () => window.clearTimeout(t);
-  }
-
-  if (heroPhase === "typingAssistant2" && assistant2Done) {
-    setHeroPhase("done");
+  if (heroPhase === "pause") {
     const t = window.setTimeout(() => {
-      setHeroExampleIndex((prev) => (prev + 1) % HOME_HERO_EXAMPLES.length);
-    }, 1500);
+      setHeroTurnIndex((prev) => (prev + 1) % HOME_HERO_TURNS.length);
+    }, 900);
     return () => window.clearTimeout(t);
   }
 }, [
   route,
   heroPhase,
-  heroUser1Chars,
-  heroAssistant1Chars,
-  heroUser2Chars,
-  heroAssistant2Chars,
-  currentHeroExample.user1.length,
-  currentHeroExample.assistant1.length,
-  currentHeroExample.user2.length,
-  currentHeroExample.assistant2.length,
+  heroUserChars,
+  heroAssistantChars,
+  currentHeroTurn.user.length,
+  currentHeroTurn.assistant.length,
 ]);
 
 useEffect(() => {
   if (route !== "/") return;
-  if (heroPhase !== "typingUser1") return;
+  if (heroPhase !== "typingUser") return;
 
   const id = window.setInterval(() => {
-    setHeroUser1Chars((prev) => Math.min(prev + 2, currentHeroExample.user1.length));
+    setHeroUserChars((prev) => Math.min(prev + 2, currentHeroTurn.user.length));
   }, 20);
 
   return () => window.clearInterval(id);
-}, [route, heroPhase, currentHeroExample.user1.length]);
+}, [route, heroPhase, currentHeroTurn.user.length]);
 
 useEffect(() => {
   if (route !== "/") return;
-  if (heroPhase !== "typingAssistant1") return;
+  if (heroPhase !== "typingAssistant") return;
 
   const id = window.setInterval(() => {
-    setHeroAssistant1Chars((prev) => Math.min(prev + 2, currentHeroExample.assistant1.length));
+    setHeroAssistantChars((prev) => Math.min(prev + 2, currentHeroTurn.assistant.length));
   }, 16);
 
   return () => window.clearInterval(id);
-}, [route, heroPhase, currentHeroExample.assistant1.length]);
-
-useEffect(() => {
-  if (route !== "/") return;
-  if (heroPhase !== "typingUser2") return;
-
-  const id = window.setInterval(() => {
-    setHeroUser2Chars((prev) => Math.min(prev + 2, currentHeroExample.user2.length));
-  }, 20);
-
-  return () => window.clearInterval(id);
-}, [route, heroPhase, currentHeroExample.user2.length]);
-
-useEffect(() => {
-  if (route !== "/") return;
-  if (heroPhase !== "typingAssistant2") return;
-
-  const id = window.setInterval(() => {
-    setHeroAssistant2Chars((prev) => Math.min(prev + 2, currentHeroExample.assistant2.length));
-  }, 16);
-
-  return () => window.clearInterval(id);
-}, [route, heroPhase, currentHeroExample.assistant2.length]);
+}, [route, heroPhase, currentHeroTurn.assistant.length]);
 
 
   // Подписки на события Phantom + тихая автоподключалка
@@ -3372,9 +3308,9 @@ return (
           [background-size:30px_30px]"
       />
 
-      <div className="relative z-20 flex flex-col items-center text-center px-6 pt-16 md:pt-20">
+      <div className="relative z-20 flex flex-col items-center text-center px-6 pt-14 md:pt-18">
         <div className="text-[11px] uppercase tracking-[0.20em] text-white/55">Get Started</div>
-        <h2 className="mt-3 text-5xl md:text-7xl lg:text-8xl font-semibold leading-tight text-white max-w-5xl">
+        <h2 className="mt-3 text-5xl md:text-7xl lg:text-[6.5rem] font-semibold leading-[0.95] text-white max-w-5xl">
           Chat with AI agents instantly.
         </h2>
         <p className="mt-4 text-base md:text-xl text-white/70 max-w-2xl">
@@ -3395,57 +3331,35 @@ return (
       </div>
 
       {/* Background chat simulation */}
-      <div aria-hidden className="absolute inset-0 pointer-events-none">
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-8 md:bottom-10 w-[92%] md:w-[72%] rounded-3xl border border-white/10 bg-black/35 backdrop-blur-sm p-5 md:p-6 shadow-2xl">
+      <div className="relative z-10 px-4 pb-8 md:pb-10 mt-8 md:mt-10">
+        <div className="mx-auto w-[95%] md:w-[76%] rounded-3xl border border-white/12 bg-black/40 backdrop-blur-md p-5 md:p-6 shadow-[0_30px_120px_rgba(0,0,0,0.65)]">
           <div className="flex items-center gap-2 mb-4">
             <div className="h-8 w-8 rounded-lg bg-white/10 grid place-items-center text-sm">🤖</div>
             <div>
-              <div className="text-sm text-white/85">{currentHeroExample.agent}</div>
+              <div className="text-sm text-white/85">{HOME_HERO_AGENT}</div>
               <div className="text-[11px] text-white/50">Live preview</div>
             </div>
+            <div className="ml-auto text-[11px] text-white/45">
+              Example {heroTurnIndex + 1}/{HOME_HERO_TURNS.length}
+            </div>
           </div>
 
-          <div className="flex justify-end mb-3">
+          <div className="flex justify-end mb-3 min-h-[44px]">
             <div className="max-w-[78%] rounded-2xl px-3 py-2 text-xs md:text-sm bg-gradient-to-r from-indigo-600/70 to-cyan-600/70 text-white rounded-br-sm">
-              {typedHeroUser1}
-              {heroPhase === "typingUser1" && (
+              {typedHeroUser}
+              {heroPhase === "typingUser" && (
                 <span className="inline-block ml-0.5 align-middle h-3 w-[2px] bg-white/80 animate-pulse" />
               )}
             </div>
           </div>
 
-          <div className="flex justify-start mb-3">
+          <div className="flex justify-start mb-3 min-h-[44px]">
             <div className="max-w-[84%] rounded-2xl px-3 py-2 text-xs md:text-sm bg-white/8 border border-white/10 text-white/85 rounded-bl-sm">
-              {typedHeroAssistant1}
-              {heroPhase === "typingAssistant1" && (
+              {typedHeroAssistant}
+              {heroPhase === "typingAssistant" && (
                 <span className="inline-block ml-0.5 align-middle h-3 w-[2px] bg-white/70 animate-pulse" />
               )}
-              {heroPhase === "typingAssistant1" && typedHeroAssistant1.length === 0 && (
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-white/60 animate-pulse" />
-                  <span className="h-1.5 w-1.5 rounded-full bg-white/40 animate-pulse [animation-delay:150ms]" />
-                  <span className="h-1.5 w-1.5 rounded-full bg-white/30 animate-pulse [animation-delay:300ms]" />
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="flex justify-end mb-3">
-            <div className="max-w-[78%] rounded-2xl px-3 py-2 text-xs md:text-sm bg-gradient-to-r from-indigo-600/70 to-cyan-600/70 text-white rounded-br-sm">
-              {typedHeroUser2}
-              {heroPhase === "typingUser2" && (
-                <span className="inline-block ml-0.5 align-middle h-3 w-[2px] bg-white/80 animate-pulse" />
-              )}
-            </div>
-          </div>
-
-          <div className="flex justify-start mb-3">
-            <div className="max-w-[84%] rounded-2xl px-3 py-2 text-xs md:text-sm bg-white/8 border border-white/10 text-white/85 rounded-bl-sm">
-              {typedHeroAssistant2}
-              {heroPhase === "typingAssistant2" && (
-                <span className="inline-block ml-0.5 align-middle h-3 w-[2px] bg-white/70 animate-pulse" />
-              )}
-              {heroPhase === "typingAssistant2" && typedHeroAssistant2.length === 0 && (
+              {heroPhase === "typingAssistant" && typedHeroAssistant.length === 0 && (
                 <span className="inline-flex items-center gap-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-white/60 animate-pulse" />
                   <span className="h-1.5 w-1.5 rounded-full bg-white/40 animate-pulse [animation-delay:150ms]" />
@@ -3458,7 +3372,7 @@ return (
           <div className="flex justify-end">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-[11px] text-emerald-100">
               <span className="h-2 w-2 rounded-full bg-emerald-300" />
-              Session price: {currentHeroExample.price}
+              Session price: {HOME_HERO_PRICE}
             </div>
           </div>
         </div>
