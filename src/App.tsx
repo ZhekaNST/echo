@@ -3291,7 +3291,7 @@ return (
         </p>
         <div className="mt-7">
             <Button
-              className="group relative overflow-hidden gap-2 rounded-xl border border-white/20 bg-white/[0.06] px-5 py-2.5 text-white shadow-[0_10px_36px_rgba(79,70,229,0.28)] transition-all duration-300 hover:border-cyan-300/45 hover:bg-white/[0.1] hover:shadow-[0_14px_44px_rgba(34,211,238,0.22)]"
+              className="group relative overflow-hidden gap-2 rounded-xl border border-white/18 bg-[linear-gradient(180deg,rgba(255,255,255,0.10)_0%,rgba(255,255,255,0.04)_100%)] px-5 py-2.5 text-white shadow-[0_8px_26px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.14)] transition-all duration-300 hover:border-white/32 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0.06)_100%)] hover:shadow-[0_12px_34px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.2)]"
               onClick={() => {
                 push("/explore");
                 requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
@@ -3300,7 +3300,7 @@ return (
               <span
                 aria-hidden
                 className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
-                bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+                bg-[linear-gradient(118deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0.08)_36%,rgba(255,255,255,0.02)_62%,transparent_82%)]"
               />
               <Search className="relative z-10 h-4 w-4" />
               <span className="relative z-10">Explore agents</span>
@@ -3310,7 +3310,12 @@ return (
 
       {/* Background chat simulation */}
       <div className="relative z-10 px-4 pb-6 md:pb-8 mt-6 md:mt-7">
-        <div className="relative mx-auto w-[95%] md:w-[76%] rounded-3xl border border-white/12 bg-black/70 backdrop-blur-md p-5 md:p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_0_24px_rgba(99,102,241,0.18),0_0_34px_rgba(34,211,238,0.10),0_24px_90px_rgba(0,0,0,0.62)]">
+        <div className="relative mx-auto w-[95%] md:w-[76%] rounded-3xl bg-black/72 backdrop-blur-md p-5 md:p-6 shadow-[0_24px_90px_rgba(0,0,0,0.62)]">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-2 -z-10 rounded-[30px] opacity-45 blur-2xl
+              bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.14),transparent_68%)]"
+          />
           <div className="flex items-center gap-2 mb-4">
             <img
               src={DEFAULT_AGENT_AVATAR_URL}
@@ -4026,13 +4031,13 @@ return (
                         const hasActiveSession = typeof window !== "undefined" ? !!getActiveSession(a.id) : false;
                         return (
                           <Button
-                            className="group relative w-full overflow-hidden py-2 text-base gap-2 rounded-xl border border-white/20 bg-white/[0.06] text-white shadow-[0_10px_36px_rgba(79,70,229,0.28)] transition-all duration-300 hover:border-cyan-300/45 hover:bg-white/[0.1] hover:shadow-[0_14px_44px_rgba(34,211,238,0.22)]"
+                            className="group relative w-full overflow-hidden py-2 text-base gap-2 rounded-xl border border-white/18 bg-[linear-gradient(180deg,rgba(255,255,255,0.10)_0%,rgba(255,255,255,0.04)_100%)] text-white shadow-[0_8px_26px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.14)] transition-all duration-300 hover:border-white/32 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0.06)_100%)] hover:shadow-[0_12px_34px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.2)]"
                             onClick={() => openPay(a)}
                           >
                             <span
                               aria-hidden
                               className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
-                              bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+                              bg-[linear-gradient(118deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0.08)_36%,rgba(255,255,255,0.02)_62%,transparent_82%)]"
                             />
                             <Bot className="relative z-10 h-4 w-4" />
                             <span className="relative z-10">{hasActiveSession ? "Continue" : "Chat"}</span>
@@ -4079,15 +4084,20 @@ return (
           {/* Floating Button */}
           <button
             onClick={() => setShowSessionsPanel(true)}
-            className="fixed right-4 bottom-20 z-40 flex items-center gap-2 px-4 py-3 rounded-full border border-white/18 bg-[#171a2a] text-white font-medium shadow-[0_8px_22px_rgba(0,0,0,0.45)] hover:bg-[#1d2134] hover:border-white/28 transition-all duration-200 group"
+            className="group relative fixed right-4 bottom-20 z-40 flex items-center gap-2 px-4 py-3 rounded-full border border-white/15 bg-[#10131d] text-white font-medium shadow-[0_8px_22px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12)] hover:border-white/26 hover:bg-[#141926] transition-all duration-200"
           >
-            <div className="relative">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 rounded-full opacity-0 transition-opacity duration-300 group-hover:opacity-100
+              bg-[linear-gradient(118deg,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0.06)_40%,transparent_78%)]"
+            />
+            <div className="relative z-10">
               <Bot className="h-5 w-5" />
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full text-[10px] font-bold flex items-center justify-center animate-pulse">
                 {activeSessions.length}
               </span>
             </div>
-            <span className="hidden sm:inline">Active Sessions</span>
+            <span className="relative z-10 hidden sm:inline">Active Sessions</span>
           </button>
 
           {/* Slide-out Panel */}
@@ -4571,11 +4581,11 @@ function AgentCard({
             >
               View
             </Button>
-            <Button className="group relative h-8 px-3 text-xs overflow-hidden rounded-xl border border-white/20 bg-white/[0.06] text-white shadow-[0_8px_24px_rgba(79,70,229,0.22)] transition-all duration-300 hover:border-cyan-300/45 hover:bg-white/[0.1] hover:shadow-[0_12px_30px_rgba(34,211,238,0.2)]" onClick={onChat}>
+            <Button className="group relative h-8 px-3 text-xs overflow-hidden rounded-xl border border-white/18 bg-[linear-gradient(180deg,rgba(255,255,255,0.10)_0%,rgba(255,255,255,0.04)_100%)] text-white shadow-[0_7px_20px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.12)] transition-all duration-300 hover:border-white/30 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0.06)_100%)] hover:shadow-[0_10px_26px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.18)]" onClick={onChat}>
               <span
                 aria-hidden
                 className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
-                bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+                bg-[linear-gradient(118deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0.08)_36%,rgba(255,255,255,0.02)_62%,transparent_82%)]"
               />
               <span className="relative z-10">Chat</span>
             </Button>
@@ -5182,18 +5192,18 @@ function AgentRailCard({
               className="
                 group relative overflow-hidden
                 flex-1 h-10 rounded-xl
-                border border-white/20 bg-white/[0.06]
+                border border-white/18 bg-[linear-gradient(180deg,rgba(255,255,255,0.10)_0%,rgba(255,255,255,0.04)_100%)]
                 text-sm text-white font-medium
-                shadow-[0_10px_36px_rgba(79,70,229,0.28)]
-                hover:border-cyan-300/45 hover:bg-white/[0.1]
-                hover:shadow-[0_14px_44px_rgba(34,211,238,0.22)]
+                shadow-[0_8px_26px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.14)]
+                hover:border-white/32 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0.06)_100%)]
+                hover:shadow-[0_12px_34px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.2)]
                 transition-all duration-300
               "
             >
               <span
                 aria-hidden
                 className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
-                bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+                bg-[linear-gradient(118deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0.08)_36%,rgba(255,255,255,0.02)_62%,transparent_82%)]"
               />
               <span className="relative z-10">Chat</span>
             </button>
@@ -5468,20 +5478,20 @@ function MarketplaceRail({
                             saveScrollPosition();
                             onChat(a);
                           }}
-                          className="
+                            className="
                             group relative overflow-hidden
                             h-9 px-3 rounded-xl text-sm font-medium
-                            border border-white/20 bg-white/[0.06] text-white
-                            shadow-[0_10px_30px_rgba(79,70,229,0.24)]
-                            hover:border-cyan-300/45 hover:bg-white/[0.1]
-                            hover:shadow-[0_14px_38px_rgba(34,211,238,0.20)]
+                            border border-white/18 bg-[linear-gradient(180deg,rgba(255,255,255,0.10)_0%,rgba(255,255,255,0.04)_100%)] text-white
+                            shadow-[0_8px_24px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.12)]
+                            hover:border-white/30 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0.06)_100%)]
+                            hover:shadow-[0_12px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.18)]
                             transition-all duration-300
                           "
                         >
                           <span
                             aria-hidden
                             className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
-                            bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+                            bg-[linear-gradient(118deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0.08)_36%,rgba(255,255,255,0.02)_62%,transparent_82%)]"
                           />
                           <span className="relative z-10">{hasActiveSession ? "Continue" : "Chat"}</span>
                         </button>
@@ -8814,20 +8824,20 @@ function RailAgentCard({
 
             <button
               onClick={onChat}
-              className="
+                className="
                 group relative overflow-hidden
                 rounded-xl px-6 py-3 text-sm font-semibold text-white
-                border border-white/20 bg-white/[0.06]
-                shadow-[0_10px_36px_rgba(79,70,229,0.28)]
-                hover:border-cyan-300/45 hover:bg-white/[0.1]
-                hover:shadow-[0_14px_44px_rgba(34,211,238,0.22)]
+                border border-white/18 bg-[linear-gradient(180deg,rgba(255,255,255,0.10)_0%,rgba(255,255,255,0.04)_100%)]
+                shadow-[0_8px_26px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.14)]
+                hover:border-white/32 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0.06)_100%)]
+                hover:shadow-[0_12px_34px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.2)]
                 active:scale-[0.99] transition-all duration-300
               "
             >
               <span
                 aria-hidden
                 className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
-                bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+                bg-[linear-gradient(118deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0.08)_36%,rgba(255,255,255,0.02)_62%,transparent_82%)]"
               />
               <span className="relative z-10">Chat</span>
             </button>
@@ -9245,13 +9255,13 @@ function AgentDetailView({
                   {isLiked ? "Unlike" : "Like"}
                 </Button>
                 <Button
-                  className="group relative flex-1 overflow-hidden gap-2 rounded-xl border border-white/20 bg-white/[0.06] text-white shadow-[0_10px_36px_rgba(79,70,229,0.28)] transition-all duration-300 hover:border-cyan-300/45 hover:bg-white/[0.1] hover:shadow-[0_14px_44px_rgba(34,211,238,0.22)]"
+                  className="group relative flex-1 overflow-hidden gap-2 rounded-xl border border-white/18 bg-[linear-gradient(180deg,rgba(255,255,255,0.10)_0%,rgba(255,255,255,0.04)_100%)] text-white shadow-[0_8px_26px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.14)] transition-all duration-300 hover:border-white/32 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.15)_0%,rgba(255,255,255,0.06)_100%)] hover:shadow-[0_12px_34px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.2)]"
                   onClick={() => onOpenPay(agent)}
                 >
                   <span
                     aria-hidden
                     className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
-                    bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+                    bg-[linear-gradient(118deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0.08)_36%,rgba(255,255,255,0.02)_62%,transparent_82%)]"
                   />
                   <Bot className="relative z-10 h-4 w-4" />
                   <span className="relative z-10">{hasActiveSession ? "Resume session" : "Start session"}</span>
