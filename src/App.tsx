@@ -1096,14 +1096,22 @@ async function verifyPaymentOnServer(
 
 
 const AGENT_IMAGE_LIBRARY = [
-  { url: "/agent-avatars/orbit.svg", keywords: ["ai", "tech", "assistant", "robot", "automation"] },
-  { url: "/agent-avatars/wave.svg", keywords: ["voice", "audio", "talk", "podcast", "sound"] },
-  { url: "/agent-avatars/grid.svg", keywords: ["data", "analytics", "crypto", "research", "metrics"] },
-  { url: "/agent-avatars/spark.svg", keywords: ["design", "creative", "branding", "visual", "ui"] },
-  { url: "/agent-avatars/pulse.svg", keywords: ["startup", "growth", "marketing", "gtm", "strategy"] },
-  { url: "/agent-avatars/node.svg", keywords: ["developer", "code", "builder", "engineering", "api"] },
-  { url: "/agent-avatars/ring.svg", keywords: ["security", "trust", "privacy", "audit", "safe"] },
-  { url: "/agent-avatars/flow.svg", keywords: ["productivity", "ops", "workflow", "assistant", "planner"] },
+  { name: "AI Core", url: "/agent-avatars/orbit.svg", keywords: ["ai", "tech", "assistant", "robot", "automation"] },
+  { name: "Voice", url: "/agent-avatars/wave.svg", keywords: ["voice", "audio", "talk", "podcast", "sound"] },
+  { name: "Analytics", url: "/agent-avatars/grid.svg", keywords: ["data", "analytics", "crypto", "research", "metrics"] },
+  { name: "Design", url: "/agent-avatars/spark.svg", keywords: ["design", "creative", "branding", "visual", "ui"] },
+  { name: "Growth", url: "/agent-avatars/pulse.svg", keywords: ["startup", "growth", "marketing", "gtm", "strategy"] },
+  { name: "Developer", url: "/agent-avatars/node.svg", keywords: ["developer", "code", "builder", "engineering", "api"] },
+  { name: "Security", url: "/agent-avatars/ring.svg", keywords: ["security", "trust", "privacy", "audit", "safe"] },
+  { name: "Workflow", url: "/agent-avatars/flow.svg", keywords: ["productivity", "ops", "workflow", "assistant", "planner"] },
+  { name: "Finance", url: "/agent-avatars/finance.svg", keywords: ["finance", "trading", "market", "money", "invest"] },
+  { name: "Research", url: "/agent-avatars/research.svg", keywords: ["research", "analysis", "reports", "insights", "knowledge"] },
+  { name: "Video", url: "/agent-avatars/video.svg", keywords: ["video", "motion", "editing", "storyboard", "clip"] },
+  { name: "Writing", url: "/agent-avatars/writing.svg", keywords: ["writing", "copy", "content", "blog", "story"] },
+  { name: "Legal", url: "/agent-avatars/legal.svg", keywords: ["legal", "compliance", "policy", "contract", "law"] },
+  { name: "Health", url: "/agent-avatars/health.svg", keywords: ["health", "wellness", "coach", "fitness", "care"] },
+  { name: "Education", url: "/agent-avatars/education.svg", keywords: ["education", "teacher", "learning", "course", "study"] },
+  { name: "Support", url: "/agent-avatars/support.svg", keywords: ["support", "customer", "helpdesk", "service", "assistant"] },
 ];
 
 const DEFAULT_AGENT_AVATAR_URL = AGENT_IMAGE_LIBRARY[0].url;
@@ -1145,7 +1153,7 @@ const INITIAL_AGENTS: Agent[] = [
     name: "Image Generator",
     priceUSDC: 0,
     tagline: "Create stunning AI images in various styles.",
-    avatar: <Palette className="w-6 h-6" />,
+    avatar: "/agent-avatars/spark.svg",
     categories: ["tools", "design"],
     likes: 3250,
     sessions: 6840,
@@ -1165,7 +1173,7 @@ const INITIAL_AGENTS: Agent[] = [
     name: "Video Generator",
     priceUSDC: 0,
     tagline: "Create AI animated videos from text.",
-    avatar: <Video className="w-6 h-6" />,
+    avatar: "/agent-avatars/video.svg",
     categories: ["tools", "design"],
     likes: 1850,
     sessions: 3240,
@@ -1184,7 +1192,7 @@ const INITIAL_AGENTS: Agent[] = [
     name: "AI Startup Mentor",
     priceUSDC: 0.30,
     tagline: "Pitch, tokenomics & GTM in minutes.",
-    avatar: <Rocket className="w-6 h-6" />,
+    avatar: "/agent-avatars/pulse.svg",
     categories: ["startup", "strategy"],
     likes: 1560,
     sessions: 1842,
@@ -1201,7 +1209,7 @@ likes24h: 5,
     name: "Crypto Analyst",
     priceUSDC: 0.25,
     tagline: "On-chain metrics & narratives.",
-    avatar: <TrendingUp className="w-6 h-6" />,
+    avatar: "/agent-avatars/finance.svg",
     categories: ["crypto", "finance"],
     likes: 1825,
     sessions: 2205,
@@ -1218,7 +1226,7 @@ likes24h: 5,
     name: "AI Designer Mentor",
     priceUSDC: 0.20,
     tagline: "Brand, layout, and critique.",
-    avatar: <Palette className="w-6 h-6" />,
+    avatar: "/agent-avatars/spark.svg",
     categories: ["design", "brand"],
     likes: 940,
     sessions: 1610,
@@ -1235,7 +1243,7 @@ likes24h: 5,
     name: "Virtual Companion",
     priceUSDC: 0.15,
     tagline: "Talk, reflect, decompress.",
-    avatar: <Sparkles className="w-6 h-6" />,
+    avatar: "/agent-avatars/support.svg",
     categories: ["companion"],
     likes: 2110,
     sessions: 3401,
@@ -2526,7 +2534,7 @@ const canPublish =
                     placeholder="Search style (e.g., data, design, security)..."
                   />
 
-                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
                     {searchAgentImages(imageSearchTerm).map((image, index) => (
                       <button
                         key={index}
@@ -2535,7 +2543,7 @@ const canPublish =
                           setSelectedLibraryImage(image.url);
                           setNewAgent(a => ({ ...a, avatar: image.url }));
                         }}
-                        className={`relative p-1 rounded-lg border-2 transition-all ${
+                        className={`relative p-1.5 rounded-lg border-2 transition-all ${
                           selectedLibraryImage === image.url
                             ? 'border-cyan-300 bg-cyan-500/20'
                             : 'border-white/20 hover:border-white/40'
@@ -2543,9 +2551,12 @@ const canPublish =
                       >
                         <img
                           src={image.url}
-                          alt={`Theme: ${image.keywords.join(', ')}`}
-                          className="w-12 h-12 rounded object-cover"
+                          alt={image.name}
+                          className="w-12 h-12 rounded object-cover mx-auto"
                         />
+                        <div className="mt-1 text-[10px] text-white/70 text-center leading-tight">
+                          {image.name}
+                        </div>
                       </button>
                     ))}
                   </div>
