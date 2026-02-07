@@ -895,6 +895,13 @@ likes24h?: number;          // демо-счётчик
   maxDurationMinutes?: number | null;
 };
 
+function renderAgentAvatar(avatar: React.ReactNode, className: string = "w-6 h-6") {
+  if (typeof avatar === "string" && avatar.trim()) {
+    return <img src={avatar} alt="Agent avatar" className={`${className} rounded-lg object-cover`} />;
+  }
+  return avatar;
+}
+
 type RuntimeMode = "hosted" | "custom" | "local";
 
 type ExploreTab = "all" | "trending" | "top" | "new" | "category";
@@ -1088,49 +1095,18 @@ async function verifyPaymentOnServer(
 
 
 
-// Agent Image Library - predefined images with keywords
 const AGENT_IMAGE_LIBRARY = [
-  {
-    url: "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=150&h=150&fit=crop&crop=face",
-    keywords: ["robot", "android", "machine", "tech", "cyber", "future", "ai", "automation"]
-  },
-  {
-    url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-    keywords: ["wizard", "magic", "mystical", "wise", "elder", "sage", "magician", "sorcerer"]
-  },
-  {
-    url: "https://images.unsplash.com/photo-1556157382-97eda2d62296?w=150&h=150&fit=crop&crop=center",
-    keywords: ["scientist", "lab", "research", "chemistry", "physics", "experiment", "doctor"]
-  },
-  {
-    url: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=150&h=150&fit=crop&crop=center",
-    keywords: ["astronaut", "space", "cosmos", "universe", "galaxy", "nasa", "explorer"]
-  },
-  {
-    url: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&h=150&fit=crop&crop=center",
-    keywords: ["detective", "investigator", "mystery", "clue", "sleuth", "private eye", "spy"]
-  },
-  {
-    url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=150&h=150&fit=crop&crop=center",
-    keywords: ["nature", "forest", "tree", "green", "earth", "environment", "eco", "wildlife"]
-  },
-  {
-    url: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=150&h=150&fit=crop&crop=center",
-    keywords: ["business", "corporate", "suit", "professional", "executive", "manager", "ceo"]
-  },
-  {
-    url: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&h=150&fit=crop&crop=center",
-    keywords: ["artist", "creative", "painter", "design", "colorful", "artistic", "creator"]
-  },
-  {
-    url: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=150&h=150&fit=crop&crop=center",
-    keywords: ["chef", "cook", "kitchen", "food", "culinary", "restaurant", "gourmet"]
-  },
-  {
-    url: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=150&h=150&fit=crop&crop=center",
-    keywords: ["teacher", "education", "school", "learning", "professor", "academic", "student"]
-  }
+  { url: "/agent-avatars/orbit.svg", keywords: ["ai", "tech", "assistant", "robot", "automation"] },
+  { url: "/agent-avatars/wave.svg", keywords: ["voice", "audio", "talk", "podcast", "sound"] },
+  { url: "/agent-avatars/grid.svg", keywords: ["data", "analytics", "crypto", "research", "metrics"] },
+  { url: "/agent-avatars/spark.svg", keywords: ["design", "creative", "branding", "visual", "ui"] },
+  { url: "/agent-avatars/pulse.svg", keywords: ["startup", "growth", "marketing", "gtm", "strategy"] },
+  { url: "/agent-avatars/node.svg", keywords: ["developer", "code", "builder", "engineering", "api"] },
+  { url: "/agent-avatars/ring.svg", keywords: ["security", "trust", "privacy", "audit", "safe"] },
+  { url: "/agent-avatars/flow.svg", keywords: ["productivity", "ops", "workflow", "assistant", "planner"] },
 ];
+
+const DEFAULT_AGENT_AVATAR_URL = AGENT_IMAGE_LIBRARY[0].url;
 
 const INITIAL_AGENTS: Agent[] = [
   // 🔊 Text-to-Speech Agent (ElevenLabs)
@@ -1139,7 +1115,7 @@ const INITIAL_AGENTS: Agent[] = [
     name: "Voice Generator",
     priceUSDC: 0,
     tagline: "Convert any text to natural speech instantly.",
-    avatar: "🔊",
+    avatar: "/agent-avatars/wave.svg",
     categories: ["tools", "voice"],
     likes: 2840,
     sessions: 5120,
@@ -1696,7 +1672,7 @@ useEffect(() => {
     name: "",
     priceUSDC: 0.2,
     tagline: "",
-    avatar: <Cpu className="w-6 h-6" />,
+    avatar: DEFAULT_AGENT_AVATAR_URL,
     categories: [],
     likes: 0,
     sessions: 0,
@@ -1813,7 +1789,7 @@ async function testChatEndpoint() {
 
   // search agent image library
   const searchAgentImages = (searchTerm: string) => {
-    if (!searchTerm.trim()) return [];
+    if (!searchTerm.trim()) return AGENT_IMAGE_LIBRARY;
 
     const term = searchTerm.toLowerCase().trim();
     return AGENT_IMAGE_LIBRARY.filter(image =>
@@ -2183,7 +2159,7 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
       priceUSDC: 0.2,
       tagline: "",
 description: "",
-avatar: <Cpu className="w-6 h-6" />,
+avatar: DEFAULT_AGENT_AVATAR_URL,
       categories: [],
       likes: 0,
       sessions: 0,
@@ -2200,7 +2176,7 @@ avatar: <Cpu className="w-6 h-6" />,
     });     
     // Reset image library state
     setImageSearchTerm("");
-    setSelectedLibraryImage(null);
+    setSelectedLibraryImage(DEFAULT_AGENT_AVATAR_URL);
     setAutoPrice(true);
 setCreating(true);
 
@@ -2212,7 +2188,7 @@ setCreating(true);
     setNewAgent({ ...agent });
     // Reset image library state for editing
     setImageSearchTerm("");
-    setSelectedLibraryImage(null);
+    setSelectedLibraryImage(typeof agent.avatar === "string" ? agent.avatar : DEFAULT_AGENT_AVATAR_URL);
     setAutoPrice(false); // при редактировании обычно руками правим цену
     setCreating(true);
     setShouldScrollToForm(true); // trigger scroll after form renders
@@ -2224,14 +2200,14 @@ setCreating(true);
     setShouldScrollToForm(false);
     // Reset image library state
     setImageSearchTerm("");
-    setSelectedLibraryImage(null);
+    setSelectedLibraryImage(DEFAULT_AGENT_AVATAR_URL);
     setNewAgent({
       id: "",
       name: "",
       priceUSDC: 0.2,
       tagline: "",
 description: "",
-avatar: <Cpu className="w-6 h-6" />,
+avatar: DEFAULT_AGENT_AVATAR_URL,
       categories: [],
       likes: 0,
       sessions: 0,
@@ -2457,9 +2433,9 @@ const canPublish =
 
     return (
       
-      <div className="min-h-screen w-screen overflow-x-hidden bg-gradient-to-b from-black via-[#0b0b1a] to-black text-white">
+      <div className="min-h-screen w-screen overflow-x-hidden bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.10),transparent_50%),radial-gradient(circle_at_80%_20%,rgba(99,102,241,0.12),transparent_55%),linear-gradient(to_bottom,#030712,#050916,#030712)] text-white">
         {/* Header для страницы создания */}
-        <header className="sticky top-0 z-40 backdrop-blur border-b border-white/10">
+        <header className="sticky top-0 z-40 backdrop-blur bg-black/20">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Button
@@ -2478,9 +2454,9 @@ const canPublish =
 
         {/* Контент страницы (сюда вставляем то, что было внутри модалки) */}
         <div className="max-w-3xl mx-auto px-4 py-6">
-          <Card className="w-full bg-white/[.04] border-white/10 flex flex-col">
+          <Card className="w-full bg-transparent border-transparent shadow-none flex flex-col">
             {/* HEADER */}
-            <CardHeader className="flex-row items-start justify-between">
+            <CardHeader className="flex-row items-start justify-between border-b-0">
               <div>
                 <CardTitle>
                   {editingAgentId ? "Edit your Agent" : "Create your Agent"}
@@ -2499,7 +2475,7 @@ const canPublish =
             </CardHeader>
 
             {/* ⬇️ ЭТО КОНТЕНТ, КОТОРЫЙ БЫЛ ВНУТРИ CardContent МОДАЛКИ */}
-            <CardContent className="flex-1 overflow-y-auto px-4 space-y-6">
+            <CardContent className="flex-1 overflow-y-auto px-4 space-y-6 bg-white/[0.02] rounded-2xl">
               {/* BASIC FIELDS */}
               <div className="space-y-3">
                 <label className="text-sm text-white/70">Name</label>
@@ -2536,64 +2512,43 @@ const canPublish =
     className="bg-white/5 border-white/10 text-sm"
   />
 </div>
-                <label className="text-sm text-white/70">
-                  Avatar (emoji, URL, or select from library)
-                </label>
-                <Input
-                  value={newAgent.avatar}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setNewAgent(a => ({ ...a, avatar: e.target.value }))
-                  }
-                  className="bg-white/5 border-white/10"
-                  placeholder="Icon URL or emoji..."
-                />
-
                 {/* Agent Image Library */}
                 <div className="space-y-3 mt-4">
                   <label className="text-sm text-white/70">
-                    Or select from image library
+                    Avatar library (minimal style)
                   </label>
                   <Input
                     value={imageSearchTerm}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                       setImageSearchTerm(e.target.value);
-                      // Auto-select first match if found
-                      const matches = searchAgentImages(e.target.value);
-                      if (matches.length > 0 && !selectedLibraryImage) {
-                        setSelectedLibraryImage(matches[0].url);
-                        setNewAgent(a => ({ ...a, avatar: matches[0].url }));
-                      }
                     }}
                     className="bg-white/5 border-white/10"
-                    placeholder="Type a theme (e.g., 'robot', 'wizard', 'scientist')..."
+                    placeholder="Search style (e.g., data, design, security)..."
                   />
 
-                  {/* Search Results */}
-                  {imageSearchTerm.trim() && (
-                    <div className="grid grid-cols-5 gap-2 max-h-32 overflow-y-auto">
-                      {searchAgentImages(imageSearchTerm).map((image, index) => (
-                        <button
-                          key={index}
-                          type="button"
-                          onClick={() => {
-                            setSelectedLibraryImage(image.url);
-                            setNewAgent(a => ({ ...a, avatar: image.url }));
-                          }}
-                          className={`relative p-1 rounded-lg border-2 transition-all ${
-                            selectedLibraryImage === image.url
-                              ? 'border-purple-400 bg-purple-500/20'
-                              : 'border-white/20 hover:border-white/40'
-                          }`}
-                        >
-                          <img
-                            src={image.url}
-                            alt={`Theme: ${image.keywords.join(', ')}`}
-                            className="w-12 h-12 rounded object-cover"
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                    {searchAgentImages(imageSearchTerm).map((image, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => {
+                          setSelectedLibraryImage(image.url);
+                          setNewAgent(a => ({ ...a, avatar: image.url }));
+                        }}
+                        className={`relative p-1 rounded-lg border-2 transition-all ${
+                          selectedLibraryImage === image.url
+                            ? 'border-cyan-300 bg-cyan-500/20'
+                            : 'border-white/20 hover:border-white/40'
+                        }`}
+                      >
+                        <img
+                          src={image.url}
+                          alt={`Theme: ${image.keywords.join(', ')}`}
+                          className="w-12 h-12 rounded object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
 
                   {/* Selected Image Preview */}
                   {selectedLibraryImage && (
@@ -3292,8 +3247,8 @@ return (
           radial-gradient(circle_at_25%_72%,rgba(16,185,129,0.10),transparent_56%)]"
   />
 
-  <div className="w-full py-10 md:py-14">
-    <div className="relative overflow-hidden bg-black min-h-[520px] md:min-h-[640px]">
+  <div className="w-full py-6 md:py-10">
+    <div className="relative overflow-hidden bg-black min-h-[480px] md:min-h-[560px]">
       <div
         aria-hidden
         className="absolute inset-0 opacity-90
@@ -3314,7 +3269,7 @@ return (
           [background-size:40px_40px]"
       />
 
-      <div className="relative z-20 flex flex-col items-center text-center px-6 pt-14 md:pt-20">
+      <div className="relative z-20 flex flex-col items-center text-center px-6 pt-10 md:pt-14">
         <div className="text-[11px] uppercase tracking-[0.20em] text-white/55">Get Started</div>
         <h2 className="mt-3 text-5xl md:text-7xl lg:text-[6.5rem] font-semibold leading-[0.95] text-white max-w-5xl">
           Chat with AI agents instantly.
@@ -3337,10 +3292,14 @@ return (
       </div>
 
       {/* Background chat simulation */}
-      <div className="relative z-10 px-4 pb-8 md:pb-10 mt-8 md:mt-10">
+      <div className="relative z-10 px-4 pb-6 md:pb-8 mt-6 md:mt-7">
         <div className="mx-auto w-[95%] md:w-[76%] rounded-3xl bg-black/40 backdrop-blur-md p-5 md:p-6 shadow-[0_30px_120px_rgba(0,0,0,0.65)]">
           <div className="flex items-center gap-2 mb-4">
-            <div className="h-8 w-8 rounded-lg bg-white/10 grid place-items-center text-sm">🤖</div>
+            <img
+              src={DEFAULT_AGENT_AVATAR_URL}
+              alt="Agent avatar"
+              className="h-8 w-8 rounded-lg object-cover"
+            />
             <div>
               <div className="text-sm text-white/85">{HOME_HERO_AGENT}</div>
               <div className="text-[11px] text-white/50">Live preview</div>
@@ -3400,10 +3359,10 @@ return (
 
   <div className="max-w-7xl mx-auto px-4 py-16 space-y-14">
 
-  <MarketplaceRail
+<MarketplaceRail
   railId="trending"
   kicker="Marketplace"
-  title={<><span className="mr-2">🔥</span>Trending now</>}
+  title="Trending now"
   subtitle="Agents people are actively chatting with right now."
   items={trendingAgents}
   badge={(a) => (a.sessions > 1000 ? "Hot" : undefined)}
@@ -3414,7 +3373,7 @@ return (
 <MarketplaceRail
   railId="toprated"
   kicker="Community"
-  title={<><span className="mr-2">⭐</span>Top rated</>}
+  title="Top rated"
   subtitle="Highest liked agents across the marketplace."
   items={topRatedAgents}
   badge={(a) => (a.likes > 1500 ? "Top" : undefined)}
@@ -3425,7 +3384,7 @@ return (
 <MarketplaceRail
   railId="new"
   kicker="Explore"
-  title={<><span className="mr-2">🆕</span>New agents</>}
+  title="New agents"
   subtitle="Recently published agents you can try first."
   items={newAgents}
   badge={() => "New"}
@@ -3948,7 +3907,7 @@ return (
                           "transition-colors duration-200 group-hover:bg-white/20"
                         )}
                       >
-                        {a.avatar}
+                        {renderAgentAvatar(a.avatar)}
                       </div>
                       <div className="space-y-1">
                         <CardTitle className="text-base flex items-center gap-2 break-words">
@@ -4156,7 +4115,7 @@ return (
                       >
                         <div className="flex items-start gap-3">
                           <div className="h-12 w-12 rounded-xl grid place-items-center text-2xl bg-gradient-to-br from-purple-500/20 to-indigo-500/20 border border-purple-500/20 flex-shrink-0">
-                            {agent.avatar}
+                            {renderAgentAvatar(agent.avatar)}
                           </div>
                           <div className="flex-1 min-w-0">
                             <h3 className="font-medium text-white group-hover:text-purple-300 transition-colors truncate">
@@ -4226,7 +4185,7 @@ return (
           <CardHeader className="flex-row items-start justify-between">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl grid place-items-center text-lg bg-white/10">
-                {selected.avatar}
+                {renderAgentAvatar(selected.avatar)}
               </div>
               <div>
                 <CardTitle className="text-lg">{selected.name}</CardTitle>
@@ -4568,7 +4527,7 @@ function AgentCard({
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-white/10 grid place-items-center text-lg">
-            {agent.avatar}
+            {renderAgentAvatar(agent.avatar)}
           </div>
           <div className="min-w-0">
             <div className="font-medium truncate">{agent.name}</div>
@@ -5109,7 +5068,7 @@ function AgentRailCard({
           {/* top */}
           <div className="p-4 pb-3 flex items-start gap-3">
             <div className="h-12 w-12 rounded-2xl bg-white/10 border border-white/10 grid place-items-center text-2xl">
-              {agent.avatar}
+              {renderAgentAvatar(agent.avatar)}
             </div>
 
             <div className="min-w-0 flex-1">
@@ -5432,7 +5391,7 @@ function MarketplaceRail({
                   <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),transparent_55%)]" />
 
                   <div className="absolute left-4 top-4 h-10 w-10 rounded-xl bg-black/40 border border-white/15 grid place-items-center text-xl">
-                    {a.avatar}
+                    {renderAgentAvatar(a.avatar)}
                   </div>
 
                   {badge?.(a) && (
@@ -6383,7 +6342,7 @@ function ChatView({
             {selectedAgent ? (
               <div className="flex items-center gap-3">
                 <div className="h-9 w-9 rounded-xl bg-white/10 grid place-items-center text-lg">
-                  {selectedAgent.avatar}
+                  {renderAgentAvatar(selectedAgent.avatar)}
                 </div>
                 <div className="flex flex-col">
                   <span className="text-sm font-medium">
@@ -7813,7 +7772,7 @@ function ProfileSavedView({
               <Card key={a.id} className="bg-white/[.04] flex flex-col">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
-                    {a.avatar} {a.name}
+                    {renderAgentAvatar(a.avatar)} {a.name}
                   </CardTitle>
                   <CardDescription>{a.tagline}</CardDescription>
                 </CardHeader>
@@ -8781,7 +8740,7 @@ function RailAgentCard({
         {/* TOP BLACK HEADER (как на главной) */}
         <div className="relative h-[92px] bg-black/70">
           <div className="absolute left-5 top-5 h-12 w-12 rounded-2xl bg-white/10 border border-white/10 grid place-items-center text-xl">
-            {agent.avatar}
+            {renderAgentAvatar(agent.avatar)}
           </div>
 
           <div className="absolute right-5 top-5">
@@ -9068,7 +9027,7 @@ function AgentDetailView({
           <Card className="bg-white/[.04] border-white/10">
             <CardContent className="p-6 flex gap-4">
               <div className="h-16 w-16 rounded-2xl bg-white/10 grid place-items-center text-3xl">
-                {agent.avatar}
+                {renderAgentAvatar(agent.avatar)}
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
