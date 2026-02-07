@@ -14,6 +14,108 @@ import React, { useMemo, useState, useEffect, useRef, useCallback } from "react"
 function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
   const [ttsAudioUrl, setTtsAudioUrl] = React.useState<string | null>(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = React.useState(false);
+  const [savedAudioUrl, setSavedAudioUrl] = React.useState<string | null>(null);
+  const [isLoadingSavedAudio, setIsLoadingSavedAudio] = React.useState(false);
+  const [savedContentUrl, setSavedContentUrl] = React.useState<string | null>(null);
+  const [isLoadingSavedContent, setIsLoadingSavedContent] = React.useState(false);
+
+  // Load previously saved example audio (exact chat output) from IndexedDB.
+  useEffect(() => {
+    let canceled = false;
+
+    const loadSavedAudio = async () => {
+      if (example.exampleResponse.type !== "audio" || !example.exampleResponse.audioAttachmentId) {
+        setSavedAudioUrl((prev) => {
+          if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+          return null;
+        });
+        return;
+      }
+
+      setIsLoadingSavedAudio(true);
+      try {
+        const blob = await getAttachmentBlob(example.exampleResponse.audioAttachmentId);
+        if (!blob) {
+          if (!canceled) setSavedAudioUrl(null);
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        if (canceled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        setSavedAudioUrl((prev) => {
+          if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+          return url;
+        });
+      } catch (error) {
+        console.warn("Failed to load saved example audio:", error);
+        if (!canceled) setSavedAudioUrl(null);
+      } finally {
+        if (!canceled) setIsLoadingSavedAudio(false);
+      }
+    };
+
+    loadSavedAudio();
+
+    return () => {
+      canceled = true;
+    };
+  }, [example.id, example.exampleResponse.type, example.exampleResponse.audioAttachmentId]);
+
+  // Load saved media for image/video examples from IndexedDB.
+  useEffect(() => {
+    let canceled = false;
+
+    const loadSavedContent = async () => {
+      const mediaId = example.exampleResponse.contentAttachmentId;
+      if (!mediaId) {
+        setSavedContentUrl((prev) => {
+          if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+          return null;
+        });
+        return;
+      }
+
+      setIsLoadingSavedContent(true);
+      try {
+        const blob = await getAttachmentBlob(mediaId);
+        if (!blob) {
+          if (!canceled) setSavedContentUrl(null);
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        if (canceled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        setSavedContentUrl((prev) => {
+          if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+          return url;
+        });
+      } catch (error) {
+        console.warn("Failed to load saved example media:", error);
+        if (!canceled) setSavedContentUrl(null);
+      } finally {
+        if (!canceled) setIsLoadingSavedContent(false);
+      }
+    };
+
+    loadSavedContent();
+
+    return () => {
+      canceled = true;
+    };
+  }, [example.id, example.exampleResponse.contentAttachmentId]);
+
+  // Cleanup blob URLs created for example playback.
+  useEffect(() => {
+    return () => {
+      if (ttsAudioUrl && ttsAudioUrl.startsWith("blob:")) URL.revokeObjectURL(ttsAudioUrl);
+      if (savedAudioUrl && savedAudioUrl.startsWith("blob:")) URL.revokeObjectURL(savedAudioUrl);
+      if (savedContentUrl && savedContentUrl.startsWith("blob:")) URL.revokeObjectURL(savedContentUrl);
+    };
+  }, [ttsAudioUrl, savedAudioUrl, savedContentUrl]);
 
   // Generate TTS audio for examples
   const generateTtsAudio = async () => {
@@ -38,7 +140,10 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
 
       const audioBlob = await ttsResponse.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
-      setTtsAudioUrl(audioUrl);
+      setTtsAudioUrl((prev) => {
+        if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+        return audioUrl;
+      });
 
       // Auto-play the audio
       const audio = new Audio(audioUrl);
@@ -52,27 +157,65 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
     }
   };
 
+  const renderTextWithLinks = (text: string) => {
+    const splitRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(splitRegex);
+    const isUrl = (value: string) => /^https?:\/\/[^\s]+$/.test(value);
+
+    return parts.map((part, index) => {
+      if (!part) return null;
+      if (isUrl(part)) {
+        return (
+          <a
+            key={`link-${index}`}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline text-cyan-300 hover:text-cyan-200 break-all"
+          >
+            {part}
+          </a>
+        );
+      }
+      return <React.Fragment key={`text-${index}`}>{part}</React.Fragment>;
+    });
+  };
+
   const renderResponse = () => {
     switch (example.exampleResponse.type) {
       case "text":
         return (
           <div className="bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-3 max-w-[85%]">
-            <p className="text-sm text-white/70 leading-relaxed">
-              {example.exampleResponse.content}
+            <p className="text-sm text-white/70 leading-relaxed whitespace-pre-wrap">
+              {renderTextWithLinks(example.exampleResponse.content)}
             </p>
           </div>
         );
 
       case "image":
+        if (isLoadingSavedContent && example.exampleResponse.contentAttachmentId) {
+          return (
+            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 max-w-[85%] text-xs text-white/50">
+              Loading saved image...
+            </div>
+          );
+        }
+        if (!(savedContentUrl || example.exampleResponse.content)) {
+          return (
+            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 max-w-[85%] text-xs text-white/50">
+              Saved image is unavailable.
+            </div>
+          );
+        }
         return (
           <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 max-w-[85%]">
             <div className="relative group">
               <img
-                src={example.exampleResponse.content}
+                src={savedContentUrl || example.exampleResponse.content}
                 alt="Example image response"
                 className="rounded-xl max-w-full h-auto cursor-pointer hover:opacity-90 transition shadow-lg"
                 style={{ maxHeight: "300px" }}
-                onClick={() => window.open(example.exampleResponse.content, '_blank')}
+                onClick={() => window.open(savedContentUrl || example.exampleResponse.content, '_blank')}
               />
               <div className="absolute inset-0 rounded-xl bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none" />
               <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -85,15 +228,43 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
         );
 
       case "audio":
+        // Preferred path: play exact audio saved from chat message.
+        if (savedAudioUrl) {
+          return (
+            <AudioResult
+              audioUrl={savedAudioUrl}
+              downloadFilename="example-audio"
+              isExample={true}
+            />
+          );
+        }
+
+        if (isLoadingSavedAudio && example.exampleResponse.audioAttachmentId) {
+          return (
+            <div className="w-full max-w-md">
+              <div className="bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 text-xs text-white/50">
+                Loading saved audio...
+              </div>
+            </div>
+          );
+        }
+
         // If we have TTS params, show full TTS interface
         if (example.exampleResponse.ttsParams) {
+          const voiceName =
+            TTS_VOICES.find((v) => v.id === example.exampleResponse.ttsParams?.voiceId)?.name ||
+            example.exampleResponse.ttsParams.voiceId;
+          const modelName =
+            TTS_MODELS.find((m) => m.id === example.exampleResponse.ttsParams?.modelId)?.name ||
+            example.exampleResponse.ttsParams.modelId;
+
           // If audio is already generated, show the player
           if (ttsAudioUrl) {
             return (
               <AudioResult
                 audioUrl={ttsAudioUrl}
-                voiceName={example.exampleResponse.ttsParams.voiceId ? "Voice Name" : undefined} // Could map voiceId to name
-                modelName={example.exampleResponse.ttsParams.modelId ? "Model Name" : undefined} // Could map modelId to name
+                voiceName={voiceName}
+                modelName={modelName}
                 downloadFilename="example-audio"
                 isExample={true}
               />
@@ -106,7 +277,7 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
               <div className="bg-white/[0.02] border border-white/10 rounded-xl overflow-hidden">
                 <div className="px-4 py-2 border-b border-white/5">
                   <div className="text-xs text-white/40">
-                    Voice: Voice Name · Model: Model Name
+                    Voice: {voiceName} · Model: {modelName}
                   </div>
                 </div>
                 <div className="px-4 py-3">
@@ -146,6 +317,20 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
         );
 
       case "video":
+        if (isLoadingSavedContent && example.exampleResponse.contentAttachmentId) {
+          return (
+            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 max-w-[85%] text-xs text-white/50">
+              Loading saved video...
+            </div>
+          );
+        }
+        if (!(savedContentUrl || example.exampleResponse.content)) {
+          return (
+            <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 max-w-[85%] text-xs text-white/50">
+              Saved video is unavailable.
+            </div>
+          );
+        }
         return (
           <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 max-w-[85%]">
             <div className="relative">
@@ -155,13 +340,13 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
                 style={{ maxHeight: "300px" }}
                 preload="metadata"
               >
-                <source src={example.exampleResponse.content} type="video/mp4" />
+                <source src={savedContentUrl || example.exampleResponse.content} type="video/mp4" />
                 Your browser does not support the video element.
               </video>
               <div className="mt-2 flex items-center justify-between">
                 <span className="text-xs text-white/50">Click play to view video</span>
                 <a
-                  href={example.exampleResponse.content}
+                  href={savedContentUrl || example.exampleResponse.content}
                   download={`example-video-${Date.now()}.mp4`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -652,6 +837,8 @@ type ExampleResponse = {
   type: ExampleOutputType;
   content: string; // text content or media URL
   attachments?: ChatAttachment[]; // for complex responses
+  audioAttachmentId?: string; // IndexedDB id for saved audio examples
+  contentAttachmentId?: string; // IndexedDB id for saved image/video examples
 
   // For TTS audio - store parameters to regenerate
   ttsParams?: {
@@ -3059,7 +3246,7 @@ return (
       className="text-5xl md:text-7xl lg:text-8xl font-semibold leading-tight tracking-tight"
     >
       <span className="block pb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-emerald-300 to-indigo-300 drop-shadow-[0_0_45px_rgba(34,211,238,0.7)]">
-        Chat with AI agents instantly.
+        A pay-per-session AI agent marketplace.
       </span>
     </motion.h1>
 
@@ -3070,8 +3257,44 @@ return (
       transition={{ delay: 0.1, duration: 0.35 }}
       className="mt-4 max-w-2xl text-lg md:text-xl text-white/70 leading-relaxed"
     >
-      No subscriptions. Pay only when you use it.
+      Discover agents, preview real outputs, then unlock chat with a USDC payment on Solana.
     </motion.p>
+
+    {/* Quick clarity bullets */}
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.14, duration: 0.35 }}
+      className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-3xl w-full"
+    >
+      <div className="rounded-2xl bg-white/[0.03] border border-white/10 px-4 py-3 text-left">
+        <div className="flex items-center gap-2 text-sm text-white/90">
+          <Bot className="h-4 w-4 text-cyan-200" />
+          Chat with specialist agents
+        </div>
+        <div className="mt-1 text-xs text-white/55">
+          Tools, research, design, crypto, and more.
+        </div>
+      </div>
+      <div className="rounded-2xl bg-white/[0.03] border border-white/10 px-4 py-3 text-left">
+        <div className="flex items-center gap-2 text-sm text-white/90">
+          <Sparkles className="h-4 w-4 text-emerald-200" />
+          Preview real examples
+        </div>
+        <div className="mt-1 text-xs text-white/55">
+          Creators can save chat outputs for customers.
+        </div>
+      </div>
+      <div className="rounded-2xl bg-white/[0.03] border border-white/10 px-4 py-3 text-left">
+        <div className="flex items-center gap-2 text-sm text-white/90">
+          <DollarSign className="h-4 w-4 text-indigo-200" />
+          Pay only when you use it
+        </div>
+        <div className="mt-1 text-xs text-white/55">
+          No subscriptions. One session at a time.
+        </div>
+      </div>
+    </motion.div>
 
 
     {/* CTA */}
@@ -3124,6 +3347,144 @@ return (
         <div className="text-xs text-white/60">Wallet-to-wallet payments</div>
       </div>
     </motion.div>
+  </div>
+</section>
+
+{/* ================= HOME · EXPLAINERS ================= */}
+<section className="relative border-t border-white/10">
+  <div
+    aria-hidden
+    className="pointer-events-none absolute inset-0 -z-10 opacity-70
+      bg-[radial-gradient(circle_at_15%_20%,rgba(56,189,248,0.12),transparent_55%),
+          radial-gradient(circle_at_80%_30%,rgba(99,102,241,0.10),transparent_55%),
+          radial-gradient(circle_at_55%_85%,rgba(34,197,94,0.08),transparent_60%)]"
+  />
+
+  <div className="max-w-7xl mx-auto px-4 py-14 space-y-10">
+    <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+      <div className="space-y-2">
+        <div className="text-[11px] uppercase tracking-[0.18em] text-white/40">
+          What is Echo?
+        </div>
+        <h2 className="text-2xl md:text-3xl font-semibold text-white">
+          A marketplace where AI agents are a product you can try and buy.
+        </h2>
+        <div className="text-sm text-white/60 max-w-2xl">
+          Creators publish agents with examples. Customers preview outputs, then pay per session and chat.
+        </div>
+      </div>
+      <div className="flex gap-3">
+        <Button
+          className="gap-2"
+          onClick={() => {
+            push("/explore");
+            requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+          }}
+        >
+          <Search className="h-4 w-4" />
+          Explore agents
+        </Button>
+        <Button
+          variant="secondary"
+          className="bg-white/10 hover:bg-white/20 gap-2"
+          onClick={() => {
+            push("/profile/agents");
+            requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+          }}
+        >
+          <Plus className="h-4 w-4" />
+          Create an agent
+        </Button>
+      </div>
+    </div>
+
+    {/* Banner cards */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent p-6 overflow-hidden relative">
+        <div aria-hidden className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-cyan-400/15 blur-2xl" />
+        <div className="relative">
+          <div className="inline-flex items-center gap-2 text-xs text-white/60">
+            <Wallet className="h-4 w-4 text-cyan-200" />
+            Payments
+          </div>
+          <div className="mt-2 text-lg font-semibold text-white">USDC on Solana</div>
+          <div className="mt-2 text-sm text-white/60">
+            Clear pricing per session, wallet-to-wallet. No subscriptions.
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent p-6 overflow-hidden relative">
+        <div aria-hidden className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-emerald-400/15 blur-2xl" />
+        <div className="relative">
+          <div className="inline-flex items-center gap-2 text-xs text-white/60">
+            <Sparkles className="h-4 w-4 text-emerald-200" />
+            Examples
+          </div>
+          <div className="mt-2 text-lg font-semibold text-white">Preview before you pay</div>
+          <div className="mt-2 text-sm text-white/60">
+            Real saved outputs, including audio, images, and video when available.
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent p-6 overflow-hidden relative">
+        <div aria-hidden className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-indigo-400/15 blur-2xl" />
+        <div className="relative">
+          <div className="inline-flex items-center gap-2 text-xs text-white/60">
+            <ShieldCheck className="h-4 w-4 text-indigo-200" />
+            Trust
+          </div>
+          <div className="mt-2 text-lg font-semibold text-white">No private keys</div>
+          <div className="mt-2 text-sm text-white/60">
+            Wallet signing stays in Phantom. Your keys never touch the app.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* How it works */}
+    <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 md:p-8">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-white/40">How it works</div>
+          <div className="mt-2 text-xl font-semibold text-white">From preview to chat in under a minute.</div>
+        </div>
+        <div className="text-xs text-white/50 max-w-md">
+          Connect your wallet only when you want to unlock a paid session.
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+          <div className="flex items-center gap-2 text-sm text-white/90">
+            <Search className="h-4 w-4 text-cyan-200" />
+            1. Explore agents
+          </div>
+          <div className="mt-2 text-sm text-white/60">
+            Filter by category, popularity, and price. Open an agent page to see examples.
+          </div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+          <div className="flex items-center gap-2 text-sm text-white/90">
+            <DollarSign className="h-4 w-4 text-emerald-200" />
+            2. Unlock a session
+          </div>
+          <div className="mt-2 text-sm text-white/60">
+            Pay in USDC per session. No recurring billing.
+          </div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+          <div className="flex items-center gap-2 text-sm text-white/90">
+            <MessageCircle className="h-4 w-4 text-indigo-200" />
+            3. Chat and reuse
+          </div>
+          <div className="mt-2 text-sm text-white/60">
+            Continue sessions, save favorites, and come back to your history.
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -6426,9 +6787,12 @@ function ChatView({
                 {/* Save as Example Button - Below the message, outside alignment */}
               {isCreator && !isUser && (
                 <div className="flex justify-start mt-1 ml-4">
+                  {(() => {
+                    const isSavedExample = savedExampleMessageIds.has(messageId);
+                    return (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       // Find the corresponding user message (previous message)
                       const userMessageIndex = i - 1;
                       const userMessage = userMessageIndex >= 0 && messages[userMessageIndex].role === "user"
@@ -6440,16 +6804,40 @@ function ChatView({
                         let responseContent = m.content;
                         let responseAttachments = m.attachments;
                         let ttsParams: any = undefined;
+                        let audioAttachmentId: string | undefined;
+                        let contentAttachmentId: string | undefined;
 
                         // Handle different response types
                         if (m.audioUrl) {
-                          // For TTS agents, store the original text and TTS parameters for regeneration
+                          // For TTS examples, persist the exact generated audio from chat.
                           responseType = "audio";
-                          responseContent = m.originalTtsText || m.content; // Use original TTS text if available
+                          responseContent = "";
 
-                          // Store TTS parameters for regeneration
+                          try {
+                            const audioResp = await fetch(m.audioUrl);
+                            if (!audioResp.ok) {
+                              throw new Error(`Failed to load generated audio: ${audioResp.status}`);
+                            }
+
+                            const audioBlob = await audioResp.blob();
+                            const id = `example-audio-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+                            await putAttachment({
+                              id,
+                              blob: audioBlob,
+                              name: `${selectedAgent.id}-example.mp3`,
+                              mime: audioBlob.type || "audio/mpeg",
+                              size: audioBlob.size,
+                            });
+
+                            audioAttachmentId = id;
+                          } catch (error) {
+                            console.warn("Failed to persist example audio, fallback to regeneration:", error);
+                          }
+
+                          // Fallback path for old behavior if stored audio is unavailable.
                           ttsParams = {
-                            text: responseContent,
+                            text: m.originalTtsText || m.content,
                             voiceId: selectedVoice.id,
                             modelId: selectedModel.id,
                             voiceSettings: {
@@ -6462,9 +6850,56 @@ function ChatView({
                         } else if (m.generatedMediaUrl && m.generatedMediaType === "video") {
                           responseType = "video";
                           responseContent = m.generatedMediaUrl;
+
+                          try {
+                            const mediaResp = await fetch(m.generatedMediaUrl);
+                            if (!mediaResp.ok) {
+                              throw new Error(`Failed to load generated video: ${mediaResp.status}`);
+                            }
+
+                            const mediaBlob = await mediaResp.blob();
+                            const id = `example-media-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+                            await putAttachment({
+                              id,
+                              blob: mediaBlob,
+                              name: `${selectedAgent.id}-example.mp4`,
+                              mime: mediaBlob.type || "video/mp4",
+                              size: mediaBlob.size,
+                            });
+
+                            contentAttachmentId = id;
+                            responseContent = "";
+                          } catch (error) {
+                            console.warn("Failed to persist example video, fallback to URL:", error);
+                          }
                         } else if (m.generatedMediaUrl && m.generatedMediaType === "image") {
                           responseType = "image";
                           responseContent = m.generatedMediaUrl;
+
+                          try {
+                            const mediaResp = await fetch(m.generatedMediaUrl);
+                            if (!mediaResp.ok) {
+                              throw new Error(`Failed to load generated image: ${mediaResp.status}`);
+                            }
+
+                            const mediaBlob = await mediaResp.blob();
+                            const id = `example-media-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                            const ext = mediaBlob.type.split("/")[1] || "webp";
+
+                            await putAttachment({
+                              id,
+                              blob: mediaBlob,
+                              name: `${selectedAgent.id}-example.${ext}`,
+                              mime: mediaBlob.type || "image/webp",
+                              size: mediaBlob.size,
+                            });
+
+                            contentAttachmentId = id;
+                            responseContent = "";
+                          } catch (error) {
+                            console.warn("Failed to persist example image, fallback to URL:", error);
+                          }
                         }
 
                         // Create the example
@@ -6475,6 +6910,8 @@ function ChatView({
                             type: responseType,
                             content: responseContent,
                             attachments: responseAttachments,
+                            audioAttachmentId,
+                            contentAttachmentId,
                             ttsParams: ttsParams
                           },
                           createdAt: Date.now(),
@@ -6489,21 +6926,25 @@ function ChatView({
                       }
                     }}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
-                      savedExampleMessageIds.has(messageId)
+                      isSavedExample
                         ? 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300'
                         : 'bg-white/10 border border-white/20 text-white/60 hover:bg-emerald-500/20 hover:border-emerald-400/40 hover:text-emerald-300'
                     }`}
                   >
-                    <svg
-                      className={`w-3.5 h-3.5 ${savedExampleMessageIds.has(messageId) ? 'text-emerald-400' : ''}`}
-                      fill={savedExampleMessageIds.has(messageId) ? 'currentColor' : 'none'}
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Save as example
+                    {isSavedExample && (
+                      <svg
+                        className="w-3.5 h-3.5 text-emerald-400"
+                        fill="currentColor"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                    {isSavedExample ? "Saved as example" : "Save as example"}
                   </button>
+                    );
+                  })()}
                 </div>
               )}
               </React.Fragment>
@@ -9089,4 +9530,3 @@ function AgentDetailView({
     </div>
   );
 }
-
