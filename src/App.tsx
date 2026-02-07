@@ -3246,7 +3246,7 @@ return (
     {/* ================= HOME ("/") ================= */}
     
     {route === "/" && (
-      <div className="page-grid-bg">    
+      <div className="bg-gradient-to-b from-black via-[#020617] to-black">    
 
 {/* ================= HOME · EXPLAINERS ================= */}
 <section className="relative overflow-hidden">
@@ -3267,6 +3267,20 @@ return (
               radial-gradient(circle_at_68%_34%,rgba(15,23,42,0.86),transparent_50%),
               radial-gradient(circle_at_86%_78%,rgba(79,70,229,0.30),transparent_40%)]"
       />
+      <div
+        aria-hidden
+        className="absolute inset-0 opacity-24
+          [background-image:linear-gradient(to_right,rgba(255,255,255,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.07)_1px,transparent_1px)]
+          [background-size:34px_34px]
+          [mask-image:radial-gradient(circle_at_center,black_26%,black_52%,transparent_88%)]"
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0 opacity-12
+          [background-image:radial-gradient(rgba(56,189,248,0.24)_1px,transparent_1px)]
+          [background-size:44px_44px]
+          [mask-image:radial-gradient(circle_at_center,black_32%,black_58%,transparent_90%)]"
+      />
       <div className="relative z-20 flex flex-col items-center text-center px-6 pt-10 md:pt-14">
         <div className="text-[11px] uppercase tracking-[0.20em] text-white/55">Get Started</div>
         <h2 className="mt-3 text-5xl md:text-7xl lg:text-[6.5rem] font-semibold leading-[0.95] text-white max-w-5xl">
@@ -3277,14 +3291,19 @@ return (
         </p>
         <div className="mt-7">
             <Button
-              className="gap-2"
+              className="group relative overflow-hidden gap-2 rounded-xl border border-white/20 bg-white/[0.06] px-5 py-2.5 text-white shadow-[0_10px_36px_rgba(79,70,229,0.28)] transition-all duration-300 hover:border-cyan-300/45 hover:bg-white/[0.1] hover:shadow-[0_14px_44px_rgba(34,211,238,0.22)]"
               onClick={() => {
                 push("/explore");
                 requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
               }}
             >
-              <Search className="h-4 w-4" />
-              Explore agents
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
+                bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+              />
+              <Search className="relative z-10 h-4 w-4" />
+              <span className="relative z-10">Explore agents</span>
             </Button>
         </div>
       </div>
