@@ -3310,12 +3310,7 @@ return (
 
       {/* Background chat simulation */}
       <div className="relative z-10 px-4 pb-6 md:pb-8 mt-6 md:mt-7">
-        <div className="relative mx-auto w-[95%] md:w-[76%] rounded-3xl border border-white/12 bg-black/40 backdrop-blur-md p-5 md:p-6 shadow-[0_30px_120px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.04)]">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -inset-1 -z-10 rounded-[28px] opacity-75 blur-2xl
-              bg-[radial-gradient(circle_at_18%_45%,rgba(99,102,241,0.35),transparent_46%),radial-gradient(circle_at_82%_56%,rgba(34,211,238,0.25),transparent_44%)]"
-          />
+        <div className="relative mx-auto w-[95%] md:w-[76%] rounded-3xl border border-white/12 bg-black/70 backdrop-blur-md p-5 md:p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_0_24px_rgba(99,102,241,0.18),0_0_34px_rgba(34,211,238,0.10),0_24px_90px_rgba(0,0,0,0.62)]">
           <div className="flex items-center gap-2 mb-4">
             <img
               src={DEFAULT_AGENT_AVATAR_URL}
@@ -4031,11 +4026,16 @@ return (
                         const hasActiveSession = typeof window !== "undefined" ? !!getActiveSession(a.id) : false;
                         return (
                           <Button
-                            className="w-full py-2 text-base gap-2"
+                            className="group relative w-full overflow-hidden py-2 text-base gap-2 rounded-xl border border-white/20 bg-white/[0.06] text-white shadow-[0_10px_36px_rgba(79,70,229,0.28)] transition-all duration-300 hover:border-cyan-300/45 hover:bg-white/[0.1] hover:shadow-[0_14px_44px_rgba(34,211,238,0.22)]"
                             onClick={() => openPay(a)}
                           >
-                            <Bot className="h-4 w-4" />
-                            {hasActiveSession ? "Continue" : "Chat"}
+                            <span
+                              aria-hidden
+                              className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
+                              bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+                            />
+                            <Bot className="relative z-10 h-4 w-4" />
+                            <span className="relative z-10">{hasActiveSession ? "Continue" : "Chat"}</span>
                           </Button>
                         );
                       })()}
@@ -4079,7 +4079,7 @@ return (
           {/* Floating Button */}
           <button
             onClick={() => setShowSessionsPanel(true)}
-            className="fixed right-4 bottom-20 z-40 flex items-center gap-2 px-4 py-3 rounded-full border border-indigo-300/35 bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 text-white font-medium shadow-[0_14px_36px_rgba(79,70,229,0.45)] hover:shadow-[0_18px_44px_rgba(34,211,238,0.30)] hover:scale-[1.03] transition-all duration-200 group"
+            className="fixed right-4 bottom-20 z-40 flex items-center gap-2 px-4 py-3 rounded-full border border-white/18 bg-[#171a2a] text-white font-medium shadow-[0_8px_22px_rgba(0,0,0,0.45)] hover:bg-[#1d2134] hover:border-white/28 transition-all duration-200 group"
           >
             <div className="relative">
               <Bot className="h-5 w-5" />
@@ -4571,8 +4571,13 @@ function AgentCard({
             >
               View
             </Button>
-            <Button className="h-8 px-3 text-xs" onClick={onChat}>
-              Chat
+            <Button className="group relative h-8 px-3 text-xs overflow-hidden rounded-xl border border-white/20 bg-white/[0.06] text-white shadow-[0_8px_24px_rgba(79,70,229,0.22)] transition-all duration-300 hover:border-cyan-300/45 hover:bg-white/[0.1] hover:shadow-[0_12px_30px_rgba(34,211,238,0.2)]" onClick={onChat}>
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
+                bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+              />
+              <span className="relative z-10">Chat</span>
             </Button>
           </div>
         </div>
@@ -5175,16 +5180,22 @@ function AgentRailCard({
             <button
               onClick={onChat}
               className="
+                group relative overflow-hidden
                 flex-1 h-10 rounded-xl
-                bg-gradient-to-r from-indigo-600/90 to-fuchsia-600/90
-                border border-white/10
+                border border-white/20 bg-white/[0.06]
                 text-sm text-white font-medium
-                shadow-[0_0_18px_rgba(99,102,241,0.35)]
-                hover:shadow-[0_0_26px_rgba(168,85,247,0.45)]
-                transition
+                shadow-[0_10px_36px_rgba(79,70,229,0.28)]
+                hover:border-cyan-300/45 hover:bg-white/[0.1]
+                hover:shadow-[0_14px_44px_rgba(34,211,238,0.22)]
+                transition-all duration-300
               "
             >
-              Chat
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
+                bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+              />
+              <span className="relative z-10">Chat</span>
             </button>
           </div>
         </div>
@@ -5458,15 +5469,21 @@ function MarketplaceRail({
                             onChat(a);
                           }}
                           className="
+                            group relative overflow-hidden
                             h-9 px-3 rounded-xl text-sm font-medium
-                            bg-gradient-to-r from-cyan-400/70 via-indigo-400/65 to-emerald-400/60
-                            border border-white/10
-                            shadow-[0_0_18px_rgba(99,102,241,0.18)]
-                            hover:shadow-[0_0_28px_rgba(34,211,238,0.20)]
-                            transition
+                            border border-white/20 bg-white/[0.06] text-white
+                            shadow-[0_10px_30px_rgba(79,70,229,0.24)]
+                            hover:border-cyan-300/45 hover:bg-white/[0.1]
+                            hover:shadow-[0_14px_38px_rgba(34,211,238,0.20)]
+                            transition-all duration-300
                           "
                         >
-                          {hasActiveSession ? "Continue" : "Chat"}
+                          <span
+                            aria-hidden
+                            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
+                            bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+                          />
+                          <span className="relative z-10">{hasActiveSession ? "Continue" : "Chat"}</span>
                         </button>
                       );
                     })()}
@@ -8798,14 +8815,21 @@ function RailAgentCard({
             <button
               onClick={onChat}
               className="
+                group relative overflow-hidden
                 rounded-xl px-6 py-3 text-sm font-semibold text-white
-                bg-gradient-to-r from-cyan-500/60 via-indigo-500/50 to-emerald-500/60
-                border border-white/10
-                hover:opacity-95 active:scale-[0.99]
-                transition
+                border border-white/20 bg-white/[0.06]
+                shadow-[0_10px_36px_rgba(79,70,229,0.28)]
+                hover:border-cyan-300/45 hover:bg-white/[0.1]
+                hover:shadow-[0_14px_44px_rgba(34,211,238,0.22)]
+                active:scale-[0.99] transition-all duration-300
               "
             >
-              Chat
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
+                bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+              />
+              <span className="relative z-10">Chat</span>
             </button>
           </div>
 
@@ -9221,11 +9245,16 @@ function AgentDetailView({
                   {isLiked ? "Unlike" : "Like"}
                 </Button>
                 <Button
-                  className="flex-1 gap-2"
+                  className="group relative flex-1 overflow-hidden gap-2 rounded-xl border border-white/20 bg-white/[0.06] text-white shadow-[0_10px_36px_rgba(79,70,229,0.28)] transition-all duration-300 hover:border-cyan-300/45 hover:bg-white/[0.1] hover:shadow-[0_14px_44px_rgba(34,211,238,0.22)]"
                   onClick={() => onOpenPay(agent)}
                 >
-                  <Bot className="h-4 w-4" />
-                  {hasActiveSession ? "Resume session" : "Start session"}
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
+                    bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.30),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.24),transparent_45%)]"
+                  />
+                  <Bot className="relative z-10 h-4 w-4" />
+                  <span className="relative z-10">{hasActiveSession ? "Resume session" : "Start session"}</span>
                 </Button>
               </div>
 
