@@ -105,6 +105,43 @@ function apiRoutes() {
         });
       });
 
+      // ✅ Lightweight analytics events (local dev)
+      server.middlewares.use("/api/analytics-event", async (req: any, res: any) => {
+        if (req.method === "OPTIONS") {
+          res.statusCode = 200;
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+          res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+          return res.end();
+        }
+        if (req.method !== "POST") {
+          res.statusCode = 405;
+          res.setHeader("Content-Type", "application/json");
+          return res.end(JSON.stringify({ ok: false, error: "Method not allowed" }));
+        }
+
+        let body = "";
+        req.on("data", (chunk: any) => (body += chunk));
+        req.on("end", () => {
+          try {
+            const parsed = JSON.parse(body || "{}");
+            if (!parsed?.event) {
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              return res.end(JSON.stringify({ ok: false, error: "Missing event" }));
+            }
+            console.log("[ANALYTICS][DEV]", JSON.stringify(parsed));
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            return res.end(JSON.stringify({ ok: true }));
+          } catch (e: any) {
+            res.statusCode = 400;
+            res.setHeader("Content-Type", "application/json");
+            return res.end(JSON.stringify({ ok: false, error: e?.message || "Invalid JSON" }));
+          }
+        });
+      });
+
       // ✅ ПРОКСИ НА ВНЕШНИЙ БЭКЕНД (когда будет настоящий backend)
       server.middlewares.use("/api/echo-proxy", async (req: any, res: any) => {
         if (req.method === "OPTIONS") {

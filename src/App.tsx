@@ -1098,6 +1098,38 @@ async function verifyPaymentOnServer(
   }
 }
 
+type AnalyticsEventName =
+  | "view_agent"
+  | "start_session"
+  | "pay_success"
+  | "chat_message"
+  | "save_example"
+  | "publish_agent";
+
+function trackAnalyticsEvent(
+  event: AnalyticsEventName,
+  payload: Record<string, any> = {}
+) {
+  if (typeof window === "undefined") return;
+  const body = {
+    event,
+    payload,
+    ts: Date.now(),
+    path: window.location.pathname + window.location.hash,
+    ua: navigator.userAgent,
+  };
+  try {
+    fetch("/api/analytics-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // non-blocking analytics
+  }
+}
+
 
 
 
@@ -2139,6 +2171,12 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
   function startChat() {
     if (!selected) return;
 
+    trackAnalyticsEvent("start_session", {
+      agentId: selected.id,
+      source: "modal_start_chat",
+      engineProvider: selected.engineProvider || "platform",
+    });
+
     // +1 к количеству сессий у этого агента (статистика)
     const now = Date.now();
     setAgents(prev =>
@@ -2172,6 +2210,14 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
   }
   
   function openAgentView(agentId: string) {
+    const target = agents.find((a) => a.id === agentId);
+    trackAnalyticsEvent("view_agent", {
+      agentId,
+      sourceRoute: route,
+      engineProvider: target?.engineProvider || "platform",
+      isVerified: !!target?.isVerified,
+    });
+
     // Save scroll position based on current page
     if (route.startsWith("/explore")) {
       rememberExploreScroll();
@@ -2192,6 +2238,11 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
     if (isCreator) {
       // Creator gets free access - save session and go to chat
       saveSession(agent, "creator-free-access");
+      trackAnalyticsEvent("start_session", {
+        agentId: agent.id,
+        source: "creator_free_access",
+        engineProvider: agent.engineProvider || "platform",
+      });
       setSelected(agent);
       // Clear localStorage flags before navigation
       if (typeof window !== "undefined") {
@@ -2208,6 +2259,11 @@ useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
       typeof window !== "undefined" ? getActiveSession(agent.id) : null;
 
     if (activeSession) {
+      trackAnalyticsEvent("start_session", {
+        agentId: agent.id,
+        source: "resume_active_session",
+        engineProvider: agent.engineProvider || "platform",
+      });
       setSelected(agent);
       // Clear localStorage flags before navigation
       if (typeof window !== "undefined") {
@@ -2410,6 +2466,13 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
         
 
     setAgents(prev => [agent, ...prev]);
+    trackAnalyticsEvent("publish_agent", {
+      agentId: agent.id,
+      engineProvider: agent.engineProvider || "platform",
+      backendAuthMode: agent.backendAuthMode || "echo_key",
+      isVerified: !!agent.isVerified,
+      priceUSDC: agent.priceUSDC,
+    });
     setSelected(agent);
     setModalState("idle"); // Reset modal state
     setCreating(false);
@@ -4702,6 +4765,12 @@ return (
 
                     // ✅ Payment verified by server — save session
                     saveSession(selected, sig);
+                    trackAnalyticsEvent("pay_success", {
+                      agentId: selected.id,
+                      amountUsdc: selected.priceUSDC,
+                      signature: sig,
+                      engineProvider: selected.engineProvider || "platform",
+                    });
                     setModalState("paid");
                   }}
                   className="w-full"
@@ -4747,6 +4816,12 @@ return (
                     }
 
                     saveSession(selected, sig);
+                    trackAnalyticsEvent("pay_success", {
+                      agentId: selected.id,
+                      amountUsdc: selected.priceUSDC,
+                      signature: sig,
+                      engineProvider: selected.engineProvider || "platform",
+                    });
                     setModalState("paid");
                   }}
                   className="w-full"
@@ -6443,6 +6518,13 @@ function ChatView({
     }
 
     syncMessages(history);
+    trackAnalyticsEvent("chat_message", {
+      agentId: selectedAgent.id,
+      engineProvider: selectedAgent.engineProvider || "platform",
+      hasText: !!text,
+      textLength: text.length,
+      attachmentsCount: attachments.length,
+    });
     setLoading(true);
 
     try {
@@ -7187,6 +7269,11 @@ function ChatView({
 
                         // Save the example
                         onSaveExample(selectedAgent.id, example);
+                        trackAnalyticsEvent("save_example", {
+                          agentId: selectedAgent.id,
+                          responseType,
+                          hasAttachments: !!responseAttachments?.length,
+                        });
 
                         // Clear all previously saved messages and mark only this one as saved
                         setSavedExampleMessageIds(new Set([messageId]));
