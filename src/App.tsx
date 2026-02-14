@@ -889,6 +889,10 @@ likes24h?: number;          // демо-счётчик
 
   // 🔐 Auth token for creator backend
   authToken?: string | null;
+  backendAuthMode?: "echo_key" | "verified_identity";
+  identityHeaderName?: string | null;
+  identityVerifyUrl?: string | null;
+  identityAppKey?: string | null;
 
   // session limits
   maxMessagesPerSession?: number | null;
@@ -1692,6 +1696,10 @@ useEffect(() => {
     ragDescription: "",
     toolsDescription: "",
     authToken: null,
+    backendAuthMode: "echo_key",
+    identityHeaderName: "x-echo-identity",
+    identityVerifyUrl: "",
+    identityAppKey: null,
     maxMessagesPerSession: null,
     maxDurationMinutes: null,
   });
@@ -1753,14 +1761,31 @@ async function testChatEndpoint() {
   const t = setTimeout(() => controller.abort(), 9000);
 
   try {
+    const backendAuthMode = newAgent.backendAuthMode || "echo_key";
+    const identityHeaderName =
+      (newAgent.identityHeaderName || "x-echo-identity").trim().toLowerCase();
+
+    const testHeaders: Record<string, string> = {
+      "content-type": "application/json",
+    };
+
+    if (backendAuthMode === "verified_identity") {
+      testHeaders[identityHeaderName] = "echo_test_identity_token";
+      if ((newAgent.identityVerifyUrl || "").trim()) {
+        testHeaders["x-echo-identity-verify-url"] = String(
+          newAgent.identityVerifyUrl
+        );
+      }
+      if ((newAgent.identityAppKey || "").trim()) {
+        testHeaders["x-echo-identity-app-key"] = String(newAgent.identityAppKey);
+      }
+    } else if (newAgent.authToken) {
+      testHeaders["x-echo-key"] = String(newAgent.authToken);
+    }
+
     const res = await fetch(url, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(newAgent.authToken
-          ? { "x-echo-key": String(newAgent.authToken) }
-          : {}),
-      },
+      headers: testHeaders,
       body: JSON.stringify({
         type: "ping",
         message: "Hello from Echo (test). Reply with any text.",
@@ -2179,6 +2204,10 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
       ragDescription: "",
       toolsDescription: "",
       authToken: null,             // 🔐 добавили
+      backendAuthMode: "echo_key",
+      identityHeaderName: "x-echo-identity",
+      identityVerifyUrl: "",
+      identityAppKey: null,
       maxMessagesPerSession: null,
       maxDurationMinutes: null,
     });     
@@ -2227,6 +2256,10 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
       ragDescription: "",
       toolsDescription: "",
       authToken: null,             // 🔐 добавили
+      backendAuthMode: "echo_key",
+      identityHeaderName: "x-echo-identity",
+      identityVerifyUrl: "",
+      identityAppKey: null,
       maxMessagesPerSession: null,
       maxDurationMinutes: null,
     });     
@@ -2428,6 +2461,15 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
   // 🔹 Отдельная страница "Create / Edit Agent" вместо модалки
   if (creating) {
     const apiUrlTrimmed = (newAgent.engineApiUrl || "").trim();
+    const verifyUrlTrimmed = (newAgent.identityVerifyUrl || "").trim();
+    const authMode = newAgent.backendAuthMode || "echo_key";
+    const customConfigValid =
+      apiUrlTrimmed.length > 0 &&
+      isValidHttpUrl(apiUrlTrimmed) &&
+      (authMode !== "verified_identity" ||
+        (verifyUrlTrimmed.length > 0 &&
+          isValidHttpUrl(verifyUrlTrimmed) &&
+          !!(newAgent.identityAppKey || "").trim()));
 
 const canPublish =
   // базовые поля (оставь минимум что тебе надо)
@@ -2437,7 +2479,7 @@ const canPublish =
   (typeof newAgent.avatar === 'string' ? !!newAgent.avatar.trim() : true) &&
   newAgent.priceUSDC >= 0.05 &&
   // если custom — обязателен endpoint
-  (runtimeMode !== "custom" || (apiUrlTrimmed.length > 0 && isValidHttpUrl(apiUrlTrimmed)));
+  (runtimeMode !== "custom" || customConfigValid);
 
     return (
       
@@ -2846,27 +2888,147 @@ const canPublish =
       </div>
     </div>
 
-    {/* 2) Auth token — опционально, но полезно */}
-    <div className="rounded-lg bg-white/5 border border-white/10 p-3 space-y-2">
-      <div className="text-xs font-semibold text-white/80">Auth token (optional)</div>
-      <p className="text-[11px] text-white/50">
-        We send it as <span className="font-mono">x-echo-key</span>. Use it to protect your backend.
-      </p>
+    {/* 2) Connection security */}
+    <div className="rounded-lg bg-white/5 border border-white/10 p-3 space-y-3">
+      <div className="text-xs font-semibold text-white/80">Connection mode</div>
 
-      <Input
-        placeholder="my-secret-token"
-        value={newAgent.authToken || ""}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-          setNewAgent((a) => ({
-            ...a,
-            authToken: e.target.value || null,
-          }))
-        }
-        className="bg-white/5 border-white/10 text-xs"
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() =>
+            setNewAgent((a) => ({ ...a, backendAuthMode: "echo_key" }))
+          }
+          className={cx(
+            "text-left rounded-lg border px-3 py-2 text-xs transition",
+            (newAgent.backendAuthMode || "echo_key") === "echo_key"
+              ? "border-indigo-400 bg-indigo-500/10"
+              : "border-white/10 bg-white/5 hover:border-white/30"
+          )}
+        >
+          <div className="font-semibold text-white/90">Standard</div>
+          <div className="text-[10px] text-white/60">
+            Send shared token in <span className="font-mono">x-echo-key</span>.
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            setNewAgent((a) => ({
+              ...a,
+              backendAuthMode: "verified_identity",
+              identityHeaderName: a.identityHeaderName || "x-echo-identity",
+            }))
+          }
+          className={cx(
+            "text-left rounded-lg border px-3 py-2 text-xs transition",
+            (newAgent.backendAuthMode || "echo_key") === "verified_identity"
+              ? "border-indigo-400 bg-indigo-500/10"
+              : "border-white/10 bg-white/5 hover:border-white/30"
+          )}
+        >
+          <div className="font-semibold text-white/90">Verified agent</div>
+          <div className="text-[10px] text-white/60">
+            Echo sends short-lived identity token for backend verification.
+          </div>
+        </button>
+      </div>
+
+      {(newAgent.backendAuthMode || "echo_key") === "echo_key" ? (
+        <div className="space-y-2">
+          <div className="text-xs font-semibold text-white/80">
+            Auth token (optional)
+          </div>
+          <p className="text-[11px] text-white/50">
+            We send it as <span className="font-mono">x-echo-key</span>. Use it
+            to protect your backend.
+          </p>
+          <Input
+            placeholder="my-secret-token"
+            value={newAgent.authToken || ""}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setNewAgent((a) => ({
+                ...a,
+                authToken: e.target.value || null,
+              }))
+            }
+            className="bg-white/5 border-white/10 text-xs"
+          />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <div className="text-xs font-semibold text-white/80">
+              Identity verify URL <span className="text-rose-300">*</span>
+            </div>
+            <Input
+              placeholder="https://your-verifier.com/api/v1/agents/verify-identity"
+              value={newAgent.identityVerifyUrl || ""}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setNewAgent((a) => ({
+                  ...a,
+                  identityVerifyUrl: e.target.value,
+                }))
+              }
+              className="bg-white/5 border-white/10 text-xs"
+            />
+            {(newAgent.identityVerifyUrl || "").trim() &&
+              !isValidHttpUrl((newAgent.identityVerifyUrl || "").trim()) && (
+                <div className="text-[11px] text-amber-200">
+                  Please enter a valid http(s) verify URL.
+                </div>
+              )}
+          </div>
+
+          <div className="space-y-1">
+            <div className="text-xs font-semibold text-white/80">
+              Identity app key <span className="text-rose-300">*</span>
+            </div>
+            <Input
+              placeholder="app_key_from_identity_provider"
+              value={newAgent.identityAppKey || ""}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setNewAgent((a) => ({
+                  ...a,
+                  identityAppKey: e.target.value || null,
+                }))
+              }
+              className="bg-white/5 border-white/10 text-xs"
+            />
+            {!((newAgent.identityAppKey || "").trim()) && (
+              <div className="text-[11px] text-amber-200">
+                Identity app key is required in Verified mode.
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <div className="text-xs font-semibold text-white/80">
+              Identity header name
+            </div>
+            <Input
+              placeholder="x-echo-identity"
+              value={newAgent.identityHeaderName || "x-echo-identity"}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setNewAgent((a) => ({
+                  ...a,
+                  identityHeaderName:
+                    e.target.value?.trim() || "x-echo-identity",
+                }))
+              }
+              className="bg-white/5 border-white/10 text-xs"
+            />
+          </div>
+
+          {!((newAgent.identityVerifyUrl || "").trim()) && (
+            <div className="text-[11px] text-amber-200">
+              Identity verify URL is required in Verified mode.
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="text-[10px] text-amber-200 bg-amber-500/10 rounded px-2 py-1 border border-amber-400/40">
-        Do NOT put OpenAI keys here. Keep model keys on your backend.
+        Do NOT put model provider keys here. Keep model keys on your backend.
       </div>
     </div>
 
@@ -2969,7 +3131,9 @@ const canPublish =
     canPublish
       ? ""
       : runtimeMode === "custom"
-      ? "Enter a valid Chat endpoint URL to publish."
+      ? (newAgent.backendAuthMode || "echo_key") === "verified_identity"
+        ? "Provide valid Chat endpoint, Identity verify URL, and Identity app key."
+        : "Enter a valid Chat endpoint URL to publish."
       : "Fill required fields to publish."
   }
 >
@@ -6265,6 +6429,7 @@ function ChatView({
           url: selectedAgent.engineApiUrl,
           agentId: selectedAgent.id,
           hasToken: !!selectedAgent.authToken,
+          authMode: selectedAgent.backendAuthMode || "echo_key",
         });
         
         const res = await fetch("/api/agent-backend", {
@@ -6272,6 +6437,13 @@ function ChatView({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             agentId: selectedAgent.id,
+            targetUrl: selectedAgent.engineApiUrl,
+            authToken: selectedAgent.authToken || null,
+            backendAuthMode: selectedAgent.backendAuthMode || "echo_key",
+            identityHeaderName:
+              selectedAgent.identityHeaderName || "x-echo-identity",
+            identityVerifyUrl: selectedAgent.identityVerifyUrl || null,
+            identityAppKey: selectedAgent.identityAppKey || null,
             messages: backendMessages,
           }),
         });
@@ -7583,10 +7755,14 @@ Assistant: ...
 {`POST /your-endpoint
 x-echo-key: <your-token>
 
+OR (Verified mode)
+x-echo-identity: <short-lived-identity-token>
+x-echo-identity-verify-url: <verification-endpoint>
+x-echo-identity-app-key: <app-key>
+
 {
   "agentId": "...",
-  "messages": [...],
-  "meta": { ... }
+  "messages": [...]
 }`}
           </pre>
 
@@ -7614,10 +7790,12 @@ x-echo-key: <your-token>
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-xl font-medium">5. Auth Token</h2>
+          <h2 className="text-xl font-medium">5. Connection Security</h2>
           <p className="text-sm text-white/60">
-            Your backend can validate requests using x-echo-key. 
-            Never put OpenAI or Google API keys inside Echo — keep them on your backend only.
+            Standard mode sends <span className="font-mono">x-echo-key</span>. Verified mode sends
+            short-lived identity token in your chosen header
+            (default <span className="font-mono">x-echo-identity</span>).
+            Never put OpenAI or Google API keys inside Echo — keep model keys on your backend only.
           </p>
         </section>
 
@@ -9151,6 +9329,24 @@ function AgentDetailView({
           {agent.authToken ? "configured" : "not set"}
         </span>
       </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-white/50">Mode</span>
+        <span className="text-white/80">
+          {(agent.backendAuthMode || "echo_key") === "verified_identity"
+            ? "verified identity"
+            : "standard token"}
+        </span>
+      </div>
+
+      {agent.backendAuthMode === "verified_identity" && (
+        <div className="flex flex-col gap-1">
+          <span className="text-white/50">Identity verify URL</span>
+          <span className="font-mono break-all text-white/80">
+            {agent.identityVerifyUrl || "—"}
+          </span>
+        </div>
+      )}
     </CardContent>
   </Card>
 )}

@@ -4,7 +4,7 @@ function apiRoutes() {
   return {
     name: "api-routes",
     configureServer(server: any) {
-      // ✅ Agent Backend (local development)
+      // ✅ Agent Backend proxy (local development)
       server.middlewares.use("/api/agent-backend", async (req: any, res: any) => {
         if (req.method === "OPTIONS") {
           res.statusCode = 200;
@@ -18,19 +18,83 @@ function apiRoutes() {
 
         let body = "";
         req.on("data", (c: any) => (body += c));
-        req.on("end", () => {
+        req.on("end", async () => {
           try {
             const parsed = JSON.parse(body || "{}");
-            const lastUser = (parsed?.messages || []).slice().reverse().find((m: any) => m.role === "user");
-            const text = lastUser?.content || "(no text)";
+            const targetUrl = String(parsed?.targetUrl || "").trim();
+            if (!targetUrl) {
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              return res.end(JSON.stringify({ reply: "Missing targetUrl" }));
+            }
 
-            res.statusCode = 200;
+            const authMode =
+              parsed?.backendAuthMode === "verified_identity"
+                ? "verified_identity"
+                : "echo_key";
+            const identityHeaderName = String(
+              parsed?.identityHeaderName || "x-echo-identity"
+            )
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z0-9-]/g, "") || "x-echo-identity";
+            const now = Math.floor(Date.now() / 1000);
+            const devTokenPayload = {
+              iss: "echo-dev",
+              sub: parsed?.agentId || "unknown-agent",
+              iat: now,
+              exp: now + 300,
+              jti: globalThis.crypto?.randomUUID?.() || `${Date.now()}`,
+            };
+
+            const headers: Record<string, string> = {
+              "Content-Type": "application/json",
+              "x-echo-agent-id": String(parsed?.agentId || "unknown-agent"),
+            };
+
+            if (authMode === "verified_identity") {
+              headers[identityHeaderName] = `echo_dev_${Buffer.from(
+                JSON.stringify(devTokenPayload)
+              ).toString("base64url")}`;
+              if (parsed?.identityVerifyUrl) {
+                headers["x-echo-identity-verify-url"] = String(
+                  parsed.identityVerifyUrl
+                );
+              }
+              if (parsed?.identityAppKey) {
+                headers["x-echo-identity-app-key"] = String(
+                  parsed.identityAppKey
+                );
+              }
+            } else if (parsed?.authToken) {
+              headers["x-echo-key"] = String(parsed.authToken);
+            }
+
+            const upstream = await fetch(targetUrl, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                agentId: parsed?.agentId,
+                messages: parsed?.messages || [],
+              }),
+            });
+
+            const raw = await upstream.text();
+            const ct = upstream.headers.get("content-type") || "";
+            res.statusCode = upstream.status;
             res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ reply: `✅ Backend OK. You said: ${text}` }));
+            if (ct.includes("application/json")) {
+              return res.end(raw);
+            }
+            return res.end(JSON.stringify({ reply: raw.slice(0, 3000) }));
           } catch (e: any) {
             res.statusCode = 400;
             res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ reply: `Invalid JSON: ${e?.message || "Parse error"}` }));
+            res.end(
+              JSON.stringify({
+                reply: `Invalid JSON or proxy error: ${e?.message || "Parse error"}`,
+              })
+            );
           }
         });
       });
