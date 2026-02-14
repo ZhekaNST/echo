@@ -893,6 +893,8 @@ likes24h?: number;          // демо-счётчик
   identityHeaderName?: string | null;
   identityVerifyUrl?: string | null;
   identityAppKey?: string | null;
+  isVerified?: boolean;
+  verifiedAt?: number | null;
 
   // session limits
   maxMessagesPerSession?: number | null;
@@ -1700,6 +1702,8 @@ useEffect(() => {
     identityHeaderName: "x-echo-identity",
     identityVerifyUrl: "",
     identityAppKey: null,
+    isVerified: false,
+    verifiedAt: null,
     maxMessagesPerSession: null,
     maxDurationMinutes: null,
   });
@@ -1742,15 +1746,38 @@ function isValidHttpUrl(s: string) {
 
 async function testChatEndpoint() {
   const url = (newAgent.engineApiUrl || "").trim();
+  const authMode = newAgent.backendAuthMode || "echo_key";
+  const verifyUrl = (newAgent.identityVerifyUrl || "").trim();
+  const appKey = (newAgent.identityAppKey || "").trim();
 
   if (!url) {
     setEndpointTestStatus("fail");
     setEndpointTestMsg("Please enter a Chat endpoint URL first.");
+    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
     return;
   }
   if (!isValidHttpUrl(url)) {
     setEndpointTestStatus("fail");
     setEndpointTestMsg("Endpoint must be a valid http(s) URL.");
+    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+    return;
+  }
+  if (authMode === "verified_identity" && !verifyUrl) {
+    setEndpointTestStatus("fail");
+    setEndpointTestMsg("Verified mode requires Identity verify URL.");
+    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+    return;
+  }
+  if (authMode === "verified_identity" && !isValidHttpUrl(verifyUrl)) {
+    setEndpointTestStatus("fail");
+    setEndpointTestMsg("Identity verify URL must be a valid http(s) URL.");
+    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+    return;
+  }
+  if (authMode === "verified_identity" && !appKey) {
+    setEndpointTestStatus("fail");
+    setEndpointTestMsg("Verified mode requires Identity app key.");
+    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
     return;
   }
 
@@ -1758,63 +1785,121 @@ async function testChatEndpoint() {
   setEndpointTestMsg("");
 
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 9000);
+  const t = setTimeout(() => controller.abort(), 12000);
 
   try {
-    const backendAuthMode = newAgent.backendAuthMode || "echo_key";
-    const identityHeaderName =
-      (newAgent.identityHeaderName || "x-echo-identity").trim().toLowerCase();
-
-    const testHeaders: Record<string, string> = {
-      "content-type": "application/json",
-    };
-
-    if (backendAuthMode === "verified_identity") {
-      testHeaders[identityHeaderName] = "echo_test_identity_token";
-      if ((newAgent.identityVerifyUrl || "").trim()) {
-        testHeaders["x-echo-identity-verify-url"] = String(
-          newAgent.identityVerifyUrl
-        );
-      }
-      if ((newAgent.identityAppKey || "").trim()) {
-        testHeaders["x-echo-identity-app-key"] = String(newAgent.identityAppKey);
-      }
-    } else if (newAgent.authToken) {
-      testHeaders["x-echo-key"] = String(newAgent.authToken);
-    }
-
-    const res = await fetch(url, {
+    const res = await fetch("/api/agent-backend", {
       method: "POST",
-      headers: testHeaders,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        type: "ping",
-        message: "Hello from Echo (test). Reply with any text.",
-        // можешь добавить что ожидает твой бэк:
-        // agentId: editingAgentId ?? "test-agent",
+        agentId: editingAgentId || "test-agent",
+        targetUrl: url,
+        authToken: newAgent.authToken || null,
+        backendAuthMode: authMode,
+        identityHeaderName: newAgent.identityHeaderName || "x-echo-identity",
+        identityVerifyUrl: verifyUrl || null,
+        identityAppKey: appKey || null,
+        messages: [
+          {
+            role: "user",
+            content: "Echo test ping. Return JSON with reply field.",
+            attachments: [],
+          },
+        ],
       }),
       signal: controller.signal,
     });
 
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
     const text = await res.text().catch(() => "");
+
     if (!res.ok) {
+      const lower = text.toLowerCase();
+      if (authMode === "verified_identity" && (res.status === 401 || res.status === 403)) {
+        setEndpointTestStatus("fail");
+        setEndpointTestMsg(
+          "Verified check failed (401/403). Most likely Identity app key is invalid or verifier rejected token."
+        );
+        setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+        return;
+      }
+      if (
+        authMode === "verified_identity" &&
+        (lower.includes("verify") || lower.includes("identity")) &&
+        (res.status === 500 || res.status === 502 || res.status === 504)
+      ) {
+        setEndpointTestStatus("fail");
+        setEndpointTestMsg(
+          "Identity verify URL is unreachable or verifier failed. Check verify URL availability."
+        );
+        setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+        return;
+      }
       setEndpointTestStatus("fail");
       setEndpointTestMsg(
-        `HTTP ${res.status}. ${text ? text.slice(0, 140) : "No response body."}`
+        `Endpoint test failed (HTTP ${res.status}). ${text ? text.slice(0, 180) : "No response body."}`
       );
+      setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+      return;
+    }
+
+    if (!contentType.includes("application/json")) {
+      setEndpointTestStatus("fail");
+      setEndpointTestMsg(
+        "Endpoint returned non-JSON response. Return JSON like { \"reply\": \"...\" }."
+      );
+      setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+      return;
+    }
+
+    let parsed: any = null;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {
+      setEndpointTestStatus("fail");
+      setEndpointTestMsg("Endpoint returned invalid JSON.");
+      setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+      return;
+    }
+
+    const hasReply =
+      typeof parsed?.reply === "string" ||
+      typeof parsed?.content === "string" ||
+      typeof parsed?.message === "string";
+    if (parsed?.nonJsonUpstream) {
+      setEndpointTestStatus("fail");
+      setEndpointTestMsg(
+        `Endpoint returned non-JSON (${parsed?.upstreamContentType || "unknown"}). Return JSON like { "reply": "..." }.`
+      );
+      setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+      return;
+    }
+    if (!hasReply) {
+      setEndpointTestStatus("fail");
+      setEndpointTestMsg(
+        "JSON is valid but missing reply/content/message field."
+      );
+      setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
       return;
     }
 
     setEndpointTestStatus("ok");
-    setEndpointTestMsg("OK — endpoint responded successfully.");
+    if (authMode === "verified_identity") {
+      setEndpointTestMsg("Verified connection passed. This agent is marked as Verified.");
+      setNewAgent((a) => ({ ...a, isVerified: true, verifiedAt: Date.now() }));
+    } else {
+      setEndpointTestMsg("Connection passed. Endpoint responded correctly.");
+      setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+    }
   } catch (e: any) {
     const msg =
       e?.name === "AbortError"
-        ? "Timeout (9s). Endpoint did not respond."
+        ? "Timeout (12s). Endpoint did not respond."
         : e?.message || "Request failed.";
 
-    // ВАЖНО: если у тебя CORS — браузер часто покажет ошибку здесь.
     setEndpointTestStatus("fail");
     setEndpointTestMsg(msg);
+    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
   } finally {
     clearTimeout(t);
   }
@@ -2208,6 +2293,8 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
       identityHeaderName: "x-echo-identity",
       identityVerifyUrl: "",
       identityAppKey: null,
+      isVerified: false,
+      verifiedAt: null,
       maxMessagesPerSession: null,
       maxDurationMinutes: null,
     });     
@@ -2260,6 +2347,8 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
       identityHeaderName: "x-echo-identity",
       identityVerifyUrl: "",
       identityAppKey: null,
+      isVerified: false,
+      verifiedAt: null,
       maxMessagesPerSession: null,
       maxDurationMinutes: null,
     });     
@@ -2271,6 +2360,11 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
     const priceUSDC = autoPrice
       ? autoPriceFromPrompt(newAgent.promptPreview)
       : newAgent.priceUSDC;
+    const shouldMarkVerified =
+      runtimeMode === "custom" &&
+      (newAgent.backendAuthMode || "echo_key") === "verified_identity" &&
+      endpointTestStatus === "ok" &&
+      !!newAgent.isVerified;
 
     // 🔹 РЕЖИМ РЕДАКТИРОВАНИЯ
     if (editingAgentId) {
@@ -2283,6 +2377,8 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
             id: a.id, // id не меняем
             categories,
             priceUSDC,
+            isVerified: shouldMarkVerified,
+            verifiedAt: shouldMarkVerified ? Date.now() : null,
             creator: a.creator, // не трогаем создателя
             creatorWallet: a.creatorWallet,
           };
@@ -2304,6 +2400,8 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
           id,
           categories,
           priceUSDC,
+          isVerified: shouldMarkVerified,
+          verifiedAt: shouldMarkVerified ? Date.now() : null,
           sessions: 0,
           createdAt: Date.now(), // ✅ NEW
           creator: address || "local",
@@ -2809,6 +2907,15 @@ const canPublish =
                 {/* Custom backend */}
                 {runtimeMode === "custom" && (
   <div className="space-y-4">
+    <div className="rounded-lg bg-white/5 border border-white/10 p-3 space-y-2">
+      <div className="text-xs font-semibold text-white/85">Quickstart (3 steps)</div>
+      <ol className="text-[11px] text-white/65 list-decimal list-inside space-y-1">
+        <li>Choose connection mode.</li>
+        <li>Paste your chat endpoint (and verify settings for Verified mode).</li>
+        <li>Click <span className="font-semibold">Test endpoint</span>, then publish.</li>
+      </ol>
+    </div>
+
     {/* 1) Chat endpoint — главный и обязательный */}
     <div className="rounded-lg bg-white/5 border border-white/10 p-3 space-y-2">
       <div className="flex items-center justify-between">
@@ -2834,7 +2941,12 @@ const canPublish =
     placeholder="https://api.backend.com/run"
     value={newAgent.engineApiUrl || ""}
     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-      setNewAgent((a) => ({ ...a, engineApiUrl: e.target.value }));
+      setNewAgent((a) => ({
+        ...a,
+        engineApiUrl: e.target.value,
+        isVerified: false,
+        verifiedAt: null,
+      }));
       setEndpointTestStatus("idle");
       setEndpointTestMsg("");
     }}
@@ -2848,9 +2960,46 @@ const canPublish =
     onClick={testChatEndpoint}
     disabled={endpointTestStatus === "testing"}
   >
-    {endpointTestStatus === "testing" ? "Testing..." : "Test endpoint"}
-  </Button>
-</div>
+	    {endpointTestStatus === "testing" ? "Testing..." : "Test endpoint"}
+	  </Button>
+	</div>
+
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="secondary"
+          className="bg-white/10 hover:bg-white/20 text-xs px-3"
+          onClick={() => {
+            const template = `import express from "express";
+const app = express();
+app.use(express.json());
+
+app.post("/run", async (req, res) => {
+  const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+  const lastUser = [...messages].reverse().find((m) => m?.role === "user");
+
+  // Standard mode token (optional)
+  const echoKey = req.header("x-echo-key");
+
+  // Verified mode headers
+  const identityToken = req.header("x-echo-identity");
+  const verifyUrl = req.header("x-echo-identity-verify-url");
+  const appKey = req.header("x-echo-identity-app-key");
+
+  // TODO: if identityToken exists, verify it with your verifier service using verifyUrl + appKey.
+  // If verification fails: return res.status(401).json({ reply: "Identity verification failed" });
+
+  const text = lastUser?.content || "(empty)";
+  return res.json({ reply: \`Backend OK. You said: \${text}\` });
+});
+
+app.listen(3000, () => console.log("Backend listening on :3000"));`;
+            navigator.clipboard?.writeText(template);
+          }}
+        >
+          Copy backend template
+        </Button>
+      </div>
 
 {/* маленькая валидация прямо под полем */}
 {runtimeMode === "custom" && !(newAgent.engineApiUrl || "").trim() && (
@@ -2882,6 +3031,13 @@ const canPublish =
   </div>
 )}
 
+{newAgent.isVerified && newAgent.backendAuthMode === "verified_identity" && (
+  <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200">
+    <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+    Verified backend
+  </div>
+)}
+
 
       <div className="text-[10px] text-white/45">
         Tip: return JSON like <span className="font-mono">{`{ "reply": "..." }`}</span>
@@ -2895,9 +3051,16 @@ const canPublish =
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <button
           type="button"
-          onClick={() =>
-            setNewAgent((a) => ({ ...a, backendAuthMode: "echo_key" }))
-          }
+          onClick={() => {
+            setNewAgent((a) => ({
+              ...a,
+              backendAuthMode: "echo_key",
+              isVerified: false,
+              verifiedAt: null,
+            }));
+            setEndpointTestStatus("idle");
+            setEndpointTestMsg("");
+          }}
           className={cx(
             "text-left rounded-lg border px-3 py-2 text-xs transition",
             (newAgent.backendAuthMode || "echo_key") === "echo_key"
@@ -2912,13 +3075,17 @@ const canPublish =
         </button>
         <button
           type="button"
-          onClick={() =>
+          onClick={() => {
             setNewAgent((a) => ({
               ...a,
               backendAuthMode: "verified_identity",
               identityHeaderName: a.identityHeaderName || "x-echo-identity",
-            }))
-          }
+              isVerified: false,
+              verifiedAt: null,
+            }));
+            setEndpointTestStatus("idle");
+            setEndpointTestMsg("");
+          }}
           className={cx(
             "text-left rounded-lg border px-3 py-2 text-xs transition",
             (newAgent.backendAuthMode || "echo_key") === "verified_identity"
@@ -2933,28 +3100,7 @@ const canPublish =
         </button>
       </div>
 
-      {(newAgent.backendAuthMode || "echo_key") === "echo_key" ? (
-        <div className="space-y-2">
-          <div className="text-xs font-semibold text-white/80">
-            Auth token (optional)
-          </div>
-          <p className="text-[11px] text-white/50">
-            We send it as <span className="font-mono">x-echo-key</span>. Use it
-            to protect your backend.
-          </p>
-          <Input
-            placeholder="my-secret-token"
-            value={newAgent.authToken || ""}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setNewAgent((a) => ({
-                ...a,
-                authToken: e.target.value || null,
-              }))
-            }
-            className="bg-white/5 border-white/10 text-xs"
-          />
-        </div>
-      ) : (
+      {(newAgent.backendAuthMode || "echo_key") === "verified_identity" ? (
         <div className="space-y-3">
           <div className="space-y-1">
             <div className="text-xs font-semibold text-white/80">
@@ -2963,12 +3109,16 @@ const canPublish =
             <Input
               placeholder="https://your-verifier.com/api/v1/agents/verify-identity"
               value={newAgent.identityVerifyUrl || ""}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                 setNewAgent((a) => ({
                   ...a,
                   identityVerifyUrl: e.target.value,
-                }))
-              }
+                  isVerified: false,
+                  verifiedAt: null,
+                }));
+                setEndpointTestStatus("idle");
+                setEndpointTestMsg("");
+              }}
               className="bg-white/5 border-white/10 text-xs"
             />
             {(newAgent.identityVerifyUrl || "").trim() &&
@@ -2986,12 +3136,16 @@ const canPublish =
             <Input
               placeholder="app_key_from_identity_provider"
               value={newAgent.identityAppKey || ""}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                 setNewAgent((a) => ({
                   ...a,
                   identityAppKey: e.target.value || null,
-                }))
-              }
+                  isVerified: false,
+                  verifiedAt: null,
+                }));
+                setEndpointTestStatus("idle");
+                setEndpointTestMsg("");
+              }}
               className="bg-white/5 border-white/10 text-xs"
             />
             {!((newAgent.identityAppKey || "").trim()) && (
@@ -3001,31 +3155,69 @@ const canPublish =
             )}
           </div>
 
-          <div className="space-y-1">
-            <div className="text-xs font-semibold text-white/80">
-              Identity header name
-            </div>
-            <Input
-              placeholder="x-echo-identity"
-              value={newAgent.identityHeaderName || "x-echo-identity"}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setNewAgent((a) => ({
-                  ...a,
-                  identityHeaderName:
-                    e.target.value?.trim() || "x-echo-identity",
-                }))
-              }
-              className="bg-white/5 border-white/10 text-xs"
-            />
-          </div>
-
           {!((newAgent.identityVerifyUrl || "").trim()) && (
             <div className="text-[11px] text-amber-200">
               Identity verify URL is required in Verified mode.
             </div>
           )}
         </div>
+      ) : (
+        <div className="text-[11px] text-white/60">
+          Standard mode is active. You can optionally add auth token in Advanced.
+        </div>
       )}
+
+      <details className="rounded-lg bg-white/5 border border-white/10 p-3">
+        <summary className="cursor-pointer text-xs font-semibold text-white/75 select-none">
+          Advanced security (optional)
+        </summary>
+        <div className="mt-3 space-y-3">
+          {(newAgent.backendAuthMode || "echo_key") === "echo_key" ? (
+            <div className="space-y-1">
+              <div className="text-xs font-semibold text-white/80">
+                Auth token
+              </div>
+              <Input
+                placeholder="my-secret-token"
+                value={newAgent.authToken || ""}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setNewAgent((a) => ({
+                    ...a,
+                    authToken: e.target.value || null,
+                    isVerified: false,
+                    verifiedAt: null,
+                  }));
+                  setEndpointTestStatus("idle");
+                  setEndpointTestMsg("");
+                }}
+                className="bg-white/5 border-white/10 text-xs"
+              />
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="text-xs font-semibold text-white/80">
+                Identity header name
+              </div>
+              <Input
+                placeholder="x-echo-identity"
+                value={newAgent.identityHeaderName || "x-echo-identity"}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setNewAgent((a) => ({
+                    ...a,
+                    identityHeaderName:
+                      e.target.value?.trim() || "x-echo-identity",
+                    isVerified: false,
+                    verifiedAt: null,
+                  }));
+                  setEndpointTestStatus("idle");
+                  setEndpointTestMsg("");
+                }}
+                className="bg-white/5 border-white/10 text-xs"
+              />
+            </div>
+          )}
+        </div>
+      </details>
 
       <div className="text-[10px] text-amber-200 bg-amber-500/10 rounded px-2 py-1 border border-amber-400/40">
         Do NOT put model provider keys here. Keep model keys on your backend.
@@ -5600,6 +5792,12 @@ function MarketplaceRail({
                       "
                     >
                       {badge(a)}
+                    </div>
+                  )}
+
+                  {a.isVerified && (
+                    <div className="absolute left-3 bottom-3 text-[10px] rounded-full px-2 py-1 bg-emerald-500/10 border border-emerald-400/35 text-emerald-200">
+                      Verified
                     </div>
                   )}
                 </div>
@@ -9256,6 +9454,12 @@ function AgentDetailView({
               <div className="space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="text-xl font-semibold">{agent.name}</div>
+                  {agent.isVerified && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-200">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                      Verified
+                    </span>
+                  )}
                   {agent.categories.map((c) => (
                     <Badge
                       key={c}

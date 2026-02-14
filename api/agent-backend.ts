@@ -141,6 +141,8 @@ export default async function handler(req: any, res: any) {
     return res.send(
       JSON.stringify({
         reply: raw.slice(0, 3000),
+        nonJsonUpstream: true,
+        upstreamContentType: ct || "unknown",
       })
     );
   } catch (error: any) {

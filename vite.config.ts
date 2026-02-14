@@ -86,7 +86,13 @@ function apiRoutes() {
             if (ct.includes("application/json")) {
               return res.end(raw);
             }
-            return res.end(JSON.stringify({ reply: raw.slice(0, 3000) }));
+            return res.end(
+              JSON.stringify({
+                reply: raw.slice(0, 3000),
+                nonJsonUpstream: true,
+                upstreamContentType: ct || "unknown",
+              })
+            );
           } catch (e: any) {
             res.statusCode = 400;
             res.setHeader("Content-Type", "application/json");
