@@ -1106,6 +1106,17 @@ type AnalyticsEventName =
   | "save_example"
   | "publish_agent";
 
+type LocalAnalyticsEvent = {
+  event: AnalyticsEventName;
+  payload?: Record<string, any>;
+  ts: number;
+  path?: string;
+  ua?: string;
+};
+
+const ANALYTICS_STORAGE_KEY = "echo_analytics_events";
+const ANALYTICS_STORAGE_LIMIT = 1000;
+
 function trackAnalyticsEvent(
   event: AnalyticsEventName,
   payload: Record<string, any> = {}
@@ -1118,6 +1129,14 @@ function trackAnalyticsEvent(
     path: window.location.pathname + window.location.hash,
     ua: navigator.userAgent,
   };
+  try {
+    const raw = localStorage.getItem(ANALYTICS_STORAGE_KEY);
+    const prev = raw ? (JSON.parse(raw) as LocalAnalyticsEvent[]) : [];
+    const next = [...prev, body].slice(-ANALYTICS_STORAGE_LIMIT);
+    localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // non-blocking analytics
+  }
   try {
     fetch("/api/analytics-event", {
       method: "POST",
@@ -2494,6 +2513,10 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
 
 
     // --- Views ---
+  if (route.startsWith("/analytics")) {
+    return <AnalyticsView onBack={() => push("/")} />;
+  }
+
   // Profile routes
   if (route.startsWith("/profile/agents")) {
     return (
@@ -5323,6 +5346,210 @@ function TopNavItem({
 }
 
 
+function AnalyticsView({ onBack }: { onBack: () => void }) {
+  const [events, setEvents] = useState<LocalAnalyticsEvent[]>([]);
+
+  const loadEvents = useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(ANALYTICS_STORAGE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as LocalAnalyticsEvent[]) : [];
+      setEvents(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setEvents([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
+  const stats = useMemo(() => {
+    const counts: Record<AnalyticsEventName, number> = {
+      view_agent: 0,
+      start_session: 0,
+      pay_success: 0,
+      chat_message: 0,
+      save_example: 0,
+      publish_agent: 0,
+    };
+    events.forEach((evt) => {
+      if (counts[evt.event] !== undefined) counts[evt.event] += 1;
+    });
+    return counts;
+  }, [events]);
+
+  const funnel = useMemo(() => {
+    const views = stats.view_agent;
+    const starts = stats.start_session;
+    const pays = stats.pay_success;
+    return {
+      views,
+      starts,
+      pays,
+      startRate: views > 0 ? (starts / views) * 100 : 0,
+      payRate: starts > 0 ? (pays / starts) * 100 : 0,
+    };
+  }, [stats]);
+
+  const daily = useMemo(() => {
+    const dayMap: Record<string, number> = {};
+    const last7: { key: string; label: string }[] = [];
+    for (let i = 6; i >= 0; i -= 1) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      last7.push({ key, label });
+      dayMap[key] = 0;
+    }
+    events.forEach((evt) => {
+      const key = new Date(evt.ts).toISOString().slice(0, 10);
+      if (dayMap[key] !== undefined) dayMap[key] += 1;
+    });
+    const max = Math.max(1, ...Object.values(dayMap));
+    return last7.map(({ key, label }) => ({ key, label, value: dayMap[key] || 0, max }));
+  }, [events]);
+
+  const recent = useMemo(() => [...events].sort((a, b) => b.ts - a.ts).slice(0, 25), [events]);
+
+  const clearAll = () => {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem(ANALYTICS_STORAGE_KEY);
+    setEvents([]);
+  };
+
+  const cards = [
+    { label: "Agent views", value: stats.view_agent },
+    { label: "Sessions started", value: stats.start_session },
+    { label: "Payments success", value: stats.pay_success },
+    { label: "Chat messages", value: stats.chat_message },
+    { label: "Examples saved", value: stats.save_example },
+    { label: "Agents published", value: stats.publish_agent },
+  ];
+
+  return (
+    <main className="min-h-screen bg-[#05070f] text-white">
+      <div className="mx-auto max-w-7xl px-5 py-8 md:px-8 md:py-10">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-white/85 hover:bg-white/[0.08]"
+          >
+            Back to marketplace
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={loadEvents}
+              className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-white/85 hover:bg-white/[0.08]"
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              className="rounded-lg border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-200 hover:bg-red-500/20"
+            >
+              Clear local data
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Creator analytics</p>
+          <h1 className="mt-2 text-3xl font-semibold md:text-4xl">MVP dashboard</h1>
+          <p className="mt-2 text-white/60">Events are stored in this browser and sent to `/api/analytics-event`.</p>
+        </div>
+
+        <section className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+          {cards.map((card) => (
+            <div key={card.label} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="text-xs text-white/55">{card.label}</div>
+              <div className="mt-2 text-2xl font-semibold">{card.value.toLocaleString()}</div>
+            </div>
+          ))}
+        </section>
+
+        <section className="mb-6 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <h2 className="text-lg font-semibold">Funnel</h2>
+            <p className="mt-1 text-sm text-white/60">View - Start session - Pay success</p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <div className="mb-1 flex justify-between text-sm text-white/75"><span>Views</span><span>{funnel.views}</span></div>
+                <div className="h-2 rounded-full bg-white/10"><div className="h-2 rounded-full bg-cyan-300" style={{ width: "100%" }} /></div>
+              </div>
+              <div>
+                <div className="mb-1 flex justify-between text-sm text-white/75"><span>Start session</span><span>{funnel.starts} ({funnel.startRate.toFixed(1)}%)</span></div>
+                <div className="h-2 rounded-full bg-white/10"><div className="h-2 rounded-full bg-violet-300" style={{ width: `${Math.min(100, funnel.startRate)}%` }} /></div>
+              </div>
+              <div>
+                <div className="mb-1 flex justify-between text-sm text-white/75"><span>Pay success</span><span>{funnel.pays} ({funnel.payRate.toFixed(1)}%)</span></div>
+                <div className="h-2 rounded-full bg-white/10"><div className="h-2 rounded-full bg-emerald-300" style={{ width: `${Math.min(100, funnel.payRate)}%` }} /></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <h2 className="text-lg font-semibold">Last 7 days</h2>
+            <p className="mt-1 text-sm text-white/60">All tracked events per day</p>
+            <div className="mt-4 flex h-44 items-end gap-2">
+              {daily.map((d) => {
+                const h = `${Math.max(8, (d.value / d.max) * 100)}%`;
+                return (
+                  <div key={d.key} className="flex flex-1 flex-col items-center gap-2">
+                    <div className="w-full rounded-t-md bg-gradient-to-t from-cyan-400/70 to-violet-400/80" style={{ height: h }} />
+                    <div className="text-[11px] text-white/55">{d.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+          <h2 className="text-lg font-semibold">Recent events</h2>
+          <p className="mt-1 text-sm text-white/60">Latest 25 events on this device</p>
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-white/60">
+                  <th className="px-3 py-2 font-medium">Time</th>
+                  <th className="px-3 py-2 font-medium">Event</th>
+                  <th className="px-3 py-2 font-medium">Agent</th>
+                  <th className="px-3 py-2 font-medium">Path</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.length === 0 ? (
+                  <tr>
+                    <td className="px-3 py-6 text-white/45" colSpan={4}>
+                      No events yet. Open agents, start sessions, chat, and refresh this page.
+                    </td>
+                  </tr>
+                ) : (
+                  recent.map((evt, idx) => (
+                    <tr key={`${evt.ts}-${idx}`} className="border-t border-white/10">
+                      <td className="px-3 py-2 text-white/70">{new Date(evt.ts).toLocaleString()}</td>
+                      <td className="px-3 py-2"><span className="rounded-md border border-white/15 bg-white/[0.04] px-2 py-1 text-xs">{evt.event}</span></td>
+                      <td className="px-3 py-2 text-white/70">{evt.payload?.agentId || evt.payload?.agentName || "—"}</td>
+                      <td className="px-3 py-2 text-white/50">{evt.path || "—"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+
 // --- Profile components ---
 function ProfileButton({
   onNavigate,
@@ -5400,6 +5627,13 @@ function ProfileButton({
               label="Purchases"
               onClick={() => {
                 onNavigate("/profile/purchases");
+                setOpen(false);
+              }}
+            />
+            <ProfileItem
+              label="Analytics"
+              onClick={() => {
+                onNavigate("/analytics");
                 setOpen(false);
               }}
             />
