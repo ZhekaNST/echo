@@ -908,8 +908,6 @@ function renderAgentAvatar(avatar: React.ReactNode, className: string = "w-6 h-6
   return avatar;
 }
 
-type RuntimeMode = "hosted" | "custom" | "local";
-
 type ExploreTab = "all" | "trending" | "top" | "new" | "category";
 
 // 🔊 Available TTS Voices (ElevenLabs)
@@ -1254,7 +1252,7 @@ const INITIAL_AGENTS: Agent[] = [
     likes: 1560,
     sessions: 1842,
     promptPreview: "You are a pragmatic startup advisor...",
-    engineProvider: "platform",
+    engineProvider: "creator_backend",
     createdAt: Date.now() - 1 * 24 * 60 * 60 * 1000, // вчера
 lastActiveAt: Date.now() - 1000 * 60 * 60 * 2,    // 2 часа назад
 sessions24h: 12,
@@ -1271,7 +1269,7 @@ likes24h: 5,
     likes: 1825,
     sessions: 2205,
     promptPreview: "Analyze token flows, performance, catalysts...",
-    engineProvider: "platform",
+    engineProvider: "creator_backend",
     createdAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
 lastActiveAt: Date.now() - 1000 * 60 * 60 * 2,    // 2 часа назад
 sessions24h: 15,
@@ -1760,7 +1758,6 @@ useEffect(() => {
   });
   
   const [autoPrice, setAutoPrice] = useState(true);
-  const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>("hosted");
   
   const [endpointTestStatus, setEndpointTestStatus] = useState<
   "idle" | "testing" | "ok" | "fail"
@@ -2358,7 +2355,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
       sessions: 0,
       promptPreview: "",
       createdAt: Date.now(),
-      engineProvider: "platform",
+      engineProvider: "creator_backend",
       engineApiUrl: "",
       ragEndpointUrl: "",
       ragDescription: "",
@@ -2412,7 +2409,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
       sessions: 0,
       promptPreview: "",
       createdAt: Date.now(),
-      engineProvider: "platform",
+      engineProvider: "creator_backend",
       engineApiUrl: "",
       ragEndpointUrl: "",
       ragDescription: "",
@@ -2436,7 +2433,6 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
       ? autoPriceFromPrompt(newAgent.promptPreview)
       : newAgent.priceUSDC;
     const shouldMarkVerified =
-      runtimeMode === "custom" &&
       (newAgent.backendAuthMode || "echo_key") === "verified_identity" &&
       endpointTestStatus === "ok" &&
       !!newAgent.isVerified;
@@ -2450,6 +2446,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
             ...a,
             ...newAgent,
             id: a.id, // id не меняем
+            engineProvider: "creator_backend",
             categories,
             priceUSDC,
             isVerified: shouldMarkVerified,
@@ -2473,6 +2470,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
         const agent: Agent = {
           ...newAgent,
           id,
+          engineProvider: "creator_backend",
           categories,
           priceUSDC,
           isVerified: shouldMarkVerified,
@@ -2656,14 +2654,21 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
           !!(newAgent.identityAppKey || "").trim()));
 
 const canPublish =
-  // базовые поля (оставь минимум что тебе надо)
   !!newAgent.name?.trim() &&
   !!newAgent.tagline?.trim() &&
   !!newAgent.avatar &&
-  (typeof newAgent.avatar === 'string' ? !!newAgent.avatar.trim() : true) &&
+  (typeof newAgent.avatar === "string" ? !!newAgent.avatar.trim() : true) &&
   newAgent.priceUSDC >= 0.05 &&
-  // если custom — обязателен endpoint
-  (runtimeMode !== "custom" || customConfigValid);
+  customConfigValid;
+
+const publishChecks = [
+  { label: "Name", ok: !!newAgent.name?.trim() },
+  { label: "Tagline", ok: !!newAgent.tagline?.trim() },
+  { label: "Avatar", ok: !!newAgent.avatar && (typeof newAgent.avatar === "string" ? !!newAgent.avatar.trim() : true) },
+  { label: "Price >= 0.05 USDC", ok: newAgent.priceUSDC >= 0.05 },
+  { label: "Valid backend endpoint", ok: customConfigValid },
+];
+const publishReadyCount = publishChecks.filter((c) => c.ok).length;
 
     return (
       
@@ -2879,129 +2884,16 @@ const canPublish =
                 />
               </div>
 
-              {/* RUNTIME + режим-зависимые поля */}
+              {/* BACKEND RUNTIME */}
               <div className="space-y-4 border-t border-white/10 pt-4">
                 <div className="text-xs text-white/60">
-                  Where does this agent actually run?
+                  This agent runs on your backend API.
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-[11px] text-white/65">
+                  Echo sends user messages to your chat endpoint and renders the reply you return.
                 </div>
 
-                {/* 3 кнопки режимов */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  {/* Hosted */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRuntimeMode("hosted");
-                      setNewAgent(a => ({ ...a, engineProvider: "platform" }));
-                    }}
-                    className={cx(
-                      "text-left rounded-lg border px-3 py-2 text-xs transition",
-                      runtimeMode === "hosted"
-                        ? "border-indigo-400 bg-indigo-500/10"
-                        : "border-white/10 bg-white/5 hover:border-white/30"
-                    )}
-                  >
-                    <div className="font-semibold text-white/90 text-[11px]">
-                      Hosted on da GOAT
-                    </div>
-                    <div className="text-[10px] text-white/60">
-                      We host and run this agent for you. No servers or URLs.
-                    </div>
-                  </button>
-
-
-                  {/* Custom backend */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRuntimeMode("custom");
-                      setNewAgent(a => ({
-                        ...a,
-                        engineProvider: "creator_backend",
-                      }));
-                    }}
-                    className={cx(
-                      "text-left rounded-lg border px-3 py-2 text-xs transition",
-                      runtimeMode === "custom"
-                        ? "border-indigo-400 bg-indigo-500/10"
-                        : "border-white/10 bg-white/5 hover:border-white/30"
-                    )}
-                  >
-                    <div className="font-semibold text-white/90 text-[11px]">
-                      Use my backend
-                    </div>
-                    <div className="text-[10px] text-white/60">
-                      We send messages to your API. You return the reply.
-                    </div>
-                  </button>
-
-                  {/* Local */}
-                  <button
-                    type="button"
-                    onClick={() => setRuntimeMode("local")}
-                    className={cx(
-                      "text-left rounded-lg border px-3 py-2 text-xs transition",
-                      runtimeMode === "local"
-                        ? "border-indigo-400 bg-indigo-500/10"
-                        : "border-white/10 bg-white/5 hover:border-white/30"
-                    )}
-                  >
-                    <div className="font-semibold text-white/90 text-[11px]">
-                      Run on my computer
-                    </div>
-                    <div className="text-[10px] text-white/60">
-                      Coming soon: local connector app.
-                    </div>
-                  </button>
-                </div>
-
-                {/* Hosted режим */}
-                {runtimeMode === "hosted" && (
-  <div className="space-y-2">
-    <div className="flex items-center justify-between gap-3">
-      <label className="text-sm text-white/70">
-        System prompt / persona
-      </label>
-
-      <button
-        type="button"
-        onClick={() => (window.location.hash = "/learn?tab=hosted-prompt")}
-        className="
-          text-[11px] text-white/55 hover:text-white/85
-          underline underline-offset-4
-          transition
-        "
-      >
-        Need help writing a great prompt? →
-      </button>
-    </div>
-
-    <Textarea
-  rows={4}
-  value={newAgent.promptPreview}
-  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-    setNewAgent(a => ({
-      ...a,
-      promptPreview: e.target.value,
-    }))
-  }
-  className="bg-white/5 border-white/10"
-/>
-  </div>
-)}
-
-                {/* Custom backend */}
-                {runtimeMode === "custom" && (
-  <div className="space-y-4">
-    <div className="rounded-lg bg-white/5 border border-white/10 p-3 space-y-2">
-      <div className="text-xs font-semibold text-white/85">Quickstart (3 steps)</div>
-      <ol className="text-[11px] text-white/65 list-decimal list-inside space-y-1">
-        <li>Choose connection mode.</li>
-        <li>Paste your chat endpoint (and verify settings for Verified mode).</li>
-        <li>Click <span className="font-semibold">Test endpoint</span>, then publish.</li>
-      </ol>
-    </div>
-
+                <div className="space-y-4">
     {/* 1) Chat endpoint — главный и обязательный */}
     <div className="rounded-lg bg-white/5 border border-white/10 p-3 space-y-2">
       <div className="flex items-center justify-between">
@@ -3088,14 +2980,13 @@ app.listen(3000, () => console.log("Backend listening on :3000"));`;
       </div>
 
 {/* маленькая валидация прямо под полем */}
-{runtimeMode === "custom" && !(newAgent.engineApiUrl || "").trim() && (
+{!(newAgent.engineApiUrl || "").trim() && (
   <div className="text-[11px] text-amber-200">
     Chat endpoint is required in “Use my backend”.
   </div>
 )}
 
-{runtimeMode === "custom" &&
-  (newAgent.engineApiUrl || "").trim() &&
+{(newAgent.engineApiUrl || "").trim() &&
   !isValidHttpUrl((newAgent.engineApiUrl || "").trim()) && (
     <div className="text-[11px] text-amber-200">
       Please enter a valid http(s) URL.
@@ -3309,86 +3200,24 @@ app.listen(3000, () => console.log("Backend listening on :3000"));`;
         Do NOT put model provider keys here. Keep model keys on your backend.
       </div>
     </div>
-
-    {/* 3) Advanced — прячем RAG + Tools */}
-    <details className="rounded-lg bg-white/5 border border-white/10 p-3">
-      <summary className="cursor-pointer text-xs font-semibold text-white/75 select-none">
-        Advanced (optional)
-        <span className="text-white/45 font-normal"> — RAG & tools</span>
-      </summary>
-
-      <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-        {/* RAG */}
-        <div className="rounded-lg bg-white/5 border border-white/10 p-3 space-y-2">
-          <div className="text-xs font-semibold text-white/70">RAG / Knowledge Base</div>
-          <p className="text-[11px] text-white/50">
-            Optional URL for docs search / vector DB / knowledge.
-          </p>
-
-          <Input
-            placeholder="https://your-backend.com/rag"
-            value={newAgent.ragEndpointUrl || ""}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-              setNewAgent((a) => ({
-                ...a,
-                ragEndpointUrl: e.target.value,
-              }))
-            }
-            className="bg-white/5 border-white/10 text-xs"
-          />
-
-          <Textarea
-            rows={2}
-            placeholder="Describe what docs are connected (FAQ, docs, KB, etc.)"
-            value={newAgent.ragDescription || ""}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-              setNewAgent((a) => ({
-                ...a,
-                ragDescription: e.target.value,
-              }))
-            }
-            className="bg-white/5 border-white/10 text-xs"
-          />
-        </div>
-
-        {/* Tools */}
-        <div className="rounded-lg bg-white/5 border border-white/10 p-3 space-y-2">
-          <div className="text-xs font-semibold text-white/70">Tools</div>
-          <p className="text-[11px] text-white/50">
-            List external integrations your backend can use (APIs, on-chain fetchers, etc.)
-          </p>
-
-          <Textarea
-            rows={4}
-            placeholder="e.g. on-chain fetcher, pricing API, CRM, analytics…"
-            value={newAgent.toolsDescription || ""}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-              setNewAgent((a) => ({
-                ...a,
-                toolsDescription: e.target.value,
-              }))
-            }
-            className="bg-white/5 border-white/10 text-xs"
-          />
-        </div>
-      </div>
-    </details>
   </div>
-)}
+              </div>
 
-
-                {/* Local mode */}
-                {runtimeMode === "local" && (
-                  <div className="space-y-2 text-xs text-white/60">
-                    <div className="font-semibold text-white/70">
-                      Local connector (coming soon)
-                    </div>
-                    <p>
-                      You&apos;ll be able to run the agent on your own computer
-                      using a small connector app. No public server needed.
-                    </p>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold text-white/85">Publish readiness</div>
+                  <div className="text-[11px] text-white/60">
+                    {publishReadyCount}/{publishChecks.length} complete
                   </div>
-                )}
+                </div>
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {publishChecks.map((check) => (
+                    <div key={check.label} className="text-[11px] text-white/70 flex items-center gap-2">
+                      <span className={cx("inline-block h-1.5 w-1.5 rounded-full", check.ok ? "bg-emerald-300" : "bg-amber-300")} />
+                      <span>{check.label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </CardContent>
 
@@ -3408,11 +3237,9 @@ app.listen(3000, () => console.log("Backend listening on :3000"));`;
   title={
     canPublish
       ? ""
-      : runtimeMode === "custom"
-      ? (newAgent.backendAuthMode || "echo_key") === "verified_identity"
+      : (newAgent.backendAuthMode || "echo_key") === "verified_identity"
         ? "Provide valid Chat endpoint, Identity verify URL, and Identity app key."
         : "Enter a valid Chat endpoint URL to publish."
-      : "Fill required fields to publish."
   }
 >
 
@@ -4147,8 +3974,8 @@ return (
             Turn your prompt into revenue.
           </div>
           <p className="text-xs md:text-sm text-white/65">
-            Publish agents in minutes. Use hosted engine or route all traffic
-            to your own backend with tools and RAG.
+            Publish agents in minutes. Route all traffic to your own backend
+            with tools and RAG.
           </p>
           <ul className="mt-1 text-[11px] text-white/60 space-y-1">
             <li>• Set your own price in USDC</li>
@@ -8103,23 +7930,6 @@ function ChatView({
 
 
 function LearnPage({ onBack }: { onBack: () => void }) {
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
-    const tab = params.get("tab");
-
-    if (tab === "hosted-prompt") {
-      // небольшая задержка, чтобы DOM точно успел отрендериться
-      setTimeout(() => {
-        document.getElementById("hosted-prompt")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 50);
-    }
-  }, []);
-
   return (
     <div className="min-h-screen w-screen bg-gradient-to-b from-black via-[#0b0b1a] to-black text-white">
       
@@ -8145,126 +7955,7 @@ function LearnPage({ onBack }: { onBack: () => void }) {
         <h1 className="text-3xl font-semibold">Creating Agents on Echo</h1>
 
         <section className="space-y-2">
-          <h2 className="text-xl font-medium">1. Hosted on Echo</h2>
-          <p className="text-sm text-white/60">
-            No backend. No servers. Just add your persona, prompt, and price — we host and run the model for you.
-          </p>
-        </section>
-{/* ================= PROMPT GUIDE (HOSTED) ================= */}
-<section
-  id="hosted-prompt"
-  className="space-y-3 border border-white/10 rounded-xl p-5 bg-white/[0.03]"
->
-  <div className="text-[11px] uppercase tracking-[0.18em] text-white/40">
-    Hosted on da GOAT • Prompt guide
-  </div>
-
-  <h2 className="text-xl font-medium text-white">
-    How to write a great prompt (so your agent feels consistent)
-  </h2>
-
-  <p className="text-sm text-white/60 leading-relaxed">
-    In Hosted mode, your agent is driven by this text. The clearer the rules and
-    format, the more stable the answers. Use the template below.
-  </p>
-
-  <div className="grid md:grid-cols-2 gap-4">
-    {/* Left: steps */}
-    <div className="space-y-3 text-sm text-white/70">
-      <div className="space-y-1">
-        <div className="font-medium text-white/85">1) Role + purpose (1–2 lines)</div>
-        <div className="text-white/60">Who the agent is and what it helps with.</div>
-      </div>
-
-      <div className="space-y-1">
-        <div className="font-medium text-white/85">2) Audience</div>
-        <div className="text-white/60">Newbie / intermediate / expert.</div>
-      </div>
-
-      <div className="space-y-1">
-        <div className="font-medium text-white/85">3) Rules (3–10 bullets)</div>
-        <div className="text-white/60">
-          Example rules: ask clarifying questions, don’t hallucinate, don’t give financial advice, keep answers short.
-        </div>
-      </div>
-
-      <div className="space-y-1">
-        <div className="font-medium text-white/85">4) Output format</div>
-        <div className="text-white/60">Force a consistent structure (TL;DR → details → next steps).</div>
-      </div>
-
-      <div className="space-y-1">
-        <div className="font-medium text-white/85">5) Examples (optional, but powerful)</div>
-        <div className="text-white/60">2–3 “User → Ideal answer” examples.</div>
-      </div>
-    </div>
-
-    {/* Right: template */}
-    <div className="space-y-2">
-      <div className="text-xs text-white/60">Copy-paste template:</div>
-
-      <pre className="text-xs whitespace-pre-wrap bg-black/40 border border-white/10 rounded-lg p-3 text-white/80">
-{`ROLE:
-You are a [role]. Your job is to [purpose].
-
-AUDIENCE:
-Explain for [newbie/intermediate/expert]. Tone: [friendly/serious].
-
-RULES:
-- If info is missing, ask 1–3 clarifying questions.
-- If unsure, say you’re unsure and explain what you’d need to know.
-- Avoid financial advice. Provide educational info only.
-- Keep answers concise and structured.
-
-OUTPUT FORMAT:
-1) TL;DR (1–2 lines)
-2) Key points (bullets)
-3) Risks / caveats (if relevant)
-4) Next step / question to user
-
-EXAMPLES:
-User: ...
-Assistant: ...
-`}
-      </pre>
-
-      <button
-        type="button"
-        onClick={() => {
-          const text = `ROLE:
-You are a [role]. Your job is to [purpose].
-
-AUDIENCE:
-Explain for [newbie/intermediate/expert]. Tone: [friendly/serious].
-
-RULES:
-- If info is missing, ask 1–3 clarifying questions.
-- If unsure, say you’re unsure and explain what you’d need to know.
-- Avoid financial advice. Provide educational info only.
-- Keep answers concise and structured.
-
-OUTPUT FORMAT:
-1) TL;DR (1–2 lines)
-2) Key points (bullets)
-3) Risks / caveats (if relevant)
-4) Next step / question to user
-
-EXAMPLES:
-User: ...
-Assistant: ...
-`;
-          navigator.clipboard?.writeText(text);
-        }}
-        className="text-xs px-3 py-2 rounded-lg bg-white/10 border border-white/15 hover:bg-white/15 transition"
-      >
-        Copy template
-      </button>
-    </div>
-  </div>
-</section>
-
-        <section className="space-y-2">
-          <h2 className="text-xl font-medium">2. Use My Backend</h2>
+          <h2 className="text-xl font-medium">1. Use My Backend</h2>
           <p className="text-sm text-white/60">
             Echo forwards every user message to your API endpoint. Your backend returns the reply. 
             You can use OpenAI, Google Gemini, Anthropic, your own APIs, databases, trading engines — anything.
@@ -8293,7 +7984,7 @@ x-echo-identity-app-key: <app-key>
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-xl font-medium">3. RAG / Knowledge Base</h2>
+          <h2 className="text-xl font-medium">2. RAG / Knowledge Base</h2>
           <p className="text-sm text-white/60">
             Connect your own document search or vector database. Echo passes metadata so your backend 
             can retrieve relevant documents for grounded answers.
@@ -8301,7 +7992,7 @@ x-echo-identity-app-key: <app-key>
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-xl font-medium">4. Tools</h2>
+          <h2 className="text-xl font-medium">3. Tools</h2>
           <p className="text-sm text-white/60">
             Declare what external capabilities your agent uses (e.g. pricing API, CRM, trading engine). 
             This is informational for users and helps with transparency.
@@ -8309,7 +8000,7 @@ x-echo-identity-app-key: <app-key>
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-xl font-medium">5. Connection Security</h2>
+          <h2 className="text-xl font-medium">4. Connection Security</h2>
           <p className="text-sm text-white/60">
             Standard mode sends <span className="font-mono">x-echo-key</span>. Verified mode sends
             short-lived identity token in your chosen header
