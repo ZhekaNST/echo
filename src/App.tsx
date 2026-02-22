@@ -2643,12 +2643,15 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
   // 🔹 Отдельная страница "Create / Edit Agent" вместо модалки
   if (creating) {
     const apiUrlTrimmed = (newAgent.engineApiUrl || "").trim();
-    const verifyUrlTrimmed = (newAgent.identityVerifyUrl || "").trim();
-    const authMode = newAgent.backendAuthMode || "echo_key";
-    const customConfigValid =
-      apiUrlTrimmed.length > 0 &&
-      isValidHttpUrl(apiUrlTrimmed) &&
-      (authMode !== "verified_identity" ||
+  const verifyUrlTrimmed = (newAgent.identityVerifyUrl || "").trim();
+  const authMode = newAgent.backendAuthMode || "echo_key";
+  const isSmokeEndpoint =
+    /\/api\/backend-smoke\/?$/i.test(apiUrlTrimmed) ||
+    apiUrlTrimmed.includes("postman-echo.com");
+  const customConfigValid =
+    apiUrlTrimmed.length > 0 &&
+    isValidHttpUrl(apiUrlTrimmed) &&
+    (authMode !== "verified_identity" ||
         (verifyUrlTrimmed.length > 0 &&
           isValidHttpUrl(verifyUrlTrimmed) &&
           !!(newAgent.identityAppKey || "").trim()));
@@ -2659,7 +2662,8 @@ const canPublish =
   !!newAgent.avatar &&
   (typeof newAgent.avatar === "string" ? !!newAgent.avatar.trim() : true) &&
   newAgent.priceUSDC >= 0.05 &&
-  customConfigValid;
+  customConfigValid &&
+  !isSmokeEndpoint;
 
 const publishChecks = [
   { label: "Name", ok: !!newAgent.name?.trim() },
@@ -2667,6 +2671,7 @@ const publishChecks = [
   { label: "Avatar", ok: !!newAgent.avatar && (typeof newAgent.avatar === "string" ? !!newAgent.avatar.trim() : true) },
   { label: "Price >= 0.05 USDC", ok: newAgent.priceUSDC >= 0.05 },
   { label: "Valid backend endpoint", ok: customConfigValid },
+  { label: "Production endpoint (not smoke/test)", ok: !isSmokeEndpoint },
 ];
 const publishReadyCount = publishChecks.filter((c) => c.ok).length;
 
@@ -2942,43 +2947,6 @@ const publishReadyCount = publishChecks.filter((c) => c.ok).length;
 	  </Button>
 	</div>
 
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          className="bg-white/10 hover:bg-white/20 text-xs px-3"
-          onClick={() => {
-            const template = `import express from "express";
-const app = express();
-app.use(express.json());
-
-app.post("/run", async (req, res) => {
-  const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
-  const lastUser = [...messages].reverse().find((m) => m?.role === "user");
-
-  // Standard mode token (optional)
-  const echoKey = req.header("x-echo-key");
-
-  // Verified mode headers
-  const identityToken = req.header("x-echo-identity");
-  const verifyUrl = req.header("x-echo-identity-verify-url");
-  const appKey = req.header("x-echo-identity-app-key");
-
-  // TODO: if identityToken exists, verify it with your verifier service using verifyUrl + appKey.
-  // If verification fails: return res.status(401).json({ reply: "Identity verification failed" });
-
-  const text = lastUser?.content || "(empty)";
-  return res.json({ reply: \`Backend OK. You said: \${text}\` });
-});
-
-app.listen(3000, () => console.log("Backend listening on :3000"));`;
-            navigator.clipboard?.writeText(template);
-          }}
-        >
-          Copy backend template
-        </Button>
-      </div>
-
 {/* маленькая валидация прямо под полем */}
 {!(newAgent.engineApiUrl || "").trim() && (
   <div className="text-[11px] text-amber-200">
@@ -2992,6 +2960,12 @@ app.listen(3000, () => console.log("Backend listening on :3000"));`;
       Please enter a valid http(s) URL.
     </div>
   )}
+
+{isSmokeEndpoint && (
+  <div className="text-[11px] text-amber-200">
+    Test endpoint detected. Replace with a real production backend URL before publishing.
+  </div>
+)}
 
 {/* статус теста */}
 {endpointTestStatus !== "idle" && endpointTestMsg && (
@@ -3237,6 +3211,8 @@ app.listen(3000, () => console.log("Backend listening on :3000"));`;
   title={
     canPublish
       ? ""
+      : isSmokeEndpoint
+      ? "Publishing is blocked for smoke/test endpoints. Use a real backend URL."
       : (newAgent.backendAuthMode || "echo_key") === "verified_identity"
         ? "Provide valid Chat endpoint, Identity verify URL, and Identity app key."
         : "Enter a valid Chat endpoint URL to publish."
