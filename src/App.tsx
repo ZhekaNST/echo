@@ -737,11 +737,7 @@ function restoreRouteScroll(route: string) {
   if (!raw) return;
   const y = parseInt(raw, 10);
   if (Number.isNaN(y)) return;
-  requestAnimationFrame(() => {
-    setTimeout(() => {
-      window.scrollTo({ top: y, left: 0, behavior: "auto" });
-    }, 40);
-  });
+  window.scrollTo({ top: y, left: 0, behavior: "auto" });
   safeSessionRemove(routeScrollKey(route));
 }
 
@@ -835,9 +831,11 @@ const Switch = ({ checked, onCheckedChange }: any) => (
 function useHashRoute(defaultRoute: string = "/") {
   const [route, setRoute] = useState<string>(() => (typeof window !== 'undefined' ? (window.location.hash.replace('#','') || defaultRoute) : defaultRoute));
   useEffect(() => {
+    if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
     const onHash = () => {
       const current = window.location.hash.replace('#', '') || defaultRoute;
-      saveRouteScroll(route);
       setRoute(current);
       restoreRouteScroll(current);
     };
@@ -848,6 +846,7 @@ function useHashRoute(defaultRoute: string = "/") {
   }, [defaultRoute, route]);
   const push = (path: string) => {
     if (typeof window !== 'undefined') {
+      saveRouteScroll(route);
       window.location.hash = path.startsWith('#') ? path : `#${path}`;
     }
   };
@@ -2027,14 +2026,10 @@ async function testChatEndpoint() {
 
 
   // per-user like memory (one-like-per-agent)
-  const [liked, setLiked] = useState<Record<string, boolean>>(() =>
-  loadLS<Record<string, boolean>>(LS.LIKED, {})
-);
+  const [liked, setLiked] = useState<Record<string, boolean>>({});
   
   // per-user saved/favorites (Saved agents)
-  const [saved, setSaved] = useState<Record<string, boolean>>(() =>
-  loadLS<Record<string, boolean>>(LS.SAVED, {})
-);
+  const [saved, setSaved] = useState<Record<string, boolean>>({});
  
 
   function toggleSaved(id: string) {
@@ -2151,6 +2146,8 @@ useEffect(() => {
   if (!connected || !walletPk) {
     setCloudToken(null);
     setCloudTokenState(null);
+    setLiked({});
+    setSaved({});
     return;
   }
   const existing = getCloudToken();
@@ -2160,9 +2157,15 @@ useEffect(() => {
 // ===================== PERSISTENCE (SAVE TO LOCALSTORAGE) =====================
 useEffect(() => { saveLS(LS.AGENTS, agents); }, [agents]);
 
-useEffect(() => { saveLS(LS.LIKED, liked); }, [liked]);
+useEffect(() => {
+  if (!connected || !walletPk) return;
+  saveLS(LS.LIKED, liked);
+}, [liked, connected, walletPk]);
 
-useEffect(() => { saveLS(LS.SAVED, saved); }, [saved]);
+useEffect(() => {
+  if (!connected || !walletPk) return;
+  saveLS(LS.SAVED, saved);
+}, [saved, connected, walletPk]);
 
 useEffect(() => { saveLS(LS.PURCHASES, purchases); }, [purchases]);
 
@@ -2560,8 +2563,6 @@ useEffect(() => {
       // Paid agent ready to accept payment
       setModalState("ready");
     }
-    
-    push("/");
   }    
     
   function closePay() {
@@ -4591,11 +4592,11 @@ return (
           {/* Floating Button */}
           <button
             onClick={() => setShowSessionsPanel(true)}
-            className="fixed right-4 bottom-20 z-40 flex items-center gap-2 px-4 py-3 rounded-full border border-white/18 bg-[#171a2a] text-white font-medium shadow-[0_8px_22px_rgba(0,0,0,0.45)] hover:bg-[#1d2134] hover:border-white/28 transition-all duration-200 group"
+            className="fixed right-4 bottom-20 z-40 flex items-center gap-2 px-4 py-3 rounded-full border border-white/14 bg-black/80 backdrop-blur-md text-white/90 font-medium shadow-[0_8px_18px_rgba(0,0,0,0.5)] hover:bg-black/90 hover:border-white/24 transition-all duration-200 group"
           >
             <div className="relative">
-              <Bot className="h-5 w-5" />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full text-[10px] font-bold flex items-center justify-center animate-pulse">
+              <Bot className="h-5 w-5 text-white/80" />
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500/85 rounded-full text-[10px] font-bold text-black flex items-center justify-center">
                 {activeSessions.length}
               </span>
             </div>
@@ -4610,14 +4611,14 @@ return (
               
               {/* Panel */}
               <div 
-                className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-[#0a0a14] border-l border-white/10 shadow-2xl overflow-hidden flex flex-col"
+                className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-[#090b14] border-l border-white/10 shadow-2xl overflow-hidden flex flex-col"
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-gradient-to-r from-purple-900/30 to-indigo-900/30">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-black/40">
                   <div>
                     <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                      <Bot className="h-5 w-5 text-purple-400" />
+                      <Bot className="h-5 w-5 text-white/75" />
                       Active Sessions
                     </h2>
                     <p className="text-sm text-white/50">{activeSessions.length} conversation{activeSessions.length !== 1 ? 's' : ''} in progress</p>
@@ -4640,7 +4641,7 @@ return (
                     return (
                       <div
                         key={agent.id}
-                        className="group p-4 rounded-xl bg-white/[.03] border border-white/10 hover:border-purple-500/30 hover:bg-white/[.05] transition-all cursor-pointer"
+                        className="group p-4 rounded-xl bg-white/[.02] border border-white/10 hover:border-white/20 hover:bg-white/[.04] transition-all cursor-pointer"
                         onClick={() => {
                           setSelected(agent);
                           setShowSessionsPanel(false);
@@ -4648,11 +4649,11 @@ return (
                         }}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="h-12 w-12 rounded-xl grid place-items-center text-2xl bg-gradient-to-br from-purple-500/20 to-indigo-500/20 border border-purple-500/20 flex-shrink-0">
+                          <div className="h-12 w-12 rounded-xl grid place-items-center text-2xl bg-white/[.03] border border-white/15 flex-shrink-0">
                             {renderAgentAvatar(agent.avatar)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-white group-hover:text-purple-300 transition-colors truncate">
+                            <h3 className="font-medium text-white group-hover:text-white transition-colors truncate">
                               {agent.name}
                             </h3>
                             <p className="text-sm text-white/50 truncate mt-0.5">
@@ -4676,7 +4677,7 @@ return (
                             </div>
                           </div>
                           <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400">
+                            <div className="p-2 rounded-lg bg-white/10 text-white/70">
                               <MessageCircle className="h-4 w-4" />
                             </div>
                           </div>
@@ -10216,21 +10217,21 @@ function AgentDetailView({
                 .map((r) => (
                   <Card
                     key={r.id}
-                    className="bg-white/[.02] border-white/10"
+                    className="bg-white/[.02] border-white/10 rounded-2xl"
                   >
-                    <CardContent className="p-3 space-y-1">
+                    <CardContent className="p-4 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-white/80">
+                        <span className="text-xs font-medium text-white/85">
                           {r.user}
                         </span>
-                        <span className="text-xs text-yellow-300">
+                        <span className="text-xs text-amber-300 tracking-wide">
                           {"★".repeat(r.rating)}
                           <span className="text-white/30">
                             {"★".repeat(5 - r.rating)}
                           </span>
                         </span>
                       </div>
-                      <div className="text-xs text-white/70 whitespace-pre-wrap">
+                      <div className="text-sm text-white/70 whitespace-pre-wrap leading-relaxed">
                         {r.text}
                       </div>
                       <div className="text-[10px] text-white/40">
@@ -10243,11 +10244,11 @@ function AgentDetailView({
           )}
 
           {/* Форма добавления отзыва */}
-          <Card className="bg-white/[.02] border-white/10">
+          <Card className="bg-white/[.02] border-white/10 rounded-2xl">
             <CardHeader>
               <CardTitle className="text-sm">Add your review</CardTitle>
               <CardDescription className="text-xs text-white/60">
-                Reviews are stored locally in your browser.
+                Reviews are tied to your wallet and synced in cloud state.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -10261,7 +10262,7 @@ function AgentDetailView({
                     value={reviewName}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReviewName(e.target.value)}
                     placeholder="Your name or nickname"
-                    className="bg-white/5 border-white/10 text-xs"
+                    className="bg-white/5 border-white/10 text-sm"
                   />
                 </div>
 
@@ -10298,7 +10299,7 @@ function AgentDetailView({
                     value={reviewText}
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReviewText(e.target.value)}
                     placeholder="What did you like or dislike?"
-                    className="bg-white/5 border-white/10 text-xs"
+                    className="bg-white/5 border-white/10 text-sm leading-relaxed"
                   />
                 </div>
 
