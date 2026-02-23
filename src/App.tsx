@@ -1604,7 +1604,8 @@ useEffect(() => {
     provider.on?.("disconnect", onDisconnect);
     provider.on?.("accountChanged", onAccountChanged);
   
-    provider.connect?.({ onlyIfTrusted: true }).catch(() => {});
+    // Do not auto-connect on page load.
+    // This avoids startup crashes from wallet/solana init and removes phantom popup on refresh.
   
     return () => {
       provider.removeListener?.("connect", onConnect);
