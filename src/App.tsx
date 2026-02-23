@@ -1466,6 +1466,7 @@ const typedHeroAssistant = currentHeroTurn.assistant.slice(0, heroAssistantChars
 const viewerId = useMemo(() => walletPk || getOrCreateViewerId(), [walletPk]);
 const [cloudToken, setCloudTokenState] = useState<string | null>(() => getCloudToken());
 const [cloudHydrated, setCloudHydrated] = useState(false);
+const cloudAuthPromiseRef = useRef<Promise<string | null> | null>(null);
 
 useEffect(() => {
   if (route !== "/") return;
@@ -1996,6 +1997,7 @@ async function testChatEndpoint() {
  
 
   function toggleSaved(id: string) {
+    if (!requireWalletAction("save agents")) return;
     setSaved((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
@@ -2023,29 +2025,25 @@ async function testChatEndpoint() {
     loadLS<Record<string, AgentReview[]>>(LS.REVIEWS, {})
   );
 
-useEffect(() => {
-  let cancelled = false;
+const requestCloudToken = useCallback(async (): Promise<string | null> => {
+  if (!connected || !walletPk) return null;
 
-  const ensureCloudAuth = async () => {
-    if (!connected || !walletPk) {
-      setCloudToken(null);
-      setCloudTokenState(null);
-      return;
-    }
+  const existing = getCloudToken();
+  if (existing) {
+    setCloudTokenState(existing);
+    return existing;
+  }
 
-    // reuse existing token if present
-    const existing = getCloudToken();
-    if (existing) {
-      setCloudTokenState(existing);
-      return;
-    }
+  if (cloudAuthPromiseRef.current) {
+    return cloudAuthPromiseRef.current;
+  }
 
+  const authPromise = (async () => {
     try {
       const provider = getPhantomProvider();
       if (!provider?.signMessage) {
         console.warn("Phantom signMessage not available; cloud auth disabled.");
-        setCloudTokenState(null);
-        return;
+        return null;
       }
 
       const challengeRes = await fetch("/api/wallet-auth", {
@@ -2053,17 +2051,12 @@ useEffect(() => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "challenge", wallet: walletPk }),
       });
-      if (!challengeRes.ok) {
-        setCloudTokenState(null);
-        return;
-      }
+      if (!challengeRes.ok) return null;
+
       const challenge = await challengeRes.json();
       const message = String(challenge?.message || "");
       const challengeId = String(challenge?.challengeId || "");
-      if (!message || !challengeId) {
-        setCloudTokenState(null);
-        return;
-      }
+      if (!message || !challengeId) return null;
 
       const encoded = new TextEncoder().encode(message);
       const signed = await provider.signMessage(encoded, "utf8");
@@ -2080,37 +2073,47 @@ useEffect(() => {
           signature,
         }),
       });
-      if (!verifyRes.ok) {
-        setCloudToken(null);
-        setCloudTokenState(null);
-        return;
-      }
+      if (!verifyRes.ok) return null;
 
       const verified = await verifyRes.json();
       const token = String(verified?.token || "");
-      if (!token) {
-        setCloudTokenState(null);
-        return;
-      }
+      if (!token) return null;
 
-      if (!cancelled) {
-        setCloudToken(token);
-        setCloudTokenState(token);
-      }
+      setCloudToken(token);
+      setCloudTokenState(token);
+      return token;
     } catch (e) {
       console.warn("Cloud wallet auth failed:", e);
-      if (!cancelled) {
-        setCloudToken(null);
-        setCloudTokenState(null);
-      }
+      return null;
+    } finally {
+      cloudAuthPromiseRef.current = null;
     }
-  };
+  })();
 
-  ensureCloudAuth();
+  cloudAuthPromiseRef.current = authPromise;
+  return authPromise;
+}, [connected, walletPk]);
 
-  return () => {
-    cancelled = true;
-  };
+function requireWalletAction(actionLabel: string) {
+  if (!connected || !walletPk) {
+    alert(`Connect your Phantom wallet to ${actionLabel}.`);
+    return false;
+  }
+  if (!cloudToken) {
+    // Ask Phantom signature only after explicit user action (not on page refresh).
+    void requestCloudToken();
+  }
+  return true;
+}
+
+useEffect(() => {
+  if (!connected || !walletPk) {
+    setCloudToken(null);
+    setCloudTokenState(null);
+    return;
+  }
+  const existing = getCloudToken();
+  setCloudTokenState(existing || null);
 }, [connected, walletPk]);
   
 // ===================== PERSISTENCE (SAVE TO LOCALSTORAGE) =====================
@@ -2220,6 +2223,7 @@ useEffect(() => {
       agentId: string,
       data: { rating: number; text: string; user?: string }
     ) {
+      if (!requireWalletAction("add reviews")) return;
       setReviews((prev) => {
         const list = prev[agentId] || [];
         let id: string;
@@ -2523,6 +2527,7 @@ useEffect(() => {
 
   // like handler with guard (toggle like/unlike, one like per agent per user)
   function handleLike(id: string) {
+    if (!requireWalletAction("like agents")) return;
     setLiked((prev) => {
       const next = !prev[id];
   
