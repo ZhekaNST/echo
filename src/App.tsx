@@ -4144,162 +4144,6 @@ return (
   </div>
 </motion.section>
 
-
-        {/* ТРИ КАРТОЧКИ «USERS / CREATORS / ON SOLANA» — SOLANA FOUNDATION STYLE */}
-<section className="section-grid">
-  <div className="max-w-7xl mx-auto px-4 py-12 space-y-6">
-    {/* Заголовок секции */}
-    <div className="flex items-center justify-between gap-2">
-      <div className="space-y-1">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-white/40">
-          WHO IS ECHO FOR
-        </div>
-        <h2 className="text-xl md:text-2xl font-semibold text-white">
-          Users, creators and on-chain builders.
-        </h2>
-      </div>
-      <span className="hidden md:inline-flex text-[11px] text-white/50">
-        Solana · USDC · Non-custodial
-      </span>
-    </div>
-
-    {/* 3 колонки — все в одном стиле */}
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {/* USERS */}
-      <div className="rounded-2xl border border-white/12 bg-white/[0.025] px-5 py-5 flex flex-col justify-between">
-        <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 text-xs text-white/60">
-            <span className="h-6 w-6 rounded-full bg-cyan-500/15 border border-cyan-300/40 grid place-items-center">
-              <User className="w-3 h-3" />
-            </span>
-            <span className="uppercase tracking-[0.18em] text-[10px] text-white/45">
-              USERS
-            </span>
-          </div>
-          <div className="text-sm md:text-base font-semibold text-white">
-            Tap into specialized AI agents.
-          </div>
-          <p className="text-xs md:text-sm text-white/65">
-            Pay per session in USDC and chat with agents tuned for crypto,
-            design, startup strategy and more.
-          </p>
-          <ul className="mt-1 text-[11px] text-white/60 space-y-1">
-            <li>• No accounts — just Phantom</li>
-            <li>• Save your favorite agents</li>
-            <li>• Transparent pricing per session</li>
-          </ul>
-        </div>
-        <div className="mt-4">
-          <Button
-            variant="secondary"
-            className="w-full text-xs bg-white/5 hover:bg-white/10"
-            onClick={() => {
-              push("/explore");
-              requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
-            }}
-          >
-            Browse agents
-          </Button>
-        </div>
-      </div>
-
-      {/* CREATORS */}
-      <div className="rounded-2xl border border-white/12 bg-white/[0.025] px-5 py-5 flex flex-col justify-between">
-        <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 text-xs text-white/60">
-            <span className="h-6 w-6 rounded-full bg-fuchsia-500/15 border border-fuchsia-300/40 grid place-items-center">
-              🧩
-            </span>
-            <span className="uppercase tracking-[0.18em] text-[10px] text-white/45">
-              CREATORS
-            </span>
-          </div>
-          <div className="text-sm md:text-base font-semibold text-white">
-            Turn your prompt into revenue.
-          </div>
-          <p className="text-xs md:text-sm text-white/65">
-            Publish agents in minutes. Route all traffic to your own backend
-            with tools and RAG.
-          </p>
-          <ul className="mt-1 text-[11px] text-white/60 space-y-1">
-            <li>• Set your own price in USDC</li>
-            <li>• Non-custodial payouts to your wallet</li>
-            <li>• Track sessions, likes and revenue</li>
-          </ul>
-        </div>
-        <div className="mt-4 flex gap-2">
-          <Button
-            className="flex-1 text-xs"
-            onClick={handleStartCreate}
-          >
-            Create agent
-          </Button>
-          <Button
-            variant="secondary"
-            className="flex-1 text-xs bg-white/5 hover:bg-white/10"
-            onClick={() => push("/learn")}
-          >
-            Learn more
-          </Button>
-        </div>
-      </div>
-
-      {/* SOLANA / WALLET */}
-      <div className="rounded-2xl border border-white/12 bg-white/[0.025] px-5 py-5 flex flex-col justify-between">
-        <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 text-xs text-white/60">
-            <span className="h-6 w-6 rounded-full bg-emerald-500/15 border border-emerald-300/40 grid place-items-center">
-              <Zap className="w-3 h-3" />
-            </span>
-            <span className="uppercase tracking-[0.18em] text-[10px] text-white/45">
-              ON SOLANA
-            </span>
-          </div>
-          <div className="text-sm md:text-base font-semibold text-white">
-            Fast, cheap, non-custodial.
-          </div>
-          <p className="text-xs md:text-sm text-white/65">
-            USDC on Solana gives instant low-fee transfers from users to
-            creators. Connect Phantom and you&apos;re in.
-          </p>
-          <div className="mt-3 rounded-2xl bg-black/60 border border-white/15 px-4 py-3 text-xs space-y-1">
-            <div className="flex justify-between">
-              <span className="text-white/60">SOL</span>
-              <span className="font-mono text-white/90">
-                {solBalance != null ? solBalance.toFixed(4) : "--"}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-white/60">USDC</span>
-              <span className="font-mono text-white/90">
-                {usdcBalance != null ? usdcBalance.toFixed(2) : "--"}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="mt-4">
-          {connected ? (
-            <Button
-              variant="secondary"
-              className="w-full text-xs bg-white/5 hover:bg-white/10"
-              onClick={handleDisconnect}
-            >
-              Disconnect wallet
-            </Button>
-          ) : (
-            <Button
-              className="w-full text-xs"
-              onClick={handleConnect}
-            >
-              <Wallet className="h-4 w-4 mr-1" />
-              Connect Phantom
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
       </div>
     )}
 
@@ -10200,121 +10044,122 @@ function AgentDetailView({
 
         
 
-        {/* 🔥 Reviews — САМЫЙ НИЗ СТРАНИЦЫ */}
-        <section className="space-y-4">
-          <h2 className="text-sm font-semibold text-white">Reviews</h2>
+        <section className="space-y-5">
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.04] to-white/[0.02] p-4 md:p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                  Community
+                </div>
+                <h3 className="mt-1 text-lg md:text-xl font-semibold text-white">Reviews</h3>
+              </div>
+              <div className="text-right">
+                <div className="text-xl font-semibold text-white">
+                  {agentReviews.length > 0 ? averageRating.toFixed(1) : "—"}
+                </div>
+                <div className="text-xs text-white/50">
+                  {agentReviews.length} review{agentReviews.length === 1 ? "" : "s"}
+                </div>
+              </div>
+            </div>
+          </div>
 
-          {/* Список отзывов */}
           {agentReviews.length === 0 ? (
-            <div className="text-xs text-white/50">
+            <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] px-4 py-6 text-sm text-white/55">
               No reviews yet. Be the first to leave one.
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-3">
               {agentReviews
                 .slice()
                 .sort((a, b) => b.createdAt - a.createdAt)
                 .map((r) => (
-                  <Card
+                  <div
                     key={r.id}
-                    className="bg-white/[.02] border-white/10 rounded-2xl"
+                    className="rounded-2xl border border-white/10 bg-black/30 px-4 py-4"
                   >
-                    <CardContent className="p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-white/85">
-                          {r.user}
-                        </span>
-                        <span className="text-xs text-amber-300 tracking-wide">
-                          {"★".repeat(r.rating)}
-                          <span className="text-white/30">
-                            {"★".repeat(5 - r.rating)}
-                          </span>
-                        </span>
-                      </div>
-                      <div className="text-sm text-white/70 whitespace-pre-wrap leading-relaxed">
-                        {r.text}
-                      </div>
-                      <div className="text-[10px] text-white/40">
-                        {new Date(r.createdAt).toLocaleString()}
-                      </div>
-                    </CardContent>
-                  </Card>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-white/90">{r.user}</span>
+                      <span className="text-xs text-amber-300 tracking-wide">
+                        {"★".repeat(r.rating)}
+                        <span className="text-white/25">{"★".repeat(5 - r.rating)}</span>
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-white/70 leading-relaxed whitespace-pre-wrap">
+                      {r.text}
+                    </p>
+                    <div className="mt-3 text-[11px] text-white/40">
+                      {new Date(r.createdAt).toLocaleString()}
+                    </div>
+                  </div>
                 ))}
             </div>
           )}
 
-          {/* Форма добавления отзыва */}
-          <Card className="bg-white/[.02] border-white/10 rounded-2xl">
-            <CardHeader>
-              <CardTitle className="text-sm">Add your review</CardTitle>
-              <CardDescription className="text-xs text-white/60">
-                Reviews are tied to your wallet and synced in cloud state.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-3" onSubmit={handleSubmitReview}>
-                {/* Name */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/60">
-                    Name (optional)
-                  </label>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 md:p-5">
+            <div className="mb-4">
+              <h4 className="text-sm font-semibold text-white">Add your review</h4>
+              <p className="text-xs text-white/55 mt-1">
+                Wallet-based review, synced to cloud state.
+              </p>
+            </div>
+            <form className="space-y-4" onSubmit={handleSubmitReview}>
+              <div className="grid md:grid-cols-[1fr_auto] gap-3 items-end">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-white/60">Name (optional)</label>
                   <Input
                     value={reviewName}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReviewName(e.target.value)}
                     placeholder="Your name or nickname"
-                    className="bg-white/5 border-white/10 text-sm"
+                    className="bg-black/30 border-white/12 text-sm"
                   />
                 </div>
-
-                {/* Rating */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/60">Rating</label>
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => setReviewRating(n)}
-                        className={cx(
-                          "h-7 w-7 rounded-full text-xs flex items-center justify-center border",
-                          n <= reviewRating
-                            ? "bg-yellow-400/20 border-yellow-300 text-yellow-200"
-                            : "bg-white/5 border-white/15 text-white/40"
-                        )}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                    <span className="ml-2 text-[11px] text-white/50">
-                      {reviewRating}/5
-                    </span>
-                  </div>
+                <div className="flex items-center gap-1.5">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setReviewRating(n)}
+                      className={cx(
+                        "h-8 w-8 rounded-full text-xs flex items-center justify-center border transition-colors",
+                        n <= reviewRating
+                          ? "bg-amber-400/18 border-amber-300/70 text-amber-200"
+                          : "bg-white/5 border-white/15 text-white/45 hover:border-white/30"
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
                 </div>
+              </div>
 
-                {/* Text */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/60">Review</label>
-                  <Textarea
-                    rows={3}
-                    value={reviewText}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReviewText(e.target.value)}
-                    placeholder="What did you like or dislike?"
-                    className="bg-white/5 border-white/10 text-sm leading-relaxed"
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-white/60">Review</label>
+                <Textarea
+                  rows={4}
+                  value={reviewText}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReviewText(e.target.value)}
+                  placeholder="What did you like or dislike?"
+                  className="bg-black/30 border-white/12 text-sm leading-relaxed"
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  disabled={!reviewText.trim()}
+                  className="group relative overflow-hidden gap-2 rounded-xl border border-white/20 bg-white/[0.06] px-4 py-2 text-sm text-white shadow-[0_10px_30px_rgba(79,70,229,0.22)] transition-all duration-300 hover:border-cyan-300/45 hover:bg-white/[0.1]"
+                >
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
+                    bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.26),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.20),transparent_45%)]"
                   />
-                </div>
-
-                <div className="flex justify-end">
-                  <Button
-                    type="submit"
-                    disabled={!reviewText.trim()}
-                    className="text-xs px-3 py-1"
-                  >
-                    Submit review
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                  <span className="relative z-10">Submit review</span>
+                </Button>
+              </div>
+            </form>
+          </div>
         </section>
       </div>
     </div>
