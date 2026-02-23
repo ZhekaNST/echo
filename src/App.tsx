@@ -2043,8 +2043,9 @@ useEffect(() => {
     }
 
     try {
-      const [cloudAgents, cloudSaved, cloudPurchases, cloudReviews] = await Promise.all([
+      const [cloudAgents, cloudLiked, cloudSaved, cloudPurchases, cloudReviews] = await Promise.all([
         loadCloudState<Agent[]>("global", "agents"),
+        loadCloudState<Record<string, boolean>>(viewerId, "liked"),
         loadCloudState<Record<string, boolean>>(viewerId, "saved"),
         loadCloudState<Purchase[]>(viewerId, "purchases"),
         loadCloudState<Record<string, AgentReview[]>>(viewerId, "reviews"),
@@ -2061,6 +2062,9 @@ useEffect(() => {
               : DEFAULT_AGENT_AVATAR_URL,
         }));
         setAgents(normalized);
+      }
+      if (cloudLiked && typeof cloudLiked === "object") {
+        setLiked(cloudLiked);
       }
       if (cloudSaved && typeof cloudSaved === "object") {
         setSaved(cloudSaved);
@@ -2094,6 +2098,11 @@ useEffect(() => {
   }));
   saveCloudState("global", "agents", safeAgents);
 }, [agents, cloudHydrated]);
+
+useEffect(() => {
+  if (!cloudHydrated || !isCloudEnabled()) return;
+  saveCloudState(viewerId, "liked", liked);
+}, [liked, cloudHydrated, viewerId]);
 
 useEffect(() => {
   if (!cloudHydrated || !isCloudEnabled()) return;

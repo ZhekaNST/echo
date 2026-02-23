@@ -19,7 +19,7 @@ function headers() {
   };
 }
 
-export type CloudStateScope = "agents" | "saved" | "purchases" | "reviews";
+export type CloudStateScope = "agents" | "liked" | "saved" | "purchases" | "reviews";
 
 export async function loadCloudState<T>(owner: string, scope: CloudStateScope): Promise<T | null> {
   if (!hasConfig()) return null;
