@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { logServerError } from "./_telemetry";
+import { logServerError } from "./_telemetry.js";
 
 type Scope = "agents" | "liked" | "saved" | "purchases" | "reviews";
 

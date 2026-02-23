@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
-import { logServerError } from "./_telemetry";
+import { logServerError } from "./_telemetry.js";
 
 type ChallengeRecord = {
   nonce: string;

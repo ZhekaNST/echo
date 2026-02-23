@@ -2,7 +2,7 @@
 // This creates a payment intent that will be verified server-side after payment
 
 import crypto from "crypto";
-import { logServerError } from "../_telemetry";
+import { logServerError } from "../_telemetry.js";
 
 // USDC on Solana Mainnet
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";

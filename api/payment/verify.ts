@@ -3,7 +3,7 @@
 
 // Import payment intent store (Note: in production, use shared KV storage)
 // For serverless, we need a different approach - verify directly on-chain
-import { logServerError } from "../_telemetry";
+import { logServerError } from "../_telemetry.js";
 
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const USDC_DECIMALS = 6;

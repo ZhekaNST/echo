@@ -1,5 +1,5 @@
 import { createHmac, randomUUID } from "node:crypto";
-import { logServerError } from "./_telemetry";
+import { logServerError } from "./_telemetry.js";
 
 type BackendAuthMode = "echo_key" | "verified_identity";
 

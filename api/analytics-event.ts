@@ -1,4 +1,4 @@
-import { logServerError } from "./_telemetry";
+import { logServerError } from "./_telemetry.js";
 
 type AnalyticsEventBody = {
   event?: string;
