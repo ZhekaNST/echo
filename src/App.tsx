@@ -509,6 +509,46 @@ function loadLS<T>(key: string, fallback: T): T {
   }
 }
 
+function safeLocalGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeLocalSet(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function safeSessionGet(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSessionSet(key: string, value: string) {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function safeSessionRemove(key: string) {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // ignore storage errors
+  }
+}
+
 function saveLS(key: string, value: any) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -524,13 +564,13 @@ const CLOUD_VIEWER_ID_KEY = "echo:viewer_id:v1";
 
 function getOrCreateViewerId() {
   if (typeof window === "undefined") return "anon-server";
-  const existing = localStorage.getItem(CLOUD_VIEWER_ID_KEY);
+  const existing = safeLocalGet(CLOUD_VIEWER_ID_KEY);
   if (existing) return existing;
   const id =
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `anon_${Date.now()}_${Math.random()}`;
-  localStorage.setItem(CLOUD_VIEWER_ID_KEY, id);
+  safeLocalSet(CLOUD_VIEWER_ID_KEY, id);
   return id;
 }
 
@@ -663,12 +703,12 @@ function routeScrollKey(route: string) {
 
 function saveRouteScroll(route: string) {
   if (typeof window === "undefined") return;
-  sessionStorage.setItem(routeScrollKey(route), String(window.scrollY));
+  safeSessionSet(routeScrollKey(route), String(window.scrollY));
 }
 
 function restoreRouteScroll(route: string) {
   if (typeof window === "undefined") return;
-  const raw = sessionStorage.getItem(routeScrollKey(route));
+  const raw = safeSessionGet(routeScrollKey(route));
   if (!raw) return;
   const y = parseInt(raw, 10);
   if (Number.isNaN(y)) return;
@@ -677,7 +717,7 @@ function restoreRouteScroll(route: string) {
       window.scrollTo({ top: y, left: 0, behavior: "auto" });
     }, 40);
   });
-  sessionStorage.removeItem(routeScrollKey(route));
+  safeSessionRemove(routeScrollKey(route));
 }
 
 
@@ -1683,7 +1723,7 @@ useEffect(() => {
     if (typeof window === "undefined") return;
   
     const now = Date.now();
-    const last = Number(localStorage.getItem(TRENDING_RESET_KEY) || 0);
+    const last = Number(safeLocalGet(TRENDING_RESET_KEY) || 0);
   
     // каждые 24 часа обнуляем "24h" счётчики
     if (!last || now - last > 24 * 60 * 60 * 1000) {
@@ -1694,14 +1734,14 @@ useEffect(() => {
           likes24h: 0,
         }))
       );
-      localStorage.setItem(TRENDING_RESET_KEY, String(now));
+      safeLocalSet(TRENDING_RESET_KEY, String(now));
     }
   }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
   
-    const savedAgentId = localStorage.getItem("selectedAgentId");
+    const savedAgentId = safeLocalGet("selectedAgentId");
   
     if (savedAgentId) {
       const agent = agents.find(a => a.id === savedAgentId);

@@ -75,8 +75,31 @@ function renderFatalBootError(message: string) {
   `
 }
 
+function installGlobalCrashHandlers() {
+  if (typeof window === 'undefined') return
+
+  const renderFromUnknown = (err: unknown) => {
+    const message =
+      err instanceof Error
+        ? `${err.name}: ${err.message}`
+        : typeof err === 'string'
+          ? err
+          : JSON.stringify(err)
+    renderFatalBootError(message)
+  }
+
+  window.addEventListener('error', (event) => {
+    renderFromUnknown(event.error || event.message)
+  })
+
+  window.addEventListener('unhandledrejection', (event) => {
+    renderFromUnknown(event.reason)
+  })
+}
+
 async function bootstrap() {
   try {
+    installGlobalCrashHandlers()
     normalizeHashRoute()
 
     const rootEl = document.getElementById('root')
