@@ -1087,9 +1087,11 @@ type AnalyticsEventName =
   | "view_agent"
   | "start_session"
   | "pay_success"
+  | "pay_verify_fail"
   | "chat_message"
   | "save_example"
-  | "publish_agent";
+  | "publish_agent"
+  | "endpoint_test_fail";
 
 type LocalAnalyticsEvent = {
   event: AnalyticsEventName;
@@ -1799,35 +1801,39 @@ async function testChatEndpoint() {
   const authMode = newAgent.backendAuthMode || "echo_key";
   const verifyUrl = (newAgent.identityVerifyUrl || "").trim();
   const appKey = (newAgent.identityAppKey || "").trim();
+  const agentId = editingAgentId || "test-agent";
+
+  const failEndpoint = (message: string, extra: Record<string, any> = {}) => {
+    setEndpointTestStatus("fail");
+    setEndpointTestMsg(message);
+    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+    trackAnalyticsEvent("endpoint_test_fail", {
+      reason: message,
+      targetUrl: url,
+      authMode,
+      agentId,
+      ...extra,
+    });
+  };
 
   if (!url) {
-    setEndpointTestStatus("fail");
-    setEndpointTestMsg("Please enter a Chat endpoint URL first.");
-    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+    failEndpoint("Please enter a Chat endpoint URL first.");
     return;
   }
   if (!isValidHttpUrl(url)) {
-    setEndpointTestStatus("fail");
-    setEndpointTestMsg("Endpoint must be a valid http(s) URL.");
-    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+    failEndpoint("Endpoint must be a valid http(s) URL.");
     return;
   }
   if (authMode === "verified_identity" && !verifyUrl) {
-    setEndpointTestStatus("fail");
-    setEndpointTestMsg("Verified mode requires Identity verify URL.");
-    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+    failEndpoint("Verified mode requires Identity verify URL.");
     return;
   }
   if (authMode === "verified_identity" && !isValidHttpUrl(verifyUrl)) {
-    setEndpointTestStatus("fail");
-    setEndpointTestMsg("Identity verify URL must be a valid http(s) URL.");
-    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+    failEndpoint("Identity verify URL must be a valid http(s) URL.");
     return;
   }
   if (authMode === "verified_identity" && !appKey) {
-    setEndpointTestStatus("fail");
-    setEndpointTestMsg("Verified mode requires Identity app key.");
-    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+    failEndpoint("Verified mode requires Identity app key.");
     return;
   }
 
@@ -1841,8 +1847,8 @@ async function testChatEndpoint() {
     const res = await fetch("/api/agent-backend", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        agentId: editingAgentId || "test-agent",
+        body: JSON.stringify({
+        agentId,
         targetUrl: url,
         authToken: newAgent.authToken || null,
         backendAuthMode: authMode,
@@ -1866,11 +1872,9 @@ async function testChatEndpoint() {
     if (!res.ok) {
       const lower = text.toLowerCase();
       if (authMode === "verified_identity" && (res.status === 401 || res.status === 403)) {
-        setEndpointTestStatus("fail");
-        setEndpointTestMsg(
+        failEndpoint(
           "Verified check failed (401/403). Most likely Identity app key is invalid or verifier rejected token."
-        );
-        setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+        , { status: res.status });
         return;
       }
       if (
@@ -1878,27 +1882,21 @@ async function testChatEndpoint() {
         (lower.includes("verify") || lower.includes("identity")) &&
         (res.status === 500 || res.status === 502 || res.status === 504)
       ) {
-        setEndpointTestStatus("fail");
-        setEndpointTestMsg(
+        failEndpoint(
           "Identity verify URL is unreachable or verifier failed. Check verify URL availability."
-        );
-        setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+        , { status: res.status });
         return;
       }
-      setEndpointTestStatus("fail");
-      setEndpointTestMsg(
+      failEndpoint(
         `Endpoint test failed (HTTP ${res.status}). ${text ? text.slice(0, 180) : "No response body."}`
-      );
-      setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+      , { status: res.status });
       return;
     }
 
     if (!contentType.includes("application/json")) {
-      setEndpointTestStatus("fail");
-      setEndpointTestMsg(
+      failEndpoint(
         "Endpoint returned non-JSON response. Return JSON like { \"reply\": \"...\" }."
       );
-      setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
       return;
     }
 
@@ -1906,9 +1904,7 @@ async function testChatEndpoint() {
     try {
       parsed = text ? JSON.parse(text) : null;
     } catch {
-      setEndpointTestStatus("fail");
-      setEndpointTestMsg("Endpoint returned invalid JSON.");
-      setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+      failEndpoint("Endpoint returned invalid JSON.");
       return;
     }
 
@@ -1917,19 +1913,15 @@ async function testChatEndpoint() {
       typeof parsed?.content === "string" ||
       typeof parsed?.message === "string";
     if (parsed?.nonJsonUpstream) {
-      setEndpointTestStatus("fail");
-      setEndpointTestMsg(
+      failEndpoint(
         `Endpoint returned non-JSON (${parsed?.upstreamContentType || "unknown"}). Return JSON like { "reply": "..." }.`
       );
-      setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
       return;
     }
     if (!hasReply) {
-      setEndpointTestStatus("fail");
-      setEndpointTestMsg(
+      failEndpoint(
         "JSON is valid but missing reply/content/message field."
       );
-      setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
       return;
     }
 
@@ -1947,9 +1939,7 @@ async function testChatEndpoint() {
         ? "Timeout (12s). Endpoint did not respond."
         : e?.message || "Request failed.";
 
-    setEndpointTestStatus("fail");
-    setEndpointTestMsg(msg);
-    setNewAgent((a) => ({ ...a, isVerified: false, verifiedAt: null }));
+    failEndpoint(msg);
   } finally {
     clearTimeout(t);
   }
@@ -2706,7 +2696,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
 
     // --- Views ---
   if (route.startsWith("/analytics")) {
-    return <AnalyticsView onBack={() => push("/")} />;
+    return <AnalyticsView onBack={() => push("/")} purchases={purchases} />;
   }
 
   // Profile routes
@@ -2768,6 +2758,9 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
   // 🔹 Privacy Policy page route
   if (route.startsWith("/privacy")) {
     return <PrivacyPage onBack={() => push("/")} />;
+  }
+  if (route.startsWith("/status")) {
+    return <StatusPage onBack={() => push("/")} />;
   }
 
     // 🔹 НОВЫЙ РОУТ: страница агента
@@ -3499,7 +3492,7 @@ return (
   <div className="flex items-center gap-4">
     <button
       type="button"
-      onClick={() => alert("Coming soon")}
+      onClick={() => (window.location.hash = "/docs")}
       className="
         bg-transparent border-0 p-0 appearance-none
         text-sm text-white/65 hover:text-white transition
@@ -3507,6 +3500,18 @@ return (
       "
     >
       Docs
+    </button>
+
+    <button
+      type="button"
+      onClick={() => (window.location.hash = "/status")}
+      className="
+        bg-transparent border-0 p-0 appearance-none
+        text-sm text-white/65 hover:text-white transition
+        focus:outline-none
+      "
+    >
+      Status
     </button>
 
     <button
@@ -4788,6 +4793,13 @@ return (
                     );
 
                     if (!verification.verified) {
+                      trackAnalyticsEvent("pay_verify_fail", {
+                        agentId: selected.id,
+                        amountUsdc: selected.priceUSDC,
+                        signature: sig,
+                        error: verification.error || "Unknown verification error",
+                        engineProvider: selected.engineProvider || "platform",
+                      });
                       setModalState("error");
                       alert(
                         "Payment verification failed: " + (verification.error || "Unknown error")
@@ -4855,6 +4867,13 @@ return (
                     );
 
                     if (!verification.verified) {
+                      trackAnalyticsEvent("pay_verify_fail", {
+                        agentId: selected.id,
+                        amountUsdc: selected.priceUSDC,
+                        signature: sig,
+                        error: verification.error || "Unknown verification error",
+                        engineProvider: selected.engineProvider || "platform",
+                      });
                       setModalState("error");
                       alert(
                         "Payment verification failed: " + (verification.error || "Unknown error")
@@ -4943,6 +4962,11 @@ return (
                 </a>
               </li>
               <li>
+                <a href="#/status" className="hover:text-white transition">
+                  Status
+                </a>
+              </li>
+              <li>
                 <a href="mailto:support@echo.app" className="hover:text-white transition">
                   Support
                 </a>
@@ -5009,6 +5033,9 @@ return (
             </a>
             <a href="#/about" className="hover:text-white transition">
               About
+            </a>
+            <a href="#/status" className="hover:text-white transition">
+              Status
             </a>
           </div>
         </div>
@@ -5396,7 +5423,13 @@ function TopNavItem({
 }
 
 
-function AnalyticsView({ onBack }: { onBack: () => void }) {
+function AnalyticsView({
+  onBack,
+  purchases,
+}: {
+  onBack: () => void;
+  purchases: { id: string; agentId: string; priceUSDC: number; ts: number }[];
+}) {
   const [events, setEvents] = useState<LocalAnalyticsEvent[]>([]);
 
   const loadEvents = useCallback(() => {
@@ -5419,9 +5452,11 @@ function AnalyticsView({ onBack }: { onBack: () => void }) {
       view_agent: 0,
       start_session: 0,
       pay_success: 0,
+      pay_verify_fail: 0,
       chat_message: 0,
       save_example: 0,
       publish_agent: 0,
+      endpoint_test_fail: 0,
     };
     events.forEach((evt) => {
       if (counts[evt.event] !== undefined) counts[evt.event] += 1;
@@ -5463,6 +5498,26 @@ function AnalyticsView({ onBack }: { onBack: () => void }) {
   }, [events]);
 
   const recent = useMemo(() => [...events].sort((a, b) => b.ts - a.ts).slice(0, 25), [events]);
+  const recentPayVerifyFails = useMemo(
+    () =>
+      [...events]
+        .filter((evt) => evt.event === "pay_verify_fail")
+        .sort((a, b) => b.ts - a.ts)
+        .slice(0, 12),
+    [events]
+  );
+  const recentEndpointFails = useMemo(
+    () =>
+      [...events]
+        .filter((evt) => evt.event === "endpoint_test_fail")
+        .sort((a, b) => b.ts - a.ts)
+        .slice(0, 12),
+    [events]
+  );
+  const recentPurchases = useMemo(
+    () => [...purchases].sort((a, b) => b.ts - a.ts).slice(0, 12),
+    [purchases]
+  );
 
   const clearAll = () => {
     if (typeof window === "undefined") return;
@@ -5474,7 +5529,9 @@ function AnalyticsView({ onBack }: { onBack: () => void }) {
     { label: "Agent views", value: stats.view_agent },
     { label: "Sessions started", value: stats.start_session },
     { label: "Payments success", value: stats.pay_success },
+    { label: "Pay verify fails", value: stats.pay_verify_fail },
     { label: "Chat messages", value: stats.chat_message },
+    { label: "Endpoint test fails", value: stats.endpoint_test_fail },
     { label: "Examples saved", value: stats.save_example },
     { label: "Agents published", value: stats.publish_agent },
   ];
@@ -5514,7 +5571,7 @@ function AnalyticsView({ onBack }: { onBack: () => void }) {
           <p className="mt-2 text-white/60">Events are stored in this browser and sent to `/api/analytics-event`.</p>
         </div>
 
-        <section className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <section className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
           {cards.map((card) => (
             <div key={card.label} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <div className="text-xs text-white/55">{card.label}</div>
@@ -5556,6 +5613,51 @@ function AnalyticsView({ onBack }: { onBack: () => void }) {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </section>
+
+        <section className="mb-6 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <h2 className="text-lg font-semibold">Recent payments</h2>
+            <p className="mt-1 text-sm text-white/60">Local purchase log (latest 12)</p>
+            <div className="mt-3 space-y-2 text-sm">
+              {recentPurchases.length === 0 && <div className="text-white/50">No payments yet.</div>}
+              {recentPurchases.map((p) => (
+                <div key={p.id} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                  <div className="font-mono text-[11px] text-white/70">{p.id.slice(0, 14)}...</div>
+                  <div className="mt-1 text-white/90">{p.priceUSDC.toFixed(2)} USDC</div>
+                  <div className="text-[11px] text-white/55">{new Date(p.ts).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <h2 className="text-lg font-semibold">Failed verifications</h2>
+            <p className="mt-1 text-sm text-white/60">`pay_verify_fail` events</p>
+            <div className="mt-3 space-y-2 text-sm">
+              {recentPayVerifyFails.length === 0 && <div className="text-white/50">No failures logged.</div>}
+              {recentPayVerifyFails.map((evt, idx) => (
+                <div key={`${evt.ts}_${idx}`} className="rounded-lg border border-red-400/20 bg-red-500/5 px-3 py-2">
+                  <div className="text-[11px] text-red-200/90">{new Date(evt.ts).toLocaleString()}</div>
+                  <div className="text-white/80">{String(evt.payload?.error || "Unknown verification error")}</div>
+                  <div className="text-[11px] text-white/50">agent: {String(evt.payload?.agentId || "-")}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <h2 className="text-lg font-semibold">Endpoint test failures</h2>
+            <p className="mt-1 text-sm text-white/60">`endpoint_test_fail` events</p>
+            <div className="mt-3 space-y-2 text-sm">
+              {recentEndpointFails.length === 0 && <div className="text-white/50">No endpoint failures logged.</div>}
+              {recentEndpointFails.map((evt, idx) => (
+                <div key={`${evt.ts}_${idx}`} className="rounded-lg border border-amber-300/20 bg-amber-500/5 px-3 py-2">
+                  <div className="text-[11px] text-amber-100/90">{new Date(evt.ts).toLocaleString()}</div>
+                  <div className="text-white/80">{String(evt.payload?.reason || "Unknown endpoint failure")}</div>
+                  <div className="text-[11px] text-white/50 truncate">{String(evt.payload?.targetUrl || "-")}</div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -9039,6 +9141,67 @@ function DocsPage({ onBack }: { onBack: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function StatusPage({ onBack }: { onBack: () => void }) {
+  const checks = [
+    { name: "Marketplace UI", status: "Operational", note: "Main routes are available." },
+    { name: "Wallet auth", status: "Operational", note: "Phantom challenge/verify enabled." },
+    { name: "Payments", status: "Operational", note: "USDC transfer + server verification active." },
+    { name: "Cloud state sync", status: "Operational", note: "Supabase-backed state is online." },
+    { name: "Creator endpoint proxy", status: "Operational", note: "Endpoint test + runtime proxy enabled." },
+  ];
+
+  return (
+    <main className="min-h-screen bg-[#05070f] text-white">
+      <div className="mx-auto max-w-5xl px-5 py-8 md:px-8 md:py-10">
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-white/85 hover:bg-white/[0.08]"
+          >
+            Back to marketplace
+          </button>
+        </div>
+
+        <div className="mb-6">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">System</p>
+          <h1 className="mt-2 text-3xl font-semibold md:text-4xl">Status & support</h1>
+          <p className="mt-2 text-white/60">MVP runtime overview and support channels.</p>
+        </div>
+
+        <section className="grid gap-3">
+          {checks.map((check) => (
+            <div key={check.name} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-center justify-between">
+                <div className="font-medium">{check.name}</div>
+                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-200">
+                  {check.status}
+                </span>
+              </div>
+              <div className="mt-1 text-sm text-white/65">{check.note}</div>
+            </div>
+          ))}
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+          <h2 className="text-lg font-semibold">Need help?</h2>
+          <div className="mt-3 flex flex-wrap gap-3 text-sm">
+            <a href="mailto:support@echo.app" className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-white/85 hover:bg-white/[0.08]">
+              Email support
+            </a>
+            <a href="#/docs" className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-white/85 hover:bg-white/[0.08]">
+              Documentation
+            </a>
+            <a href="#/analytics" className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-white/85 hover:bg-white/[0.08]">
+              MVP ops dashboard
+            </a>
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }
 

@@ -3,6 +3,7 @@
 
 // Import payment intent store (Note: in production, use shared KV storage)
 // For serverless, we need a different approach - verify directly on-chain
+import { logServerError } from "../_telemetry";
 
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const USDC_DECIMALS = 6;
@@ -287,7 +288,12 @@ export default async function handler(req: any, res: any) {
     }
 
   } catch (error: any) {
-    console.error("[Payment Verify] Server error:", error);
+    await logServerError("api/payment/verify", error, {
+      method: req?.method,
+      hasSignature: !!req?.body?.signature,
+      receiver: req?.body?.receiver,
+      agentId: req?.body?.agentId,
+    });
     return res.status(500).json({ 
       verified: false,
       error: "Server error during verification",

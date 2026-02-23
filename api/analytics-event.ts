@@ -1,3 +1,5 @@
+import { logServerError } from "./_telemetry";
+
 type AnalyticsEventBody = {
   event?: string;
   payload?: Record<string, any>;
@@ -50,6 +52,10 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ ok: true });
   } catch (error: any) {
+    await logServerError("api/analytics-event", error, {
+      method: req?.method,
+      hasEvent: !!req?.body?.event,
+    });
     return res.status(500).json({
       ok: false,
       error: error?.message || "Analytics handler error",

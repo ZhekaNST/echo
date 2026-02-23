@@ -55,6 +55,8 @@ ELEVENLABS_VOICE_ID=your_voice_id_here
 - `ECHO_AUTH_SECRET` (server-only secret used for wallet auth token signing)
 - `VITE_PLATFORM_WALLET` (platform Solana wallet for marketplace fee)
 - `ECHO_PLATFORM_WALLET` (server-side fallback for payment verification)
+- `ANALYTICS_WEBHOOK_URL` (optional event forwarder)
+- `TELEMETRY_WEBHOOK_URL` (optional server error forwarder)
 
 After this, cloud sync goes through secure server routes (`/api/wallet-auth`, `/api/cloud-state`):
 - wallet signs a challenge in Phantom,
@@ -156,6 +158,12 @@ The app is configured for deployment on Vercel.
 2. Connect your repo to Vercel
 3. Add environment variables in Vercel dashboard
 4. Deploy!
+
+## MVP Ops
+
+- Ops dashboard: `#/analytics`
+- Status page: `#/status`
+- Launch checklist: `/MVP_LAUNCH_CHECKLIST.md`
 
 ## Security Notes
 

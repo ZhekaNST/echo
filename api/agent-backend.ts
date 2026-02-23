@@ -1,4 +1,5 @@
 import { createHmac, randomUUID } from "node:crypto";
+import { logServerError } from "./_telemetry";
 
 type BackendAuthMode = "echo_key" | "verified_identity";
 
@@ -146,6 +147,10 @@ export default async function handler(req: any, res: any) {
       })
     );
   } catch (error: any) {
+    await logServerError("api/agent-backend", error, {
+      method: req?.method,
+      hasBody: !!req?.body,
+    });
     return res.status(500).json({
       reply: error?.message || "Internal proxy error",
     });

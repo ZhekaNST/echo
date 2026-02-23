@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { logServerError } from "./_telemetry";
 
 type Scope = "agents" | "liked" | "saved" | "purchases" | "reviews";
 
@@ -64,58 +65,66 @@ export default async function handler(req: any, res: any) {
 
   const auth = verifyToken(req.headers?.authorization || req.headers?.Authorization);
 
-  if (req.method === "GET") {
-    const owner = String(req.query?.owner || "").trim();
-    const scope = String(req.query?.scope || "").trim() as Scope;
-    if (!owner || !scope) return res.status(400).json({ error: "owner and scope are required" });
+  try {
+    if (req.method === "GET") {
+      const owner = String(req.query?.owner || "").trim();
+      const scope = String(req.query?.scope || "").trim() as Scope;
+      if (!owner || !scope) return res.status(400).json({ error: "owner and scope are required" });
 
-    const isGlobalRead = owner === "global" && scope === "agents";
-    if (!isGlobalRead) {
+      const isGlobalRead = owner === "global" && scope === "agents";
+      if (!isGlobalRead) {
+        if (!auth) return res.status(401).json({ error: "Unauthorized" });
+        if (auth.sub !== owner) return res.status(403).json({ error: "Forbidden" });
+      }
+
+      const url = `${supa.url}/rest/v1/${TABLE}?owner=eq.${encodeURIComponent(owner)}&scope=eq.${encodeURIComponent(scope)}&select=data&limit=1`;
+      const up = await fetch(url, { method: "GET", headers: supa.headers });
+      const text = await up.text();
+      if (!up.ok) return res.status(up.status).send(text);
+
+      let rows: Array<{ data: unknown }> = [];
+      try {
+        rows = JSON.parse(text || "[]");
+      } catch {
+        rows = [];
+      }
+      return res.status(200).json({ data: rows?.[0]?.data ?? null });
+    }
+
+    if (req.method === "POST") {
       if (!auth) return res.status(401).json({ error: "Unauthorized" });
-      if (auth.sub !== owner) return res.status(403).json({ error: "Forbidden" });
+
+      const owner = String(req.body?.owner || "").trim();
+      const scope = String(req.body?.scope || "").trim() as Scope;
+      const data = req.body?.data;
+
+      if (!owner || !scope) return res.status(400).json({ error: "owner and scope are required" });
+
+      if (owner !== "global" && auth.sub !== owner) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
+      const up = await fetch(`${supa.url}/rest/v1/${TABLE}`, {
+        method: "POST",
+        headers: {
+          ...supa.headers,
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify([{ owner, scope, data }]),
+      });
+
+      const text = await up.text();
+      if (!up.ok) return res.status(up.status).send(text);
+      return res.status(200).json({ ok: true });
     }
 
-    const url = `${supa.url}/rest/v1/${TABLE}?owner=eq.${encodeURIComponent(owner)}&scope=eq.${encodeURIComponent(scope)}&select=data&limit=1`;
-    const up = await fetch(url, { method: "GET", headers: supa.headers });
-    const text = await up.text();
-    if (!up.ok) return res.status(up.status).send(text);
-
-    let rows: Array<{ data: unknown }> = [];
-    try {
-      rows = JSON.parse(text || "[]");
-    } catch {
-      rows = [];
-    }
-    return res.status(200).json({ data: rows?.[0]?.data ?? null });
-  }
-
-  if (req.method === "POST") {
-    if (!auth) return res.status(401).json({ error: "Unauthorized" });
-
-    const owner = String(req.body?.owner || "").trim();
-    const scope = String(req.body?.scope || "").trim() as Scope;
-    const data = req.body?.data;
-
-    if (!owner || !scope) return res.status(400).json({ error: "owner and scope are required" });
-
-    // Global agents can be updated only by authenticated wallet owners (MVP rule)
-    if (owner !== "global" && auth.sub !== owner) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
-
-    const up = await fetch(`${supa.url}/rest/v1/${TABLE}`, {
-      method: "POST",
-      headers: {
-        ...supa.headers,
-        Prefer: "resolution=merge-duplicates,return=minimal",
-      },
-      body: JSON.stringify([{ owner, scope, data }]),
+    return res.status(405).json({ error: "Method not allowed" });
+  } catch (error: any) {
+    await logServerError("api/cloud-state", error, {
+      method: req?.method,
+      owner: req?.query?.owner || req?.body?.owner,
+      scope: req?.query?.scope || req?.body?.scope,
     });
-
-    const text = await up.text();
-    if (!up.ok) return res.status(up.status).send(text);
-    return res.status(200).json({ ok: true });
+    return res.status(500).json({ error: "Cloud state handler error" });
   }
-
-  return res.status(405).json({ error: "Method not allowed" });
 }

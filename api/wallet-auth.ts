@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
+import { logServerError } from "./_telemetry";
 
 type ChallengeRecord = {
   nonce: string;
@@ -63,53 +64,61 @@ export default async function handler(req: any, res: any) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  cleanupChallenges();
+  try {
+    cleanupChallenges();
 
-  const action = req.body?.action;
+    const action = req.body?.action;
 
-  if (action === "challenge") {
-    const wallet = String(req.body?.wallet || "").trim();
-    if (!validWallet(wallet)) return res.status(400).json({ error: "Invalid wallet" });
+    if (action === "challenge") {
+      const wallet = String(req.body?.wallet || "").trim();
+      if (!validWallet(wallet)) return res.status(400).json({ error: "Invalid wallet" });
 
-    const nonce = crypto.randomBytes(16).toString("hex");
-    const challengeId = crypto.randomUUID();
-    const message = `Echo auth\nWallet: ${wallet}\nNonce: ${nonce}`;
-    const expiresAt = Date.now() + CHALLENGE_TTL_MS;
+      const nonce = crypto.randomBytes(16).toString("hex");
+      const challengeId = crypto.randomUUID();
+      const message = `Echo auth\nWallet: ${wallet}\nNonce: ${nonce}`;
+      const expiresAt = Date.now() + CHALLENGE_TTL_MS;
 
-    challenges.set(challengeId, { nonce, wallet, message, expiresAt });
-    return res.status(200).json({ challengeId, message, expiresAt });
-  }
-
-  if (action === "verify") {
-    const challengeId = String(req.body?.challengeId || "").trim();
-    const wallet = String(req.body?.wallet || "").trim();
-    const signature = String(req.body?.signature || "").trim();
-
-    const challenge = challenges.get(challengeId);
-    if (!challenge) return res.status(400).json({ error: "Challenge not found or expired" });
-    if (challenge.expiresAt <= Date.now()) {
-      challenges.delete(challengeId);
-      return res.status(400).json({ error: "Challenge expired" });
+      challenges.set(challengeId, { nonce, wallet, message, expiresAt });
+      return res.status(200).json({ challengeId, message, expiresAt });
     }
-    if (challenge.wallet !== wallet) return res.status(400).json({ error: "Wallet mismatch" });
 
-    const sigBytes = decodeSig(signature);
-    if (!sigBytes) return res.status(400).json({ error: "Invalid signature encoding" });
+    if (action === "verify") {
+      const challengeId = String(req.body?.challengeId || "").trim();
+      const wallet = String(req.body?.wallet || "").trim();
+      const signature = String(req.body?.signature || "").trim();
 
-    try {
-      const pubkey = bs58.decode(wallet);
-      const msgBytes = new TextEncoder().encode(challenge.message);
-      const ok = nacl.sign.detached.verify(msgBytes, sigBytes, pubkey);
-      if (!ok) return res.status(401).json({ error: "Signature verification failed" });
+      const challenge = challenges.get(challengeId);
+      if (!challenge) return res.status(400).json({ error: "Challenge not found or expired" });
+      if (challenge.expiresAt <= Date.now()) {
+        challenges.delete(challengeId);
+        return res.status(400).json({ error: "Challenge expired" });
+      }
+      if (challenge.wallet !== wallet) return res.status(400).json({ error: "Wallet mismatch" });
 
-      const now = Math.floor(Date.now() / 1000);
-      const token = signToken({ sub: wallet, role: "wallet", iat: now, exp: now + TOKEN_TTL_SEC });
-      challenges.delete(challengeId);
-      return res.status(200).json({ token, owner: wallet, expiresAt: (now + TOKEN_TTL_SEC) * 1000 });
-    } catch (e: any) {
-      return res.status(400).json({ error: e?.message || "Verification error" });
+      const sigBytes = decodeSig(signature);
+      if (!sigBytes) return res.status(400).json({ error: "Invalid signature encoding" });
+
+      try {
+        const pubkey = bs58.decode(wallet);
+        const msgBytes = new TextEncoder().encode(challenge.message);
+        const ok = nacl.sign.detached.verify(msgBytes, sigBytes, pubkey);
+        if (!ok) return res.status(401).json({ error: "Signature verification failed" });
+
+        const now = Math.floor(Date.now() / 1000);
+        const token = signToken({ sub: wallet, role: "wallet", iat: now, exp: now + TOKEN_TTL_SEC });
+        challenges.delete(challengeId);
+        return res.status(200).json({ token, owner: wallet, expiresAt: (now + TOKEN_TTL_SEC) * 1000 });
+      } catch (e: any) {
+        return res.status(400).json({ error: e?.message || "Verification error" });
+      }
     }
-  }
 
-  return res.status(400).json({ error: "Unknown action" });
+    return res.status(400).json({ error: "Unknown action" });
+  } catch (error: any) {
+    await logServerError("api/wallet-auth", error, {
+      method: req?.method,
+      action: req?.body?.action,
+    });
+    return res.status(500).json({ error: "Internal auth error" });
+  }
 }
