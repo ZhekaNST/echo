@@ -1378,6 +1378,14 @@ const homeCollections = [
     query: "builder",
   },
 ];
+
+const HOME_COLLECTION_SORT: Record<string, string> = {
+  "cozy-crypto": "likes_desc",
+  "design-lab": "likes_desc",
+  "founder-stack": "sessions_desc",
+  companion: "likes_desc",
+  builders: "sessions_desc",
+};
 const EXTRA_TOP_TAGS = [
   { id: "all", label: "All" },
   { id: "trending", label: "Trending" },
@@ -2287,10 +2295,18 @@ useEffect(() => {
  
   const hashParams = useMemo(() => getHashQueryParams(), [route]);
   const exploreCategory = hashParams.get("q") || "";
+  const exploreCollection = hashParams.get("collection") || "";
+  const selectedCollection = homeCollections.find((c) => c.id === exploreCollection) || null;
   const exploreTabFromUrl = (hashParams.get("tab") as ExploreTab) || "all";  
   const filtered = useMemo(() => {
     return agents.filter(a => {
       const q = query.trim().toLowerCase();
+      const collectionQuery = (selectedCollection?.query || "").toLowerCase();
+      const searchHay = `${a.name} ${a.tagline} ${a.categories.join(" ")} ${a.promptPreview || ""} ${a.description || ""}`.toLowerCase();
+
+      if (selectedCollection && collectionQuery && !searchHay.includes(collectionQuery)) {
+        return false;
+      }
   
       // 1) если tab=category → фильтруем строго по categories
       if (exploreTabFromUrl === "category" && exploreCategory) {
@@ -2298,10 +2314,9 @@ useEffect(() => {
       }
   
       // 2) иначе обычный поиск
-      const hay = `${a.name} ${a.tagline} ${a.categories.join(" ")}`.toLowerCase();
-      return !q || hay.includes(q);
+      return !q || searchHay.includes(q);
     });
-  }, [agents, query, exploreTabFromUrl, exploreCategory]);
+  }, [agents, query, exploreTabFromUrl, exploreCategory, selectedCollection]);
   
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -3921,9 +3936,10 @@ return (
           key={c.id}
           type="button"
           onClick={() => {
-            push(`/explore?collection=${encodeURIComponent(c.id)}`);
-            requestAnimationFrame(() => {
-              window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+            pushExplore(push, {
+              collection: c.id,
+              q: c.query,
+              sort: HOME_COLLECTION_SORT[c.id] || "recommended",
             });
           }}
           className="
