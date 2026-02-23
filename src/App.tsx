@@ -653,72 +653,31 @@ async function getSolanaConnection(): Promise<Connection> {
   • Working Profile menu pages: My Agents, Purchases, Creator Stats.
 */
 
-const HOME_SCROLL_KEY = "echo_home_scroll";
-const EXPLORE_SCROLL_KEY = "echo_explore_scroll";
 const PREVIOUS_PAGE_KEY = "echo_previous_page";
-
 const TRENDING_RESET_KEY = "echo_trending_reset_v1";
+const ROUTE_SCROLL_PREFIX = "echo:route-scroll:";
 
-function rememberHomeScroll() {
-  if (typeof window === "undefined") return;
-  sessionStorage.setItem(HOME_SCROLL_KEY, String(window.scrollY));
+function routeScrollKey(route: string) {
+  return `${ROUTE_SCROLL_PREFIX}${route}`;
 }
 
-function rememberExploreScroll() {
+function saveRouteScroll(route: string) {
   if (typeof window === "undefined") return;
-  sessionStorage.setItem(EXPLORE_SCROLL_KEY, String(window.scrollY));
-  sessionStorage.setItem(PREVIOUS_PAGE_KEY, "explore");
+  sessionStorage.setItem(routeScrollKey(route), String(window.scrollY));
 }
 
-function restoreExploreScrollOnce() {
+function restoreRouteScroll(route: string) {
   if (typeof window === "undefined") return;
-  
-  const previousPage = sessionStorage.getItem(PREVIOUS_PAGE_KEY);
-  if (previousPage !== "explore") return;
-  
-  const raw = sessionStorage.getItem(EXPLORE_SCROLL_KEY);
+  const raw = sessionStorage.getItem(routeScrollKey(route));
   if (!raw) return;
-
-  const y = parseInt(raw, 10) || 0;
-
-  // Delay scroll restoration to ensure DOM is ready
+  const y = parseInt(raw, 10);
+  if (Number.isNaN(y)) return;
   requestAnimationFrame(() => {
     setTimeout(() => {
-      window.scrollTo({ top: y, behavior: "auto" });
-    }, 50);
+      window.scrollTo({ top: y, left: 0, behavior: "auto" });
+    }, 40);
   });
-
-  // Clear after restoring
-  sessionStorage.removeItem(EXPLORE_SCROLL_KEY);
-  sessionStorage.removeItem(PREVIOUS_PAGE_KEY);
-}
-
-function restoreHomeScrollOnce() {
-  if (typeof window === "undefined") return;
-
-  // First check exploreScrollY (saved when navigating from Explore to agent view)
-  const exploreY = sessionStorage.getItem("exploreScrollY");
-  if (exploreY) {
-    const y = parseInt(exploreY, 10) || 0;
-    // Delay scroll restoration to ensure DOM is ready
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: y, behavior: "auto" });
-    });
-    sessionStorage.removeItem("exploreScrollY");
-    return;
-  }
-
-  // Fallback to HOME_SCROLL_KEY
-  const raw = sessionStorage.getItem(HOME_SCROLL_KEY);
-  if (!raw) return;
-
-  const y = parseInt(raw, 10) || 0;
-
-  // восстановили позицию
-  window.scrollTo({ top: y, behavior: "auto" });
-
-  // и сразу же удаляем — чтобы на F5 не прыгало
-  sessionStorage.removeItem(HOME_SCROLL_KEY);
+  sessionStorage.removeItem(routeScrollKey(route));
 }
 
 
@@ -811,10 +770,17 @@ const Switch = ({ checked, onCheckedChange }: any) => (
 function useHashRoute(defaultRoute: string = "/") {
   const [route, setRoute] = useState<string>(() => (typeof window !== 'undefined' ? (window.location.hash.replace('#','') || defaultRoute) : defaultRoute));
   useEffect(() => {
-    const onHash = () => setRoute(window.location.hash.replace('#','') || defaultRoute);
+    const onHash = () => {
+      const current = window.location.hash.replace('#', '') || defaultRoute;
+      saveRouteScroll(route);
+      setRoute(current);
+      restoreRouteScroll(current);
+    };
     window.addEventListener('hashchange', onHash);
+    // Try to restore scroll for current route once (e.g. returning from another route).
+    restoreRouteScroll(route);
     return () => window.removeEventListener('hashchange', onHash);
-  }, [defaultRoute]);
+  }, [defaultRoute, route]);
   const push = (path: string) => {
     if (typeof window !== 'undefined') {
       window.location.hash = path.startsWith('#') ? path : `#${path}`;
@@ -1460,19 +1426,6 @@ export default function Echo() {
   // Routing (no Next.js)
   const { route, push } = useHashRoute("/");
   const topTags = useMemo(() => buildTopTags(), []);
-
-  useEffect(() => {
-    if (route === "/") {
-      restoreHomeScrollOnce();
-    }
-  }, [route]);
-
-  // Restore scroll position when returning to Explore page
-  useEffect(() => {
-    if (route.startsWith("/explore")) {
-      restoreExploreScrollOnce();
-    }
-  }, [route]);
   
   
 
@@ -2472,11 +2425,13 @@ useEffect(() => {
       isVerified: !!target?.isVerified,
     });
 
-    // Save scroll position based on current page
-    if (route.startsWith("/explore")) {
-      rememberExploreScroll();
-    } else {
-      rememberHomeScroll();
+    // Preserve source page type for custom "Back" behavior in agent view.
+    if (typeof window !== "undefined") {
+      if (route.startsWith("/explore")) {
+        sessionStorage.setItem(PREVIOUS_PAGE_KEY, "explore");
+      } else {
+        sessionStorage.removeItem(PREVIOUS_PAGE_KEY);
+      }
     }
     push(`/agent?id=${encodeURIComponent(agentId)}`);
   }
