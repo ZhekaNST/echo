@@ -7,7 +7,6 @@ if (typeof globalThis.Buffer === 'undefined') {
 import React, { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.tsx'
 
 function normalizeHashRoute() {
   if (typeof window === 'undefined') return
@@ -61,14 +60,48 @@ class AppErrorBoundary extends React.Component<React.PropsWithChildren, Boundary
   }
 }
 
-normalizeHashRoute()
+function renderFatalBootError(message: string) {
+  const root = document.getElementById('root')
+  if (!root) return
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <div className="app-shell">
-      <AppErrorBoundary>
-        <App />
-      </AppErrorBoundary>
+  root.innerHTML = `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#020617;color:white;padding:24px;font-family:Inter,system-ui,sans-serif;">
+      <div style="max-width:720px;text-align:center;line-height:1.5;">
+        <h1 style="font-size:28px;margin:0 0 12px;">App failed to start</h1>
+        <p style="opacity:.8;margin:0 0 16px;">The app crashed while loading. Open DevTools Console to see details.</p>
+        <pre style="text-align:left;white-space:pre-wrap;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:12px;opacity:.95;">${message}</pre>
+      </div>
     </div>
-  </StrictMode>,
-)
+  `
+}
+
+async function bootstrap() {
+  try {
+    normalizeHashRoute()
+
+    const rootEl = document.getElementById('root')
+    if (!rootEl) {
+      throw new Error('Root element #root not found')
+    }
+
+    const root = createRoot(rootEl)
+    const mod = await import('./App.tsx')
+    const App = mod.default
+
+    root.render(
+      <StrictMode>
+        <div className="app-shell">
+          <AppErrorBoundary>
+            <App />
+          </AppErrorBoundary>
+        </div>
+      </StrictMode>,
+    )
+  } catch (error) {
+    const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+    console.error('Fatal boot error:', error)
+    renderFatalBootError(message)
+  }
+}
+
+bootstrap()
