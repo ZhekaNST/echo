@@ -1464,6 +1464,7 @@ const currentHeroTurn = HOME_HERO_TURNS[heroTurnIndex];
 const typedHeroUser = currentHeroTurn.user.slice(0, heroUserChars);
 const typedHeroAssistant = currentHeroTurn.assistant.slice(0, heroAssistantChars);
 const viewerId = useMemo(() => walletPk || getOrCreateViewerId(), [walletPk]);
+const [cloudToken, setCloudTokenState] = useState<string | null>(() => getCloudToken());
 const [cloudHydrated, setCloudHydrated] = useState(false);
 
 useEffect(() => {
@@ -2021,6 +2022,96 @@ async function testChatEndpoint() {
     const [reviews, setReviews] = useState<Record<string, AgentReview[]>>(() =>
     loadLS<Record<string, AgentReview[]>>(LS.REVIEWS, {})
   );
+
+useEffect(() => {
+  let cancelled = false;
+
+  const ensureCloudAuth = async () => {
+    if (!connected || !walletPk) {
+      setCloudToken(null);
+      setCloudTokenState(null);
+      return;
+    }
+
+    // reuse existing token if present
+    const existing = getCloudToken();
+    if (existing) {
+      setCloudTokenState(existing);
+      return;
+    }
+
+    try {
+      const provider = getPhantomProvider();
+      if (!provider?.signMessage) {
+        console.warn("Phantom signMessage not available; cloud auth disabled.");
+        setCloudTokenState(null);
+        return;
+      }
+
+      const challengeRes = await fetch("/api/wallet-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "challenge", wallet: walletPk }),
+      });
+      if (!challengeRes.ok) {
+        setCloudTokenState(null);
+        return;
+      }
+      const challenge = await challengeRes.json();
+      const message = String(challenge?.message || "");
+      const challengeId = String(challenge?.challengeId || "");
+      if (!message || !challengeId) {
+        setCloudTokenState(null);
+        return;
+      }
+
+      const encoded = new TextEncoder().encode(message);
+      const signed = await provider.signMessage(encoded, "utf8");
+      const sigBytes: Uint8Array = signed?.signature ? signed.signature : signed;
+      const signature = btoa(String.fromCharCode(...sigBytes));
+
+      const verifyRes = await fetch("/api/wallet-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify",
+          wallet: walletPk,
+          challengeId,
+          signature,
+        }),
+      });
+      if (!verifyRes.ok) {
+        setCloudToken(null);
+        setCloudTokenState(null);
+        return;
+      }
+
+      const verified = await verifyRes.json();
+      const token = String(verified?.token || "");
+      if (!token) {
+        setCloudTokenState(null);
+        return;
+      }
+
+      if (!cancelled) {
+        setCloudToken(token);
+        setCloudTokenState(token);
+      }
+    } catch (e) {
+      console.warn("Cloud wallet auth failed:", e);
+      if (!cancelled) {
+        setCloudToken(null);
+        setCloudTokenState(null);
+      }
+    }
+  };
+
+  ensureCloudAuth();
+
+  return () => {
+    cancelled = true;
+  };
+}, [connected, walletPk]);
   
 // ===================== PERSISTENCE (SAVE TO LOCALSTORAGE) =====================
 useEffect(() => { saveLS(LS.AGENTS, agents); }, [agents]);
@@ -2043,13 +2134,16 @@ useEffect(() => {
     }
 
     try {
-      const [cloudAgents, cloudLiked, cloudSaved, cloudPurchases, cloudReviews] = await Promise.all([
-        loadCloudState<Agent[]>("global", "agents"),
-        loadCloudState<Record<string, boolean>>(viewerId, "liked"),
-        loadCloudState<Record<string, boolean>>(viewerId, "saved"),
-        loadCloudState<Purchase[]>(viewerId, "purchases"),
-        loadCloudState<Record<string, AgentReview[]>>(viewerId, "reviews"),
-      ]);
+      const cloudAgents = await loadCloudState<Agent[]>("global", "agents", cloudToken);
+      const [cloudLiked, cloudSaved, cloudPurchases, cloudReviews] =
+        walletPk && cloudToken
+          ? await Promise.all([
+              loadCloudState<Record<string, boolean>>(viewerId, "liked", cloudToken),
+              loadCloudState<Record<string, boolean>>(viewerId, "saved", cloudToken),
+              loadCloudState<Purchase[]>(viewerId, "purchases", cloudToken),
+              loadCloudState<Record<string, AgentReview[]>>(viewerId, "reviews", cloudToken),
+            ])
+          : [null, null, null, null];
 
       if (cancelled) return;
 
@@ -2085,10 +2179,10 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
-}, [viewerId]);
+}, [viewerId, walletPk, cloudToken]);
 
 useEffect(() => {
-  if (!cloudHydrated || !isCloudEnabled()) return;
+  if (!cloudHydrated || !isCloudEnabled() || !walletPk || !cloudToken) return;
   const safeAgents = agents.map((a) => ({
     ...a,
     avatar:
@@ -2096,28 +2190,28 @@ useEffect(() => {
         ? a.avatar
         : DEFAULT_AGENT_AVATAR_URL,
   }));
-  saveCloudState("global", "agents", safeAgents);
-}, [agents, cloudHydrated]);
+  saveCloudState("global", "agents", safeAgents, cloudToken);
+}, [agents, cloudHydrated, walletPk, cloudToken]);
 
 useEffect(() => {
-  if (!cloudHydrated || !isCloudEnabled()) return;
-  saveCloudState(viewerId, "liked", liked);
-}, [liked, cloudHydrated, viewerId]);
+  if (!cloudHydrated || !isCloudEnabled() || !walletPk || !cloudToken) return;
+  saveCloudState(viewerId, "liked", liked, cloudToken);
+}, [liked, cloudHydrated, viewerId, walletPk, cloudToken]);
 
 useEffect(() => {
-  if (!cloudHydrated || !isCloudEnabled()) return;
-  saveCloudState(viewerId, "saved", saved);
-}, [saved, cloudHydrated, viewerId]);
+  if (!cloudHydrated || !isCloudEnabled() || !walletPk || !cloudToken) return;
+  saveCloudState(viewerId, "saved", saved, cloudToken);
+}, [saved, cloudHydrated, viewerId, walletPk, cloudToken]);
 
 useEffect(() => {
-  if (!cloudHydrated || !isCloudEnabled()) return;
-  saveCloudState(viewerId, "purchases", purchases);
-}, [purchases, cloudHydrated, viewerId]);
+  if (!cloudHydrated || !isCloudEnabled() || !walletPk || !cloudToken) return;
+  saveCloudState(viewerId, "purchases", purchases, cloudToken);
+}, [purchases, cloudHydrated, viewerId, walletPk, cloudToken]);
 
 useEffect(() => {
-  if (!cloudHydrated || !isCloudEnabled()) return;
-  saveCloudState(viewerId, "reviews", reviews);
-}, [reviews, cloudHydrated, viewerId]);
+  if (!cloudHydrated || !isCloudEnabled() || !walletPk || !cloudToken) return;
+  saveCloudState(viewerId, "reviews", reviews, cloudToken);
+}, [reviews, cloudHydrated, viewerId, walletPk, cloudToken]);
 
   
   
@@ -6157,7 +6251,13 @@ function MarketplaceTopTags({
 
 // Import IndexedDB attachment storage
 import { putAttachment, getAttachmentBlob, deleteAttachments } from "./lib/attachmentStore";
-import { isCloudEnabled, loadCloudState, saveCloudState } from "./lib/cloudState";
+import {
+  getCloudToken,
+  isCloudEnabled,
+  loadCloudState,
+  saveCloudState,
+  setCloudToken,
+} from "./lib/cloudState";
 
 // Attachment metadata (persisted in localStorage with messages)
 // Actual blob data is stored in IndexedDB by id

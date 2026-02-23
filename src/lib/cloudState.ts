@@ -1,71 +1,60 @@
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-
-const TABLE = "app_state";
-
-function hasConfig() {
-  return !!SUPABASE_URL && !!SUPABASE_ANON_KEY;
-}
-
-function endpoint(path: string) {
-  return `${SUPABASE_URL}${path}`;
-}
-
-function headers() {
-  return {
-    "Content-Type": "application/json",
-    apikey: SUPABASE_ANON_KEY as string,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-  };
-}
-
 export type CloudStateScope = "agents" | "liked" | "saved" | "purchases" | "reviews";
 
-export async function loadCloudState<T>(owner: string, scope: CloudStateScope): Promise<T | null> {
-  if (!hasConfig()) return null;
-  const url = endpoint(
-    `/rest/v1/${TABLE}?owner=eq.${encodeURIComponent(owner)}&scope=eq.${encodeURIComponent(scope)}&select=data&limit=1`
-  );
+const CLOUD_TOKEN_KEY = "echo:cloud_token:v1";
 
+export function getCloudToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(CLOUD_TOKEN_KEY);
+}
+
+export function setCloudToken(token: string | null) {
+  if (typeof window === "undefined") return;
+  if (!token) {
+    localStorage.removeItem(CLOUD_TOKEN_KEY);
+    return;
+  }
+  localStorage.setItem(CLOUD_TOKEN_KEY, token);
+}
+
+export function isCloudEnabled() {
+  return true;
+}
+
+export async function loadCloudState<T>(owner: string, scope: CloudStateScope, token?: string | null): Promise<T | null> {
   try {
-    const res = await fetch(url, {
+    const res = await fetch(`/api/cloud-state?owner=${encodeURIComponent(owner)}&scope=${encodeURIComponent(scope)}`, {
       method: "GET",
       headers: {
-        ...headers(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     });
+
     if (!res.ok) return null;
-    const rows = (await res.json()) as Array<{ data: T }>;
-    return rows?.[0]?.data ?? null;
+    const body = (await res.json()) as { data?: T | null };
+    return body?.data ?? null;
   } catch {
     return null;
   }
 }
 
-export async function saveCloudState(owner: string, scope: CloudStateScope, data: unknown): Promise<boolean> {
-  if (!hasConfig()) return false;
-
+export async function saveCloudState(
+  owner: string,
+  scope: CloudStateScope,
+  data: unknown,
+  token?: string | null
+): Promise<boolean> {
+  if (!token) return false;
   try {
-    const res = await fetch(endpoint(`/rest/v1/${TABLE}`), {
+    const res = await fetch("/api/cloud-state", {
       method: "POST",
       headers: {
-        ...headers(),
-        Prefer: "resolution=merge-duplicates,return=minimal",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify([
-        {
-          owner,
-          scope,
-          data,
-        },
-      ]),
+      body: JSON.stringify({ owner, scope, data }),
     });
     return res.ok;
   } catch {
     return false;
   }
-}
-
-export function isCloudEnabled() {
-  return hasConfig();
 }

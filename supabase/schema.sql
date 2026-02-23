@@ -26,24 +26,28 @@ before update on public.app_state
 for each row
 execute function public.set_updated_at();
 
--- RLS (MVP open policies; tighten later with auth)
+-- RLS locked down: client anon access is denied.
+-- App reads/writes through secure server API using service role key.
 alter table public.app_state enable row level security;
 
 drop policy if exists "app_state_select_all" on public.app_state;
-create policy "app_state_select_all"
+drop policy if exists "app_state_insert_all" on public.app_state;
+drop policy if exists "app_state_update_all" on public.app_state;
+drop policy if exists "app_state_select_none" on public.app_state;
+create policy "app_state_select_none"
 on public.app_state
 for select
-using (true);
+using (false);
 
-drop policy if exists "app_state_insert_all" on public.app_state;
-create policy "app_state_insert_all"
+drop policy if exists "app_state_insert_none" on public.app_state;
+create policy "app_state_insert_none"
 on public.app_state
 for insert
-with check (true);
+with check (false);
 
-drop policy if exists "app_state_update_all" on public.app_state;
-create policy "app_state_update_all"
+drop policy if exists "app_state_update_none" on public.app_state;
+create policy "app_state_update_none"
 on public.app_state
 for update
-using (true)
-with check (true);
+using (false)
+with check (false);

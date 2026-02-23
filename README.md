@@ -51,8 +51,13 @@ ELEVENLABS_VOICE_ID=your_voice_id_here
 2. Set frontend env vars (local + Vercel):
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` (server-only, never expose in browser)
+- `ECHO_AUTH_SECRET` (server-only secret used for wallet auth token signing)
 
-After this, `agents`, `saved`, `purchases`, and `reviews` are synced to cloud (`app_state` table) with local fallback.
+After this, cloud sync goes through secure server routes (`/api/wallet-auth`, `/api/cloud-state`):
+- wallet signs a challenge in Phantom,
+- server issues auth token,
+- app reads/writes `app_state` via server role key.
 
 ### Development
 
