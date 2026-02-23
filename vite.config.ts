@@ -661,17 +661,6 @@ export default defineConfig({
   plugins: [apiRoutes()],
   build: {
     chunkSizeWarningLimit: 700,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return undefined;
-          if (id.includes("@solana") || id.includes("@coral-xyz") || id.includes("bs58")) return "vendor-solana";
-          if (id.includes("framer-motion")) return "vendor-motion";
-          if (id.includes("react") || id.includes("react-dom")) return "vendor-react";
-          return "vendor-misc";
-        },
-      },
-    },
   },
   resolve: {
     alias: {
