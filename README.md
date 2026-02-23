@@ -53,6 +53,8 @@ ELEVENLABS_VOICE_ID=your_voice_id_here
 - `VITE_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` (server-only, never expose in browser)
 - `ECHO_AUTH_SECRET` (server-only secret used for wallet auth token signing)
+- `VITE_PLATFORM_WALLET` (platform Solana wallet for marketplace fee)
+- `ECHO_PLATFORM_WALLET` (server-side fallback for payment verification)
 
 After this, cloud sync goes through secure server routes (`/api/wallet-auth`, `/api/cloud-state`):
 - wallet signs a challenge in Phantom,

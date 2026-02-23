@@ -6,7 +6,7 @@
 
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const USDC_DECIMALS = 6;
-const PLATFORM_WALLET = "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ";
+const PLATFORM_WALLET = process.env.ECHO_PLATFORM_WALLET || "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ";
 
 // RPC endpoints for verification
 const RPC_ENDPOINTS = [
@@ -79,6 +79,8 @@ async function verifyTransactionOnChain(
   signature: string,
   expectedReceiver: string,
   expectedAmount: number,
+  expectedPlatformReceiver?: string,
+  expectedPlatformAmount?: number,
   expectedBuyer?: string
 ): Promise<VerificationResult> {
   try {
@@ -111,55 +113,23 @@ async function verifyTransactionOnChain(
     // Expected raw amount
     const expectedRaw = Math.round(expectedAmount * 10 ** USDC_DECIMALS);
 
-    // Find the USDC transfer to the expected receiver
-    let foundValidTransfer = false;
-    let actualAmount = 0;
-
-    for (const post of postBalances) {
-      // Check if this is USDC going to the receiver
-      if (post.mint === USDC_MINT && post.owner === expectedReceiver) {
-        // Find pre-balance for same account
+    function receivedAmountForOwner(owner: string) {
+      let received = 0;
+      for (const post of postBalances) {
+        if (post.mint !== USDC_MINT || post.owner !== owner) continue;
+        const postAmount = parseFloat(post.uiTokenAmount?.uiAmountString || "0");
         const pre = preBalances.find(
           (p: any) => p.accountIndex === post.accountIndex && p.mint === USDC_MINT
         );
-
-        const preAmount = pre 
-          ? parseFloat(pre.uiTokenAmount?.uiAmountString || "0") 
-          : 0;
-        const postAmount = parseFloat(post.uiTokenAmount?.uiAmountString || "0");
+        const preAmount = pre ? parseFloat(pre.uiTokenAmount?.uiAmountString || "0") : 0;
         const diff = postAmount - preAmount;
-
-        if (diff > 0) {
-          actualAmount = diff;
-          foundValidTransfer = true;
-          break;
-        }
+        if (diff > 0) received += diff;
       }
+      return received;
     }
 
-    if (!foundValidTransfer) {
-      // Also check if receiver's ATA received tokens (different check method)
-      // This handles the case where the token account was just created
-      for (const post of postBalances) {
-        if (post.mint === USDC_MINT) {
-          const postAmount = parseFloat(post.uiTokenAmount?.uiAmountString || "0");
-          const pre = preBalances.find(
-            (p: any) => p.accountIndex === post.accountIndex && p.mint === USDC_MINT
-          );
-          const preAmount = pre 
-            ? parseFloat(pre.uiTokenAmount?.uiAmountString || "0") 
-            : 0;
-          
-          if (postAmount > preAmount && post.owner === expectedReceiver) {
-            actualAmount = postAmount - preAmount;
-            foundValidTransfer = true;
-            break;
-          }
-        }
-      }
-    }
-
-    if (!foundValidTransfer) {
+    const actualAmount = receivedAmountForOwner(expectedReceiver);
+    if (actualAmount <= 0) {
       return { 
         valid: false, 
         reason: `No USDC transfer found to ${expectedReceiver.slice(0, 8)}...` 
@@ -175,6 +145,21 @@ async function verifyTransactionOnChain(
         valid: false,
         reason: `Amount mismatch: expected ${expectedAmount} USDC, received ${actualAmount.toFixed(6)} USDC`,
       };
+    }
+
+    // Optional: verify platform fee transfer in same tx
+    if (expectedPlatformReceiver && typeof expectedPlatformAmount === "number" && expectedPlatformAmount > 0) {
+      const platformRawExpected = Math.round(expectedPlatformAmount * 10 ** USDC_DECIMALS);
+      const platformActual = receivedAmountForOwner(expectedPlatformReceiver);
+      const platformRawActual = Math.round(platformActual * 10 ** USDC_DECIMALS);
+      const platformDiff = Math.abs(platformRawActual - platformRawExpected);
+
+      if (platformDiff > 10000) {
+        return {
+          valid: false,
+          reason: `Platform fee mismatch: expected ${expectedPlatformAmount} USDC, received ${platformActual.toFixed(6)} USDC`,
+        };
+      }
     }
 
     // Optional: verify sender if provided
@@ -221,7 +206,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { signature, receiver, amount, buyer, agentId } = req.body;
+    const { signature, receiver, amount, platformReceiver, platformAmount, buyer, agentId } = req.body;
 
     // Validate inputs
     if (!signature || typeof signature !== "string") {
@@ -245,6 +230,19 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    if (platformReceiver && typeof platformReceiver !== "string") {
+      return res.status(400).json({
+        verified: false,
+        error: "platformReceiver must be a valid wallet string",
+      });
+    }
+    if (platformAmount !== undefined && (typeof platformAmount !== "number" || platformAmount < 0)) {
+      return res.status(400).json({
+        verified: false,
+        error: "platformAmount must be a non-negative number",
+      });
+    }
+
     // Validate signature format (base58, 87-88 chars)
     if (!/^[1-9A-HJ-NP-Za-km-z]{87,88}$/.test(signature)) {
       return res.status(400).json({ 
@@ -262,6 +260,8 @@ export default async function handler(req: any, res: any) {
       signature,
       receiver,
       amount,
+      platformReceiver || PLATFORM_WALLET,
+      typeof platformAmount === "number" ? platformAmount : 0,
       buyer
     );
 

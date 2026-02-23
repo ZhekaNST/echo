@@ -540,6 +540,9 @@ function getOrCreateViewerId() {
 const SOLANA_NETWORK = "mainnet-beta" as const;
 // ⚠️ TODO: сюда вставь mint USDC для нужной сети (devnet/mainnet)
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const PLATFORM_FEE_BPS = 2000; // 20%
+const PLATFORM_WALLET =
+  import.meta.env.VITE_PLATFORM_WALLET || "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ";
 
 // RPC endpoints with fallback strategy
 const RPC_ENDPOINTS = [
@@ -1077,6 +1080,8 @@ async function verifyPaymentOnServer(
   signature: string,
   expectedRecipient: string,
   expectedAmount: number,
+  expectedPlatformRecipient: string,
+  expectedPlatformAmount: number,
   buyerPubkey: string,
   agentId?: string
 ): Promise<{ verified: boolean; error?: string }> {
@@ -1090,6 +1095,8 @@ async function verifyPaymentOnServer(
         signature,
         receiver: expectedRecipient,
         amount: expectedAmount,
+        platformReceiver: expectedPlatformRecipient,
+        platformAmount: expectedPlatformAmount,
         buyer: buyerPubkey,
         agentId,
       }),
@@ -1424,6 +1431,19 @@ const HOME_HERO_TURNS: HeroTurn[] = [
 
 
 const formatUSDC = (n: number) => `${n.toFixed(2)} USDC`;
+
+function splitUsdcAmount(totalUsdc: number) {
+  const rawTotal = Math.round(totalUsdc * 10 ** 6);
+  const rawFee = Math.floor((rawTotal * PLATFORM_FEE_BPS) / 10000);
+  const rawCreator = Math.max(0, rawTotal - rawFee);
+  return {
+    totalRaw: rawTotal,
+    creatorRaw: rawCreator,
+    feeRaw: rawFee,
+    creatorUsdc: rawCreator / 10 ** 6,
+    feeUsdc: rawFee / 10 ** 6,
+  };
+}
 
 export default function Echo() {
   // Routing (no Next.js)
@@ -4774,10 +4794,21 @@ return (
                     if (!selected || !walletPk) return;
 
                     // ✅ Verify payment on SERVER (secure verification)
+                    const split = splitUsdcAmount(selected.priceUSDC);
+                    const creatorAmount =
+                      selected.creatorWallet === PLATFORM_WALLET
+                        ? selected.priceUSDC
+                        : split.creatorUsdc;
+                    const platformAmount =
+                      selected.creatorWallet === PLATFORM_WALLET
+                        ? 0
+                        : split.feeUsdc;
                     const verification = await verifyPaymentOnServer(
                       sig,
                       selected.creatorWallet!,
-                      selected.priceUSDC,
+                      creatorAmount,
+                      PLATFORM_WALLET,
+                      platformAmount,
                       walletPk,
                       selected.id
                     );
@@ -4830,10 +4861,21 @@ return (
                     if (!selected || !walletPk) return;
 
                     // ✅ Verify payment on SERVER (secure verification)
+                    const split = splitUsdcAmount(selected.priceUSDC);
+                    const creatorAmount =
+                      selected.creatorWallet === PLATFORM_WALLET
+                        ? selected.priceUSDC
+                        : split.creatorUsdc;
+                    const platformAmount =
+                      selected.creatorWallet === PLATFORM_WALLET
+                        ? 0
+                        : split.feeUsdc;
                     const verification = await verifyPaymentOnServer(
                       sig,
                       selected.creatorWallet!,
-                      selected.priceUSDC,
+                      creatorAmount,
+                      PLATFORM_WALLET,
+                      platformAmount,
                       walletPk,
                       selected.id
                     );
@@ -5056,6 +5098,7 @@ function AgentCard({
 function PhantomPayButton({
   amountUsdc = 0.5,          // СКОЛЬКО USDC списываем
   recipient,
+  platformRecipient = PLATFORM_WALLET,
   onSuccess,
   onProcessing,
   onError,
@@ -5063,6 +5106,7 @@ function PhantomPayButton({
 }: {
   amountUsdc?: number;       // в нормальных единицах, типа 0.30
   recipient?: string;        // кому платим (creatorWallet)
+  platformRecipient?: string; // кошелек платформы (комиссия)
   onSuccess?: (sig: string) => void;
   onProcessing?: () => void;
   onError?: () => void;
@@ -5123,30 +5167,50 @@ function PhantomPayButton({
 
       const fromPubkey = new PublicKey(publicKey.toString());
       const toPubkey = new PublicKey(recipient);
+      const platformPubkey = new PublicKey(platformRecipient);
       const mint = new PublicKey(USDC_MINT);
 
-      // USDC has 6 decimals
-      const DECIMALS = 6;
-      const rawAmount = Math.round(amountUsdc * 10 ** DECIMALS); // e.g., 0.30 → 300000
+      const split = splitUsdcAmount(amountUsdc);
+      let creatorRaw = split.creatorRaw;
+      let feeRaw = split.feeRaw;
+      if (toPubkey.toString() === platformPubkey.toString()) {
+        creatorRaw = split.totalRaw;
+        feeRaw = 0;
+      }
 
       // Get associated token accounts for sender and recipient
       // For ATA lookup, we can use a direct connection temporarily or proxy
       const connection = await getSolanaConnection();
       const fromTokenAccount = await getAssociatedTokenAddress(mint, fromPubkey);
       const toTokenAccount = await getAssociatedTokenAddress(mint, toPubkey);
-
-      // Create SPL token transfer instruction
-      const ix = createTransferInstruction(
-        fromTokenAccount,
-        toTokenAccount,
-        fromPubkey,
-        rawAmount,
-        [],
-        TOKEN_PROGRAM_ID
-      );
+      const platformTokenAccount = await getAssociatedTokenAddress(mint, platformPubkey);
 
       // Create and prepare transaction
-      const tx = new Transaction().add(ix);
+      const tx = new Transaction();
+      if (creatorRaw > 0) {
+        tx.add(
+          createTransferInstruction(
+            fromTokenAccount,
+            toTokenAccount,
+            fromPubkey,
+            creatorRaw,
+            [],
+            TOKEN_PROGRAM_ID
+          )
+        );
+      }
+      if (feeRaw > 0) {
+        tx.add(
+          createTransferInstruction(
+            fromTokenAccount,
+            platformTokenAccount,
+            fromPubkey,
+            feeRaw,
+            [],
+            TOKEN_PROGRAM_ID
+          )
+        );
+      }
       tx.feePayer = fromPubkey;
       
       // Get latest blockhash BEFORE opening Phantom - this ensures transaction is ready
