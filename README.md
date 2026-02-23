@@ -34,9 +34,25 @@ cp .env.example .env.local
 
 2. Fill in your API keys in `.env.local`:
 ```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+
 ELEVENLABS_API_KEY=your_api_key_here
 ELEVENLABS_VOICE_ID=your_voice_id_here
 ```
+
+### Supabase Setup (Cloud Storage for MVP)
+
+1. In Supabase SQL Editor, run:
+```sql
+-- from file: supabase/schema.sql
+```
+
+2. Set frontend env vars (local + Vercel):
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+After this, `agents`, `saved`, `purchases`, and `reviews` are synced to cloud (`app_state` table) with local fallback.
 
 ### Development
 

@@ -520,6 +520,20 @@ function saveLS(key: string, value: any) {
   }
 }
 
+const CLOUD_VIEWER_ID_KEY = "echo:viewer_id:v1";
+
+function getOrCreateViewerId() {
+  if (typeof window === "undefined") return "anon-server";
+  const existing = localStorage.getItem(CLOUD_VIEWER_ID_KEY);
+  if (existing) return existing;
+  const id =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `anon_${Date.now()}_${Math.random()}`;
+  localStorage.setItem(CLOUD_VIEWER_ID_KEY, id);
+  return id;
+}
+
 
 
 
@@ -1286,7 +1300,7 @@ likes24h: 5,
     likes: 940,
     sessions: 1610,
     promptPreview: "You are a senior design reviewer...",
-    engineProvider: "platform",
+    engineProvider: "creator_backend",
     createdAt: Date.now() - 3 * 24 * 60 * 60 * 1000,
 lastActiveAt: Date.now() - 1000 * 60 * 60 * 2,    // 2 часа назад
 sessions24h: 12,
@@ -1303,7 +1317,7 @@ likes24h: 5,
     likes: 2110,
     sessions: 3401,
     promptPreview: "Supportive, empathetic companion persona...",
-    engineProvider: "platform",
+    engineProvider: "creator_backend",
     createdAt: Date.now() - 4 * 24 * 60 * 60 * 1000,
 lastActiveAt: Date.now() - 1000 * 60 * 60 * 2,    // 2 часа назад
 sessions24h: 12,
@@ -1449,6 +1463,8 @@ const [heroAssistantChars, setHeroAssistantChars] = useState(0);
 const currentHeroTurn = HOME_HERO_TURNS[heroTurnIndex];
 const typedHeroUser = currentHeroTurn.user.slice(0, heroUserChars);
 const typedHeroAssistant = currentHeroTurn.assistant.slice(0, heroAssistantChars);
+const viewerId = useMemo(() => walletPk || getOrCreateViewerId(), [walletPk]);
+const [cloudHydrated, setCloudHydrated] = useState(false);
 
 useEffect(() => {
   if (route !== "/") return;
@@ -2016,6 +2032,83 @@ useEffect(() => { saveLS(LS.SAVED, saved); }, [saved]);
 useEffect(() => { saveLS(LS.PURCHASES, purchases); }, [purchases]);
 
 useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
+
+// ===================== CLOUD SYNC (SUPABASE) =====================
+useEffect(() => {
+  let cancelled = false;
+  (async () => {
+    if (!isCloudEnabled()) {
+      setCloudHydrated(true);
+      return;
+    }
+
+    try {
+      const [cloudAgents, cloudSaved, cloudPurchases, cloudReviews] = await Promise.all([
+        loadCloudState<Agent[]>("global", "agents"),
+        loadCloudState<Record<string, boolean>>(viewerId, "saved"),
+        loadCloudState<Purchase[]>(viewerId, "purchases"),
+        loadCloudState<Record<string, AgentReview[]>>(viewerId, "reviews"),
+      ]);
+
+      if (cancelled) return;
+
+      if (cloudAgents && Array.isArray(cloudAgents) && cloudAgents.length > 0) {
+        const normalized = cloudAgents.map((a) => ({
+          ...a,
+          avatar:
+            typeof a.avatar === "string" && a.avatar.trim()
+              ? a.avatar
+              : DEFAULT_AGENT_AVATAR_URL,
+        }));
+        setAgents(normalized);
+      }
+      if (cloudSaved && typeof cloudSaved === "object") {
+        setSaved(cloudSaved);
+      }
+      if (cloudPurchases && Array.isArray(cloudPurchases)) {
+        setPurchases(cloudPurchases);
+      }
+      if (cloudReviews && typeof cloudReviews === "object") {
+        setReviews(cloudReviews);
+      }
+    } catch (e) {
+      console.warn("Cloud state load failed, continuing with local data:", e);
+    } finally {
+      if (!cancelled) setCloudHydrated(true);
+    }
+  })();
+
+  return () => {
+    cancelled = true;
+  };
+}, [viewerId]);
+
+useEffect(() => {
+  if (!cloudHydrated || !isCloudEnabled()) return;
+  const safeAgents = agents.map((a) => ({
+    ...a,
+    avatar:
+      typeof a.avatar === "string" && a.avatar.trim()
+        ? a.avatar
+        : DEFAULT_AGENT_AVATAR_URL,
+  }));
+  saveCloudState("global", "agents", safeAgents);
+}, [agents, cloudHydrated]);
+
+useEffect(() => {
+  if (!cloudHydrated || !isCloudEnabled()) return;
+  saveCloudState(viewerId, "saved", saved);
+}, [saved, cloudHydrated, viewerId]);
+
+useEffect(() => {
+  if (!cloudHydrated || !isCloudEnabled()) return;
+  saveCloudState(viewerId, "purchases", purchases);
+}, [purchases, cloudHydrated, viewerId]);
+
+useEffect(() => {
+  if (!cloudHydrated || !isCloudEnabled()) return;
+  saveCloudState(viewerId, "reviews", reviews);
+}, [reviews, cloudHydrated, viewerId]);
 
   
   
@@ -4591,6 +4684,10 @@ return (
 
                     // ✅ Payment verified by server — save session
                     saveSession(selected, sig);
+                    setPurchases((prev) => [
+                      { id: sig, agentId: selected.id, priceUSDC: selected.priceUSDC, ts: Date.now() },
+                      ...prev.filter((p) => p.id !== sig),
+                    ]);
                     trackAnalyticsEvent("pay_success", {
                       agentId: selected.id,
                       amountUsdc: selected.priceUSDC,
@@ -4642,6 +4739,10 @@ return (
                     }
 
                     saveSession(selected, sig);
+                    setPurchases((prev) => [
+                      { id: sig, agentId: selected.id, priceUSDC: selected.priceUSDC, ts: Date.now() },
+                      ...prev.filter((p) => p.id !== sig),
+                    ]);
                     trackAnalyticsEvent("pay_success", {
                       agentId: selected.id,
                       amountUsdc: selected.priceUSDC,
@@ -6047,6 +6148,7 @@ function MarketplaceTopTags({
 
 // Import IndexedDB attachment storage
 import { putAttachment, getAttachmentBlob, deleteAttachments } from "./lib/attachmentStore";
+import { isCloudEnabled, loadCloudState, saveCloudState } from "./lib/cloudState";
 
 // Attachment metadata (persisted in localStorage with messages)
 // Actual blob data is stored in IndexedDB by id
