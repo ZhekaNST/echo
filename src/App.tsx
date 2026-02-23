@@ -483,12 +483,7 @@ import {
   Building2
 } from "lucide-react";
 
-import { Connection, PublicKey, clusterApiUrl, LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
-import {
-  getAssociatedTokenAddress,
-  createTransferInstruction,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
+import type { PublicKey } from "@solana/web3.js";
 
 
 
@@ -589,8 +584,36 @@ const RPC_ENDPOINTS = [
   "https://api.mainnet-beta.solana.com",
   "https://solana-api.projectserum.com",
   "https://rpc.ankr.com/solana",
-  clusterApiUrl(SOLANA_NETWORK), // Fallback to clusterApiUrl
+  "https://api.mainnet-beta.solana.com",
 ];
+
+let solanaDepsPromise: Promise<{
+  Connection: any;
+  PublicKey: any;
+  LAMPORTS_PER_SOL: number;
+  Transaction: any;
+  getAssociatedTokenAddress: any;
+  createTransferInstruction: any;
+  TOKEN_PROGRAM_ID: any;
+}> | null = null;
+
+async function getSolanaDeps() {
+  if (!solanaDepsPromise) {
+    solanaDepsPromise = Promise.all([
+      import("@solana/web3.js"),
+      import("@solana/spl-token"),
+    ]).then(([web3, spl]) => ({
+      Connection: web3.Connection,
+      PublicKey: web3.PublicKey,
+      LAMPORTS_PER_SOL: web3.LAMPORTS_PER_SOL,
+      Transaction: web3.Transaction,
+      getAssociatedTokenAddress: spl.getAssociatedTokenAddress,
+      createTransferInstruction: spl.createTransferInstruction,
+      TOKEN_PROGRAM_ID: spl.TOKEN_PROGRAM_ID,
+    }));
+  }
+  return solanaDepsPromise;
+}
 
 // Helper function to make RPC calls through /api/solana-rpc proxy
 async function proxyRpcRequest(method: string, params: any[]): Promise<any> {
@@ -630,6 +653,7 @@ async function getLatestBlockhash(useProxy: boolean): Promise<{ blockhash: strin
       lastValidBlockHeight: result.value.lastValidBlockHeight,
     };
   } else {
+    const { Connection } = await getSolanaDeps();
     // Try direct connection
     for (const endpoint of RPC_ENDPOINTS) {
       try {
@@ -647,7 +671,8 @@ async function getLatestBlockhash(useProxy: boolean): Promise<{ blockhash: strin
 }
 
 // Get a working Solana connection - use proxy for getLatestBlockhash in production
-async function getSolanaConnection(): Promise<Connection> {
+async function getSolanaConnection(): Promise<any> {
+  const { Connection } = await getSolanaDeps();
   // In production (Vercel), use proxy for RPC calls to avoid 403 errors
   // In dev, try direct connection first
   const isProduction = typeof window !== "undefined" && 
@@ -1602,6 +1627,7 @@ useEffect(() => {
     try {
       setUsdcLoading(true);
 
+      const { PublicKey, LAMPORTS_PER_SOL, getAssociatedTokenAddress } = await getSolanaDeps();
       const connection = await getSolanaConnection();
       if (!walletPk) return;
       const owner = new PublicKey(walletPk);
@@ -5205,6 +5231,14 @@ function PhantomPayButton({
         (window.location.hostname.includes("vercel.app") || 
          window.location.hostname.includes("vercel.com") ||
          import.meta.env.PROD);
+
+      const {
+        PublicKey,
+        Transaction,
+        getAssociatedTokenAddress,
+        createTransferInstruction,
+        TOKEN_PROGRAM_ID,
+      } = await getSolanaDeps();
 
       const fromPubkey = new PublicKey(publicKey.toString());
       const toPubkey = new PublicKey(recipient);
