@@ -2254,11 +2254,11 @@ useEffect(() => {
             if (!local) return cloudAgent;
             return {
               ...cloudAgent,
-              likes: local.likes ?? cloudAgent.likes,
-              sessions: local.sessions ?? cloudAgent.sessions,
-              likes24h: local.likes24h ?? cloudAgent.likes24h,
-              sessions24h: local.sessions24h ?? cloudAgent.sessions24h,
-              lastActiveAt: local.lastActiveAt ?? cloudAgent.lastActiveAt,
+              likes: Math.max(cloudAgent.likes || 0, local.likes || 0),
+              sessions: Math.max(cloudAgent.sessions || 0, local.sessions || 0),
+              likes24h: Math.max(cloudAgent.likes24h || 0, local.likes24h || 0),
+              sessions24h: Math.max(cloudAgent.sessions24h || 0, local.sessions24h || 0),
+              lastActiveAt: Math.max(cloudAgent.lastActiveAt || 0, local.lastActiveAt || 0) || undefined,
             };
           });
         });
@@ -2286,6 +2286,64 @@ useEffect(() => {
     cancelled = true;
   };
 }, [viewerId, walletPk, cloudToken]);
+
+// Keep global counters (likes/sessions) in sync across different clients/tabs.
+useEffect(() => {
+  if (!isCloudEnabled()) return;
+
+  let cancelled = false;
+  const tick = async () => {
+    try {
+      const cloudAgents = await loadCloudState<Agent[]>("global", "agents", cloudToken);
+      if (cancelled || !cloudAgents || !Array.isArray(cloudAgents) || cloudAgents.length === 0) return;
+
+      const cloudById = new Map(cloudAgents.map((a) => [a.id, a]));
+      setAgents((prev) => {
+        let changed = false;
+        const next = prev.map((local) => {
+          const remote = cloudById.get(local.id);
+          if (!remote) return local;
+
+          const mergedLikes = Math.max(local.likes || 0, remote.likes || 0);
+          const mergedSessions = Math.max(local.sessions || 0, remote.sessions || 0);
+          const mergedLikes24h = Math.max(local.likes24h || 0, remote.likes24h || 0);
+          const mergedSessions24h = Math.max(local.sessions24h || 0, remote.sessions24h || 0);
+          const mergedLastActiveAt = Math.max(local.lastActiveAt || 0, remote.lastActiveAt || 0) || undefined;
+
+          if (
+            mergedLikes === (local.likes || 0) &&
+            mergedSessions === (local.sessions || 0) &&
+            mergedLikes24h === (local.likes24h || 0) &&
+            mergedSessions24h === (local.sessions24h || 0) &&
+            (mergedLastActiveAt || 0) === (local.lastActiveAt || 0)
+          ) {
+            return local;
+          }
+
+          changed = true;
+          return {
+            ...local,
+            likes: mergedLikes,
+            sessions: mergedSessions,
+            likes24h: mergedLikes24h,
+            sessions24h: mergedSessions24h,
+            lastActiveAt: mergedLastActiveAt,
+          };
+        });
+
+        return changed ? next : prev;
+      });
+    } catch {
+      // silent background sync failure
+    }
+  };
+
+  const intervalId = window.setInterval(tick, 8000);
+  return () => {
+    cancelled = true;
+    window.clearInterval(intervalId);
+  };
+}, [cloudToken]);
 
 useEffect(() => {
   if (!cloudHydrated || !isCloudEnabled() || !walletPk || !cloudToken) return;
