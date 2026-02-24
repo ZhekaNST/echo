@@ -495,6 +495,10 @@ const LS = {
   REVIEWS: "echo:reviews:v1",
 };
 
+function walletScopedKey(base: string, walletPk: string | null) {
+  return walletPk ? `${base}:${walletPk}` : base;
+}
+
 function loadLS<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -2151,10 +2155,6 @@ function requireWalletAction(actionLabel: string) {
     alert(`Connect your Phantom wallet to ${actionLabel}.`);
     return false;
   }
-  if (!cloudToken) {
-    // Ask Phantom signature only after explicit user action (not on page refresh).
-    void requestCloudToken();
-  }
   return true;
 }
 
@@ -2169,11 +2169,26 @@ useEffect(() => {
   const existing = getCloudToken();
   setCloudTokenState(existing || null);
 }, [connected, walletPk]);
+
+useEffect(() => {
+  if (!connected || !walletPk) return;
+  setLiked(loadLS<Record<string, boolean>>(walletScopedKey(LS.LIKED, walletPk), {}));
+  setSaved(loadLS<Record<string, boolean>>(walletScopedKey(LS.SAVED, walletPk), {}));
+}, [connected, walletPk]);
   
 // ===================== PERSISTENCE (SAVE TO LOCALSTORAGE) =====================
 useEffect(() => { saveLS(LS.AGENTS, agents); }, [agents]);
 
-// liked/saved are persisted via cloud-state API (no localStorage write)
+// liked/saved local fallback (wallet-scoped) for instant persistence without extra signature prompts
+useEffect(() => {
+  if (!connected || !walletPk) return;
+  saveLS(walletScopedKey(LS.LIKED, walletPk), liked);
+}, [liked, connected, walletPk]);
+
+useEffect(() => {
+  if (!connected || !walletPk) return;
+  saveLS(walletScopedKey(LS.SAVED, walletPk), saved);
+}, [saved, connected, walletPk]);
 
 // user actions are persisted via cloud-state API (no localStorage write)
 

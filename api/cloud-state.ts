@@ -55,6 +55,8 @@ export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  res.setHeader("Pragma", "no-cache");
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -104,7 +106,7 @@ export default async function handler(req: any, res: any) {
         return res.status(403).json({ error: "Forbidden" });
       }
 
-      const up = await fetch(`${supa.url}/rest/v1/${TABLE}`, {
+      const up = await fetch(`${supa.url}/rest/v1/${TABLE}?on_conflict=owner,scope`, {
         method: "POST",
         headers: {
           ...supa.headers,
