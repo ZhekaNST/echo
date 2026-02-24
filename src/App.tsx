@@ -567,6 +567,16 @@ function saveLS(key: string, value: any) {
   }
 }
 
+async function loadGlobalAgentStats(): Promise<{ likesByAgent: Record<string, number> } | null> {
+  try {
+    const res = await fetch("/api/agent-stats", { method: "GET" });
+    if (!res.ok) return null;
+    return (await res.json()) as { likesByAgent: Record<string, number> };
+  } catch {
+    return null;
+  }
+}
+
 const CLOUD_VIEWER_ID_KEY = "echo:viewer_id:v1";
 const WALLET_AUTOCONNECT_KEY = "echo:wallet:auto-connect:v1";
 const CLOUD_AUTH_ATTEMPT_PREFIX = "echo:cloud_auth_attempted:";
@@ -2287,47 +2297,28 @@ useEffect(() => {
   };
 }, [viewerId, walletPk, cloudToken]);
 
-// Keep global counters (likes/sessions) in sync across different clients/tabs.
+// Keep global like counters in sync across different clients/tabs.
 useEffect(() => {
   if (!isCloudEnabled()) return;
 
   let cancelled = false;
   const tick = async () => {
     try {
-      const cloudAgents = await loadCloudState<Agent[]>("global", "agents", cloudToken);
-      if (cancelled || !cloudAgents || !Array.isArray(cloudAgents) || cloudAgents.length === 0) return;
+      const stats = await loadGlobalAgentStats();
+      if (cancelled || !stats?.likesByAgent) return;
+      const likesByAgent = stats.likesByAgent;
 
-      const cloudById = new Map(cloudAgents.map((a) => [a.id, a]));
       setAgents((prev) => {
         let changed = false;
         const next = prev.map((local) => {
-          const remote = cloudById.get(local.id);
-          if (!remote) return local;
-
-          const mergedLikes = Math.max(local.likes || 0, remote.likes || 0);
-          const mergedSessions = Math.max(local.sessions || 0, remote.sessions || 0);
-          const mergedLikes24h = Math.max(local.likes24h || 0, remote.likes24h || 0);
-          const mergedSessions24h = Math.max(local.sessions24h || 0, remote.sessions24h || 0);
-          const mergedLastActiveAt = Math.max(local.lastActiveAt || 0, remote.lastActiveAt || 0) || undefined;
-
-          if (
-            mergedLikes === (local.likes || 0) &&
-            mergedSessions === (local.sessions || 0) &&
-            mergedLikes24h === (local.likes24h || 0) &&
-            mergedSessions24h === (local.sessions24h || 0) &&
-            (mergedLastActiveAt || 0) === (local.lastActiveAt || 0)
-          ) {
+          const remoteLikes = likesByAgent[local.id] ?? 0;
+          if (remoteLikes === (local.likes || 0)) {
             return local;
           }
-
           changed = true;
           return {
             ...local,
-            likes: mergedLikes,
-            sessions: mergedSessions,
-            likes24h: mergedLikes24h,
-            sessions24h: mergedSessions24h,
-            lastActiveAt: mergedLastActiveAt,
+            likes: remoteLikes,
           };
         });
 
@@ -2338,6 +2329,8 @@ useEffect(() => {
     }
   };
 
+  // immediate refresh + interval
+  tick();
   const intervalId = window.setInterval(tick, 8000);
   return () => {
     cancelled = true;
@@ -2703,20 +2696,6 @@ useEffect(() => {
     if (!requireWalletAction("like agents")) return;
     setLiked((prev) => {
       const next = !prev[id];
-  
-      setAgents((ags) => {
-        const updated = ags.map((a) =>
-          a.id === id
-            ? {
-                ...a,
-                likes: Math.max(0, (a.likes || 0) + (next ? 1 : -1)),
-                likes24h: Math.max(0, (a.likes24h ?? 0) + (next ? 1 : -1)),
-              }
-            : a
-        );
-        saveLS(LS.AGENTS, updated);
-        return updated;
-      });
 
       const likedNext = { ...prev, [id]: next };
       if (connected && walletPk) {
