@@ -2069,15 +2069,13 @@ async function testChatEndpoint() {
     setSortBy(sort);
   }, [route]);
   
-  // Purchases (for Profile > Purchases)
+  // Purchases (cloud source of truth)
   type Purchase = { id: string; agentId: string; priceUSDC: number; ts: number };
   const [purchases, setPurchases] = useState<
   { id: string; agentId: string; priceUSDC: number; ts: number }[]
->(() => loadLS(LS.PURCHASES, []));
-    // --- Reviews per agent (local storage) ---
-    const [reviews, setReviews] = useState<Record<string, AgentReview[]>>(() =>
-    loadLS<Record<string, AgentReview[]>>(LS.REVIEWS, {})
-  );
+>([]);
+    // --- Reviews per agent (cloud source of truth) ---
+    const [reviews, setReviews] = useState<Record<string, AgentReview[]>>({});
 
 const requestCloudToken = useCallback(async (): Promise<string | null> => {
   if (!connected || !walletPk) return null;
@@ -2175,19 +2173,9 @@ useEffect(() => {
 // ===================== PERSISTENCE (SAVE TO LOCALSTORAGE) =====================
 useEffect(() => { saveLS(LS.AGENTS, agents); }, [agents]);
 
-useEffect(() => {
-  if (!connected || !walletPk) return;
-  saveLS(LS.LIKED, liked);
-}, [liked, connected, walletPk]);
+// liked/saved are persisted via cloud-state API (no localStorage write)
 
-useEffect(() => {
-  if (!connected || !walletPk) return;
-  saveLS(LS.SAVED, saved);
-}, [saved, connected, walletPk]);
-
-useEffect(() => { saveLS(LS.PURCHASES, purchases); }, [purchases]);
-
-useEffect(() => { saveLS(LS.REVIEWS, reviews); }, [reviews]);
+// user actions are persisted via cloud-state API (no localStorage write)
 
 // ===================== CLOUD SYNC (SUPABASE) =====================
 useEffect(() => {
