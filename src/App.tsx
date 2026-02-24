@@ -3009,9 +3009,6 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
   if (route.startsWith("/privacy")) {
     return <PrivacyPage onBack={() => push("/")} />;
   }
-  if (route.startsWith("/status")) {
-    return <StatusPage onBack={() => push("/")} />;
-  }
 
     // 🔹 НОВЫЙ РОУТ: страница агента
     if (route.startsWith("/agent")) {
@@ -3754,7 +3751,7 @@ return (
 
     <button
       type="button"
-      onClick={() => (window.location.hash = "/status")}
+      onClick={() => (window.location.hash = "/docs")}
       className="
         bg-transparent border-0 p-0 appearance-none
         text-sm text-white/65 hover:text-white transition
@@ -5056,9 +5053,6 @@ return (
                 </a>
               </li>
               <li>
-                <a href="#/status" className="hover:text-white transition">
-                  Status
-                </a>
               </li>
               <li>
                 <a href="mailto:support@echo.app" className="hover:text-white transition">
@@ -5127,9 +5121,6 @@ return (
             </a>
             <a href="#/about" className="hover:text-white transition">
               About
-            </a>
-            <a href="#/status" className="hover:text-white transition">
-              Status
             </a>
           </div>
         </div>
@@ -9243,67 +9234,6 @@ function DocsPage({ onBack }: { onBack: () => void }) {
         </div>
       </div>
     </div>
-  );
-}
-
-function StatusPage({ onBack }: { onBack: () => void }) {
-  const checks = [
-    { name: "Marketplace UI", status: "Operational", note: "Main routes are available." },
-    { name: "Wallet auth", status: "Operational", note: "Phantom challenge/verify enabled." },
-    { name: "Payments", status: "Operational", note: "USDC transfer + server verification active." },
-    { name: "Cloud state sync", status: "Operational", note: "Supabase-backed state is online." },
-    { name: "Creator endpoint proxy", status: "Operational", note: "Endpoint test + runtime proxy enabled." },
-  ];
-
-  return (
-    <main className="min-h-screen bg-[#05070f] text-white">
-      <div className="mx-auto max-w-5xl px-5 py-8 md:px-8 md:py-10">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-white/85 hover:bg-white/[0.08]"
-          >
-            Back to marketplace
-          </button>
-        </div>
-
-        <div className="mb-6">
-          <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">System</p>
-          <h1 className="mt-2 text-3xl font-semibold md:text-4xl">Status & support</h1>
-          <p className="mt-2 text-white/60">MVP runtime overview and support channels.</p>
-        </div>
-
-        <section className="grid gap-3">
-          {checks.map((check) => (
-            <div key={check.name} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <div className="flex items-center justify-between">
-                <div className="font-medium">{check.name}</div>
-                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-200">
-                  {check.status}
-                </span>
-              </div>
-              <div className="mt-1 text-sm text-white/65">{check.note}</div>
-            </div>
-          ))}
-        </section>
-
-        <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-          <h2 className="text-lg font-semibold">Need help?</h2>
-          <div className="mt-3 flex flex-wrap gap-3 text-sm">
-            <a href="mailto:support@echo.app" className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-white/85 hover:bg-white/[0.08]">
-              Email support
-            </a>
-            <a href="#/docs" className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-white/85 hover:bg-white/[0.08]">
-              Documentation
-            </a>
-            <a href="#/analytics" className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-white/85 hover:bg-white/[0.08]">
-              MVP ops dashboard
-            </a>
-          </div>
-        </section>
-      </div>
-    </main>
   );
 }
 
