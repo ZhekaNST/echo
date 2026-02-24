@@ -2181,7 +2181,7 @@ useEffect(() => {
 // (not on every like/save action), so cloud remains source-of-truth.
 useEffect(() => {
   if (!connected || !walletPk) return;
-  if (cloudTokenState) return;
+  if (cloudToken) return;
 
   const attemptKey = `${CLOUD_AUTH_ATTEMPT_PREFIX}${walletPk}`;
   if (safeSessionGet(attemptKey) === "1") return;
@@ -2191,7 +2191,7 @@ useEffect(() => {
     // User can reject signature; app keeps local optimistic state.
     // Next explicit reconnect/new tab can re-attempt auth.
   });
-}, [connected, walletPk, cloudTokenState, requestCloudToken]);
+}, [connected, walletPk, cloudToken, requestCloudToken]);
 
 useEffect(() => {
   if (!connected || !walletPk) return;
