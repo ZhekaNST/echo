@@ -2297,6 +2297,23 @@ useEffect(() => {
   };
 }, [viewerId, walletPk, cloudToken]);
 
+const refreshGlobalLikeCounters = useCallback(async () => {
+  const stats = await loadGlobalAgentStats();
+  if (!stats?.likesByAgent) return;
+  const likesByAgent = stats.likesByAgent;
+
+  setAgents((prev) => {
+    let changed = false;
+    const next = prev.map((local) => {
+      const remoteLikes = likesByAgent[local.id] ?? 0;
+      if (remoteLikes === (local.likes || 0)) return local;
+      changed = true;
+      return { ...local, likes: remoteLikes };
+    });
+    return changed ? next : prev;
+  });
+}, []);
+
 // Keep global like counters in sync across different clients/tabs.
 useEffect(() => {
   if (!isCloudEnabled()) return;
@@ -2304,26 +2321,8 @@ useEffect(() => {
   let cancelled = false;
   const tick = async () => {
     try {
-      const stats = await loadGlobalAgentStats();
-      if (cancelled || !stats?.likesByAgent) return;
-      const likesByAgent = stats.likesByAgent;
-
-      setAgents((prev) => {
-        let changed = false;
-        const next = prev.map((local) => {
-          const remoteLikes = likesByAgent[local.id] ?? 0;
-          if (remoteLikes === (local.likes || 0)) {
-            return local;
-          }
-          changed = true;
-          return {
-            ...local,
-            likes: remoteLikes,
-          };
-        });
-
-        return changed ? next : prev;
-      });
+      if (cancelled) return;
+      await refreshGlobalLikeCounters();
     } catch {
       // silent background sync failure
     }
@@ -2336,7 +2335,7 @@ useEffect(() => {
     cancelled = true;
     window.clearInterval(intervalId);
   };
-}, [cloudToken]);
+}, [cloudToken, refreshGlobalLikeCounters]);
 
 useEffect(() => {
   if (!cloudHydrated || !isCloudEnabled() || !walletPk || !cloudToken) return;
@@ -2701,6 +2700,20 @@ useEffect(() => {
       if (connected && walletPk) {
         saveLS(walletScopedKey(LS.LIKED, walletPk), likedNext);
       }
+
+      // Push like state to cloud immediately (do not wait for passive effects),
+      // then refresh server-authoritative counters for all clients.
+      void (async () => {
+        try {
+          const token = cloudToken || (await requestCloudToken());
+          if (token) {
+            await saveCloudState(viewerId, "liked", likedNext, token);
+          }
+          await refreshGlobalLikeCounters();
+        } catch {
+          // keep optimistic local toggle; periodic poll will reconcile later
+        }
+      })();
       return likedNext;
     });
   }
