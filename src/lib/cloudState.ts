@@ -1,4 +1,4 @@
-export type CloudStateScope = "agents" | "liked" | "saved" | "purchases" | "reviews";
+export type CloudStateScope = "agents" | "liked" | "saved" | "purchases" | "reviews" | "sessions";
 
 const CLOUD_TOKEN_KEY = "echo:cloud_token:v1";
 

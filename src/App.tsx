@@ -567,11 +567,22 @@ function saveLS(key: string, value: any) {
   }
 }
 
-async function loadGlobalAgentStats(): Promise<{ likesByAgent: Record<string, number> } | null> {
+async function loadGlobalAgentStats(): Promise<{ likesByAgent: Record<string, number>; sessionsByAgent: Record<string, number> } | null> {
   try {
     const res = await fetch("/api/agent-stats", { method: "GET" });
     if (!res.ok) return null;
-    return (await res.json()) as { likesByAgent: Record<string, number> };
+    return (await res.json()) as { likesByAgent: Record<string, number>; sessionsByAgent: Record<string, number> };
+  } catch {
+    return null;
+  }
+}
+
+async function loadGlobalReviews(): Promise<Record<string, AgentReview[]> | null> {
+  try {
+    const res = await fetch("/api/reviews", { method: "GET" });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data?: Record<string, AgentReview[]> };
+    return body?.data || {};
   } catch {
     return null;
   }
@@ -2097,6 +2108,7 @@ function toggleSaved(id: string) {
 >([]);
     // --- Reviews per agent (cloud source of truth) ---
     const [reviews, setReviews] = useState<Record<string, AgentReview[]>>({});
+    const [sessionCounters, setSessionCounters] = useState<Record<string, number>>({});
 
 const requestCloudToken = useCallback(async (): Promise<string | null> => {
   if (!connected || !walletPk) return null;
@@ -2236,15 +2248,16 @@ useEffect(() => {
 
     try {
       const cloudAgents = await loadCloudState<Agent[]>("global", "agents", cloudToken);
-      const [cloudLiked, cloudSaved, cloudPurchases, cloudReviews] =
+      const [cloudLiked, cloudSaved, cloudPurchases, cloudSessions, globalReviews] =
         walletPk && cloudToken
           ? await Promise.all([
               loadCloudState<Record<string, boolean>>(viewerId, "liked", cloudToken),
               loadCloudState<Record<string, boolean>>(viewerId, "saved", cloudToken),
               loadCloudState<Purchase[]>(viewerId, "purchases", cloudToken),
-              loadCloudState<Record<string, AgentReview[]>>(viewerId, "reviews", cloudToken),
+              loadCloudState<Record<string, number>>(viewerId, "sessions", cloudToken),
+              loadGlobalReviews(),
             ])
-          : [null, null, null, null];
+          : [null, null, null, null, await loadGlobalReviews()];
 
       if (cancelled) return;
 
@@ -2282,8 +2295,11 @@ useEffect(() => {
       if (cloudPurchases && Array.isArray(cloudPurchases)) {
         setPurchases(cloudPurchases);
       }
-      if (cloudReviews && typeof cloudReviews === "object") {
-        setReviews(cloudReviews);
+      if (cloudSessions && typeof cloudSessions === "object") {
+        setSessionCounters(cloudSessions);
+      }
+      if (globalReviews && typeof globalReviews === "object") {
+        setReviews(globalReviews);
       }
     } catch (e) {
       console.warn("Cloud state load failed, continuing with local data:", e);
@@ -2297,24 +2313,29 @@ useEffect(() => {
   };
 }, [viewerId, walletPk, cloudToken]);
 
-const refreshGlobalLikeCounters = useCallback(async () => {
+const refreshGlobalCounters = useCallback(async () => {
   const stats = await loadGlobalAgentStats();
-  if (!stats?.likesByAgent) return;
+  if (!stats?.likesByAgent || !stats?.sessionsByAgent) return;
   const likesByAgent = stats.likesByAgent;
+  const sessionsByAgent = stats.sessionsByAgent;
 
   setAgents((prev) => {
     let changed = false;
     const next = prev.map((local) => {
       const remoteLikes = likesByAgent[local.id] ?? 0;
-      if (remoteLikes === (local.likes || 0)) return local;
+      const remoteSessions = sessionsByAgent[local.id] ?? 0;
+      if (
+        remoteLikes === (local.likes || 0) &&
+        remoteSessions === (local.sessions || 0)
+      ) return local;
       changed = true;
-      return { ...local, likes: remoteLikes };
+      return { ...local, likes: remoteLikes, sessions: remoteSessions };
     });
     return changed ? next : prev;
   });
 }, []);
 
-// Keep global like counters in sync across different clients/tabs.
+// Keep global counters in sync across different clients/tabs.
 useEffect(() => {
   if (!isCloudEnabled()) return;
 
@@ -2322,7 +2343,7 @@ useEffect(() => {
   const tick = async () => {
     try {
       if (cancelled) return;
-      await refreshGlobalLikeCounters();
+      await refreshGlobalCounters();
     } catch {
       // silent background sync failure
     }
@@ -2335,7 +2356,7 @@ useEffect(() => {
     cancelled = true;
     window.clearInterval(intervalId);
   };
-}, [cloudToken, refreshGlobalLikeCounters]);
+}, [cloudToken, refreshGlobalCounters]);
 
 useEffect(() => {
   if (!cloudHydrated || !isCloudEnabled() || !walletPk || !cloudToken) return;
@@ -2361,44 +2382,62 @@ useEffect(() => {
 
 useEffect(() => {
   if (!cloudHydrated || !isCloudEnabled() || !walletPk || !cloudToken) return;
-  saveCloudState(viewerId, "purchases", purchases, cloudToken);
-}, [purchases, cloudHydrated, viewerId, walletPk, cloudToken]);
+  saveCloudState(viewerId, "sessions", sessionCounters, cloudToken);
+}, [sessionCounters, cloudHydrated, viewerId, walletPk, cloudToken]);
 
 useEffect(() => {
   if (!cloudHydrated || !isCloudEnabled() || !walletPk || !cloudToken) return;
-  saveCloudState(viewerId, "reviews", reviews, cloudToken);
-}, [reviews, cloudHydrated, viewerId, walletPk, cloudToken]);
+  saveCloudState(viewerId, "purchases", purchases, cloudToken);
+}, [purchases, cloudHydrated, viewerId, walletPk, cloudToken]);
 
   
   
-    // обработчик добавления отзыва
+    // обработчик добавления отзыва (глобально для всех)
     function handleAddReview(
       agentId: string,
       data: { rating: number; text: string; user?: string }
     ) {
       if (!requireWalletAction("add reviews")) return;
-      setReviews((prev) => {
-        const list = prev[agentId] || [];
-        let id: string;
+
+      let id: string;
+      try {
+        id = crypto.randomUUID();
+      } catch {
+        id = `${Date.now()}_${Math.random()}`;
+      }
+
+      const next: AgentReview = {
+        id,
+        rating: data.rating,
+        text: data.text,
+        user: data.user?.trim() || "Anonymous",
+        createdAt: Date.now(),
+      };
+
+      // optimistic
+      setReviews((prev) => ({
+        ...prev,
+        [agentId]: [...(prev[agentId] || []), next],
+      }));
+
+      void (async () => {
         try {
-          id = crypto.randomUUID();
+          const token = cloudToken || (await requestCloudToken());
+          if (!token) return;
+          await fetch("/api/reviews", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ agentId, review: next }),
+          });
+          const globalReviews = await loadGlobalReviews();
+          if (globalReviews) setReviews(globalReviews);
         } catch {
-          id = `${Date.now()}_${Math.random()}`;
+          // keep optimistic; next load will reconcile
         }
-  
-        const next: AgentReview = {
-          id,
-          rating: data.rating,
-          text: data.text,
-          user: data.user?.trim() || "Anonymous",
-          createdAt: Date.now(),
-        };
-  
-        return {
-          ...prev,
-          [agentId]: [...list, next],
-        };
-      });
+      })();
     }
   
 
@@ -2549,9 +2588,10 @@ useEffect(() => {
   // Start chat → route to #/chat with selected agent id and increment sessions
   function startChat() {
     if (!selected) return;
+    const selectedId = selected.id;
 
     trackAnalyticsEvent("start_session", {
-      agentId: selected.id,
+      agentId: selectedId,
       source: "modal_start_chat",
       engineProvider: selected.engineProvider || "platform",
     });
@@ -2560,7 +2600,7 @@ useEffect(() => {
     const now = Date.now();
     setAgents(prev => {
       const next = prev.map(a =>
-        a.id === selected.id
+        a.id === selectedId
           ? {
               ...a,
               sessions: a.sessions + 1,
@@ -2570,6 +2610,22 @@ useEffect(() => {
           : a
       );
       saveLS(LS.AGENTS, next);
+      return next;
+    });
+
+    setSessionCounters((prev) => {
+      const next = { ...prev, [selectedId]: (prev[selectedId] || 0) + 1 };
+      void (async () => {
+        try {
+          const token = cloudToken || (await requestCloudToken());
+          if (token) {
+            await saveCloudState(viewerId, "sessions", next, token);
+          }
+          await refreshGlobalCounters();
+        } catch {
+          // periodic sync will reconcile
+        }
+      })();
       return next;
     });
     
@@ -2583,7 +2639,7 @@ useEffect(() => {
       localStorage.removeItem("selectedAgentId");
     }
     
-    const agentId = selected.id;
+    const agentId = selectedId;
     setSelected(null);
 
     // уходим на чат с этим агентом
@@ -2709,7 +2765,7 @@ useEffect(() => {
           if (token) {
             await saveCloudState(viewerId, "liked", likedNext, token);
           }
-          await refreshGlobalLikeCounters();
+          await refreshGlobalCounters();
         } catch {
           // keep optimistic local toggle; periodic poll will reconcile later
         }

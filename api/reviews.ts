@@ -1,9 +1,17 @@
 import crypto from "node:crypto";
 import { logServerError } from "./_telemetry.js";
 
-type Scope = "agents" | "liked" | "saved" | "purchases" | "reviews" | "sessions";
-
 const TABLE = "app_state";
+const OWNER = "global";
+const SCOPE = "reviews";
+
+type AgentReview = {
+  id: string;
+  rating: number;
+  text: string;
+  user: string;
+  createdAt: number;
+};
 
 function b64urlDecode(s: string) {
   const normalized = s.replace(/-/g, "+").replace(/_/g, "/");
@@ -51,6 +59,15 @@ function serviceHeaders() {
   };
 }
 
+async function loadReviews(supa: { url: string; headers: Record<string, string> }) {
+  const url = `${supa.url}/rest/v1/${TABLE}?owner=eq.${encodeURIComponent(OWNER)}&scope=eq.${encodeURIComponent(SCOPE)}&select=data&limit=1`;
+  const resp = await fetch(url, { method: "GET", headers: supa.headers });
+  const text = await resp.text();
+  if (!resp.ok) throw new Error(text || `load reviews failed: ${resp.status}`);
+  const rows = JSON.parse(text || "[]") as Array<{ data?: Record<string, AgentReview[]> }>;
+  return rows?.[0]?.data || {};
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -65,46 +82,27 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: "Supabase service configuration missing" });
   }
 
-  const auth = verifyToken(req.headers?.authorization || req.headers?.Authorization);
-
   try {
     if (req.method === "GET") {
-      const owner = String(req.query?.owner || "").trim();
-      const scope = String(req.query?.scope || "").trim() as Scope;
-      if (!owner || !scope) return res.status(400).json({ error: "owner and scope are required" });
-
-      const isGlobalRead = owner === "global" && (scope === "agents" || scope === "reviews");
-      if (!isGlobalRead) {
-        if (!auth) return res.status(401).json({ error: "Unauthorized" });
-        if (auth.sub !== owner) return res.status(403).json({ error: "Forbidden" });
-      }
-
-      const url = `${supa.url}/rest/v1/${TABLE}?owner=eq.${encodeURIComponent(owner)}&scope=eq.${encodeURIComponent(scope)}&select=data&limit=1`;
-      const up = await fetch(url, { method: "GET", headers: supa.headers });
-      const text = await up.text();
-      if (!up.ok) return res.status(up.status).send(text);
-
-      let rows: Array<{ data: unknown }> = [];
-      try {
-        rows = JSON.parse(text || "[]");
-      } catch {
-        rows = [];
-      }
-      return res.status(200).json({ data: rows?.[0]?.data ?? null });
+      const data = await loadReviews(supa);
+      return res.status(200).json({ data });
     }
 
     if (req.method === "POST") {
+      const auth = verifyToken(req.headers?.authorization || req.headers?.Authorization);
       if (!auth) return res.status(401).json({ error: "Unauthorized" });
 
-      const owner = String(req.body?.owner || "").trim();
-      const scope = String(req.body?.scope || "").trim() as Scope;
-      const data = req.body?.data;
-
-      if (!owner || !scope) return res.status(400).json({ error: "owner and scope are required" });
-
-      if (owner !== "global" && auth.sub !== owner) {
-        return res.status(403).json({ error: "Forbidden" });
+      const agentId = String(req.body?.agentId || "").trim();
+      const review = req.body?.review as AgentReview | undefined;
+      if (!agentId || !review?.id) {
+        return res.status(400).json({ error: "agentId and review are required" });
       }
+
+      const current = await loadReviews(supa);
+      const list = Array.isArray(current[agentId]) ? current[agentId] : [];
+      const exists = list.some((r) => r.id === review.id);
+      const nextList = exists ? list : [...list, review];
+      const nextData = { ...current, [agentId]: nextList };
 
       const up = await fetch(`${supa.url}/rest/v1/${TABLE}?on_conflict=owner,scope`, {
         method: "POST",
@@ -112,7 +110,7 @@ export default async function handler(req: any, res: any) {
           ...supa.headers,
           Prefer: "resolution=merge-duplicates,return=minimal",
         },
-        body: JSON.stringify([{ owner, scope, data }]),
+        body: JSON.stringify([{ owner: OWNER, scope: SCOPE, data: nextData }]),
       });
 
       const text = await up.text();
@@ -122,11 +120,11 @@ export default async function handler(req: any, res: any) {
 
     return res.status(405).json({ error: "Method not allowed" });
   } catch (error: any) {
-    await logServerError("api/cloud-state", error, {
+    await logServerError("api/reviews", error, {
       method: req?.method,
-      owner: req?.query?.owner || req?.body?.owner,
-      scope: req?.query?.scope || req?.body?.scope,
+      agentId: req?.body?.agentId,
     });
-    return res.status(500).json({ error: "Cloud state handler error" });
+    return res.status(500).json({ error: "Reviews handler error" });
   }
 }
+

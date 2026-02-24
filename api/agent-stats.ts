@@ -21,6 +21,11 @@ type LikeRow = {
   data: Record<string, boolean> | null;
 };
 
+type SessionRow = {
+  owner: string;
+  data: Record<string, number> | null;
+};
+
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -35,21 +40,39 @@ export default async function handler(req: any, res: any) {
   if (!supa) return res.status(500).json({ error: "Supabase service configuration missing" });
 
   try {
-    const url = `${supa.url}/rest/v1/${TABLE}?scope=eq.liked&select=owner,data&limit=1000`;
-    const up = await fetch(url, { method: "GET", headers: supa.headers });
-    const text = await up.text();
-    if (!up.ok) return res.status(up.status).send(text);
+    const [likesResp, sessionsResp] = await Promise.all([
+      fetch(`${supa.url}/rest/v1/${TABLE}?scope=eq.liked&select=owner,data&limit=1000`, {
+        method: "GET",
+        headers: supa.headers,
+      }),
+      fetch(`${supa.url}/rest/v1/${TABLE}?scope=eq.sessions&select=owner,data&limit=1000`, {
+        method: "GET",
+        headers: supa.headers,
+      }),
+    ]);
 
-    let rows: LikeRow[] = [];
+    const likesText = await likesResp.text();
+    if (!likesResp.ok) return res.status(likesResp.status).send(likesText);
+    const sessionsText = await sessionsResp.text();
+    if (!sessionsResp.ok) return res.status(sessionsResp.status).send(sessionsText);
+
+    let likeRows: LikeRow[] = [];
+    let sessionRows: SessionRow[] = [];
     try {
-      rows = JSON.parse(text || "[]");
+      likeRows = JSON.parse(likesText || "[]");
     } catch {
-      rows = [];
+      likeRows = [];
+    }
+    try {
+      sessionRows = JSON.parse(sessionsText || "[]");
+    } catch {
+      sessionRows = [];
     }
 
     const likesByAgent: Record<string, number> = {};
+    const sessionsByAgent: Record<string, number> = {};
 
-    for (const row of rows) {
+    for (const row of likeRows) {
       const likedMap = row?.data;
       if (!likedMap || typeof likedMap !== "object") continue;
       for (const [agentId, isLiked] of Object.entries(likedMap)) {
@@ -58,7 +81,17 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    return res.status(200).json({ likesByAgent });
+    for (const row of sessionRows) {
+      const sessionMap = row?.data;
+      if (!sessionMap || typeof sessionMap !== "object") continue;
+      for (const [agentId, count] of Object.entries(sessionMap)) {
+        const n = Number(count) || 0;
+        if (n <= 0) continue;
+        sessionsByAgent[agentId] = (sessionsByAgent[agentId] || 0) + n;
+      }
+    }
+
+    return res.status(200).json({ likesByAgent, sessionsByAgent });
   } catch (error: any) {
     await logServerError("api/agent-stats", error, {
       method: req?.method,
@@ -66,4 +99,3 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: "Agent stats handler error" });
   }
 }
-
