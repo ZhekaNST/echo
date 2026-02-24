@@ -2054,10 +2054,16 @@ async function testChatEndpoint() {
   const [saved, setSaved] = useState<Record<string, boolean>>({});
  
 
-  function toggleSaved(id: string) {
-    if (!requireWalletAction("save agents")) return;
-    setSaved((prev) => ({ ...prev, [id]: !prev[id] }));
-  }
+function toggleSaved(id: string) {
+  if (!requireWalletAction("save agents")) return;
+  setSaved((prev) => {
+    const next = { ...prev, [id]: !prev[id] };
+    if (connected && walletPk) {
+      saveLS(walletScopedKey(LS.SAVED, walletPk), next);
+    }
+    return next;
+  });
+}
 
   useEffect(() => {
     if (!route.startsWith("/explore")) return;
@@ -2223,7 +2229,22 @@ useEffect(() => {
               ? a.avatar
               : DEFAULT_AGENT_AVATAR_URL,
         }));
-        setAgents(normalized);
+        // Merge cloud snapshot with local dynamic counters to prevent UI rollback after refresh.
+        setAgents((prev) => {
+          const localById = new Map(prev.map((agent) => [agent.id, agent]));
+          return normalized.map((cloudAgent) => {
+            const local = localById.get(cloudAgent.id);
+            if (!local) return cloudAgent;
+            return {
+              ...cloudAgent,
+              likes: local.likes ?? cloudAgent.likes,
+              sessions: local.sessions ?? cloudAgent.sessions,
+              likes24h: local.likes24h ?? cloudAgent.likes24h,
+              sessions24h: local.sessions24h ?? cloudAgent.sessions24h,
+              lastActiveAt: local.lastActiveAt ?? cloudAgent.lastActiveAt,
+            };
+          });
+        });
       }
       if (cloudLiked && typeof cloudLiked === "object") {
         setLiked(cloudLiked);
@@ -2470,8 +2491,8 @@ useEffect(() => {
 
     // +1 к количеству сессий у этого агента (статистика)
     const now = Date.now();
-    setAgents(prev =>
-      prev.map(a =>
+    setAgents(prev => {
+      const next = prev.map(a =>
         a.id === selected.id
           ? {
               ...a,
@@ -2480,8 +2501,10 @@ useEffect(() => {
               lastActiveAt: now,
             }
           : a
-      )
-    );
+      );
+      saveLS(LS.AGENTS, next);
+      return next;
+    });
     
     // Close modal and clear state before navigation
     setPayModalOpen(false);
@@ -2606,13 +2629,25 @@ useEffect(() => {
     setLiked((prev) => {
       const next = !prev[id];
   
-      setAgents((ags) =>
-        ags.map((a) =>
-          a.id === id ? { ...a, likes: Math.max(0, (a.likes || 0) + (next ? 1 : -1)) } : a
-        )
-      );
-  
-      return { ...prev, [id]: next };
+      setAgents((ags) => {
+        const updated = ags.map((a) =>
+          a.id === id
+            ? {
+                ...a,
+                likes: Math.max(0, (a.likes || 0) + (next ? 1 : -1)),
+                likes24h: Math.max(0, (a.likes24h ?? 0) + (next ? 1 : -1)),
+              }
+            : a
+        );
+        saveLS(LS.AGENTS, updated);
+        return updated;
+      });
+
+      const likedNext = { ...prev, [id]: next };
+      if (connected && walletPk) {
+        saveLS(walletScopedKey(LS.LIKED, walletPk), likedNext);
+      }
+      return likedNext;
     });
   }
   
