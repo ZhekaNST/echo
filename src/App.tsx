@@ -520,6 +520,14 @@ function safeLocalSet(key: string, value: string) {
   }
 }
 
+function safeLocalRemove(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore storage errors
+  }
+}
+
 function safeSessionGet(key: string): string | null {
   try {
     return sessionStorage.getItem(key);
@@ -556,6 +564,7 @@ function saveLS(key: string, value: any) {
 }
 
 const CLOUD_VIEWER_ID_KEY = "echo:viewer_id:v1";
+const WALLET_AUTOCONNECT_KEY = "echo:wallet:auto-connect:v1";
 
 function getOrCreateViewerId() {
   if (typeof window === "undefined") return "anon-server";
@@ -1589,11 +1598,13 @@ useEffect(() => {
       setConnected(true);
       setWalletPk(key);              // полный pubkey
       setAddress(shorten(key));      // короткий для UI
+      safeLocalSet(WALLET_AUTOCONNECT_KEY, "1");
     };
     const onDisconnect = () => {
       setConnected(false);
       setAddress(null);
       setWalletPk(null);
+      safeLocalRemove(WALLET_AUTOCONNECT_KEY);
     };
     const onAccountChanged = (publicKey?: any) => {
       if (publicKey) onConnect(publicKey); else onDisconnect();
@@ -1602,9 +1613,16 @@ useEffect(() => {
     provider.on?.("connect", onConnect);
     provider.on?.("disconnect", onDisconnect);
     provider.on?.("accountChanged", onAccountChanged);
-  
-    // Do not auto-connect on page load.
-    // This avoids startup crashes from wallet/solana init and removes phantom popup on refresh.
+
+    // Auto-reconnect silently (no popup) only for users who connected before.
+    const shouldAutoReconnect = safeLocalGet(WALLET_AUTOCONNECT_KEY) === "1";
+    if (shouldAutoReconnect) {
+      if (provider.publicKey) {
+        onConnect(provider.publicKey);
+      } else {
+        provider.connect?.({ onlyIfTrusted: true }).catch(() => {});
+      }
+    }
   
     return () => {
       provider.removeListener?.("connect", onConnect);
@@ -2431,7 +2449,10 @@ useEffect(() => {
   }
 
   function handleConnect() { connectPhantom(setConnected, setAddress, setWalletPk); }
-  function handleDisconnect() { disconnectPhantom(setConnected, setAddress, setWalletPk); }
+  function handleDisconnect() {
+    safeLocalRemove(WALLET_AUTOCONNECT_KEY);
+    disconnectPhantom(setConnected, setAddress, setWalletPk);
+  }
   
 
   // Start chat → route to #/chat with selected agent id and increment sessions
