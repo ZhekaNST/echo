@@ -3718,49 +3718,35 @@ return (
       Echo
     </button>
 
-    {/* Learn (просто текст) */}
-    <button
-      type="button"
-      onClick={() => (window.location.hash = "/learn")}
-      className="
-        bg-transparent border-0 p-0 appearance-none
-        text-sm text-white/65
-        hover:text-white transition
-        focus:outline-none
-        relative
-      "
-    >
-      Learn
-      <span className="absolute left-0 -bottom-1 h-[1px] w-full bg-white/0 hover:bg-white/40 transition" />
-    </button>
+    <nav className="flex items-center gap-4 text-sm">
+      <button
+        type="button"
+        onClick={() => (window.location.hash = "/learn")}
+        className="
+          bg-transparent border-0 p-0 appearance-none
+          text-sm text-white/70 hover:text-white transition
+          focus:outline-none
+        "
+      >
+        Learn
+      </button>
+      <span className="text-white/20">|</span>
+      <button
+        type="button"
+        onClick={() => (window.location.hash = "/docs")}
+        className="
+          bg-transparent border-0 p-0 appearance-none
+          text-sm text-white/70 hover:text-white transition
+          focus:outline-none
+        "
+      >
+        Docs
+      </button>
+    </nav>
   </div>
 
   {/* RIGHT: secondary actions */}
   <div className="flex items-center gap-4">
-    <button
-      type="button"
-      onClick={() => (window.location.hash = "/docs")}
-      className="
-        bg-transparent border-0 p-0 appearance-none
-        text-sm text-white/65 hover:text-white transition
-        focus:outline-none
-      "
-    >
-      Docs
-    </button>
-
-    <button
-      type="button"
-      onClick={() => (window.location.hash = "/docs")}
-      className="
-        bg-transparent border-0 p-0 appearance-none
-        text-sm text-white/65 hover:text-white transition
-        focus:outline-none
-      "
-    >
-      Status
-    </button>
-
     <button
       type="button"
       onClick={handleStartCreate}
@@ -4615,15 +4601,20 @@ return (
           {/* Floating Button */}
           <button
             onClick={() => setShowSessionsPanel(true)}
-            className="fixed right-4 bottom-20 z-40 flex items-center gap-2 px-4 py-3 rounded-full border border-white/14 bg-black/80 backdrop-blur-md text-white/90 font-medium shadow-[0_8px_18px_rgba(0,0,0,0.5)] hover:bg-black/90 hover:border-white/24 transition-all duration-200 group"
+            className="fixed right-4 bottom-20 z-40 flex items-center gap-2 px-4 py-3 rounded-full border border-white/25 bg-white/[0.08] backdrop-blur-xl supports-[backdrop-filter]:bg-white/[0.10] text-white/95 font-medium shadow-[0_10px_30px_rgba(6,10,30,0.45)] hover:bg-white/[0.14] hover:border-white/35 transition-all duration-200 group"
           >
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 rounded-full opacity-60 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.22),transparent_48%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,0.10),transparent_45%)]"
+            />
             <div className="relative">
-              <Bot className="h-5 w-5 text-white/80" />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500/85 rounded-full text-[10px] font-bold text-black flex items-center justify-center">
+              <Bot className="h-5 w-5 text-white/90 relative z-10" />
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-400 rounded-full text-[10px] font-bold text-black flex items-center justify-center animate-pulse shadow-[0_0_12px_rgba(52,211,153,0.9)]">
                 {activeSessions.length}
               </span>
+              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full border border-emerald-300/70 animate-ping" />
             </div>
-            <span className="hidden sm:inline">Active Sessions</span>
+            <span className="hidden sm:inline relative z-10">Active Sessions</span>
           </button>
 
           {/* Slide-out Panel */}
