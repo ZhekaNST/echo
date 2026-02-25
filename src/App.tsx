@@ -4598,20 +4598,20 @@ return (
           {/* Floating Button */}
           <button
             onClick={() => setShowSessionsPanel(true)}
-            className="fixed right-4 bottom-20 z-40 flex items-center gap-3 px-4 py-2.5 rounded-full border border-white/30 bg-[linear-gradient(135deg,rgba(255,255,255,0.24),rgba(255,255,255,0.08))] backdrop-blur-2xl text-white font-medium shadow-[0_14px_35px_rgba(4,8,24,0.55)] hover:border-white/45 hover:bg-[linear-gradient(135deg,rgba(255,255,255,0.28),rgba(255,255,255,0.12))] transition-all duration-200 group"
+            className="fixed right-4 bottom-20 z-40 flex items-center gap-2.5 px-3.5 py-2 rounded-full border border-white/20 bg-[linear-gradient(135deg,rgba(0,0,0,0.86),rgba(10,10,18,0.74))] backdrop-blur-xl text-white font-medium shadow-[0_12px_30px_rgba(2,4,12,0.62)] hover:border-white/30 hover:bg-[linear-gradient(135deg,rgba(0,0,0,0.9),rgba(12,12,22,0.8))] transition-all duration-200 group"
           >
             <span
               aria-hidden
-              className="pointer-events-none absolute inset-0 rounded-full opacity-70 bg-[radial-gradient(circle_at_22%_15%,rgba(255,255,255,0.30),transparent_46%),radial-gradient(circle_at_78%_82%,rgba(255,255,255,0.16),transparent_42%)]"
+              className="pointer-events-none absolute inset-0 rounded-full opacity-40 bg-[radial-gradient(circle_at_22%_14%,rgba(255,255,255,0.18),transparent_45%),radial-gradient(circle_at_78%_82%,rgba(255,255,255,0.08),transparent_40%)]"
             />
-            <div className="relative z-10 h-8 w-8 rounded-full border border-white/35 bg-white/12 grid place-items-center shadow-[inset_0_1px_3px_rgba(255,255,255,0.25)]">
-              <Bot className="h-4.5 w-4.5 text-white" />
-              <span className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 px-1 bg-emerald-400 rounded-full text-[10px] font-bold text-black flex items-center justify-center animate-pulse shadow-[0_0_14px_rgba(52,211,153,0.9)]">
+            <div className="relative z-10 h-7 w-7 rounded-full border border-white/25 bg-white/10 grid place-items-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.18)]">
+              <MessageCircle className="h-3.5 w-3.5 text-white" />
+              <span className="absolute -top-1.5 -right-1.5 min-w-[1.15rem] h-[1.1rem] px-1 bg-emerald-400 rounded-full text-[9px] font-bold text-black flex items-center justify-center animate-pulse shadow-[0_0_12px_rgba(52,211,153,0.9)]">
                 {activeSessions.length}
               </span>
-              <span className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 rounded-full border border-emerald-300/80 animate-ping" />
+              <span className="absolute -top-1.5 -right-1.5 min-w-[1.15rem] h-[1.1rem] rounded-full border border-emerald-300/80 animate-ping" />
             </div>
-            <span className="hidden sm:inline relative z-10 text-[1.2rem] leading-none tracking-tight text-white/95 font-semibold">
+            <span className="hidden sm:inline relative z-10 text-[1.1rem] leading-none tracking-tight text-white/95 font-semibold">
               Active Sessions
             </span>
           </button>
