@@ -2861,7 +2861,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
     setAutoPrice(true);
   }
 
-  function submitCreate() {
+  async function submitCreate() {
     const categories = deriveCategories(newAgent);
     const priceUSDC = autoPrice
       ? autoPriceFromPrompt(newAgent.promptPreview)
@@ -2872,24 +2872,43 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
       !!newAgent.isVerified;
 
     // 🔹 РЕЖИМ РЕДАКТИРОВАНИЯ
+    const token = cloudToken || (await requestCloudToken());
+    if (!token) {
+      alert("Approve one-time wallet signature to publish/edit agent in cloud.");
+      return;
+    }
+
     if (editingAgentId) {
-      setAgents(prev =>
-        prev.map(a => {
-          if (a.id !== editingAgentId) return a;
-          return {
-            ...a,
-            ...newAgent,
-            id: a.id, // id не меняем
-            engineProvider: "creator_backend",
-            categories,
-            priceUSDC,
-            isVerified: shouldMarkVerified,
-            verifiedAt: shouldMarkVerified ? Date.now() : null,
-            creator: a.creator, // не трогаем создателя
-            creatorWallet: a.creatorWallet,
-          };
-        })
-      );
+      const updatedAgents = agents.map((a) => {
+        if (a.id !== editingAgentId) return a;
+        return {
+          ...a,
+          ...newAgent,
+          id: a.id, // id не меняем
+          engineProvider: "creator_backend",
+          categories,
+          priceUSDC,
+          isVerified: shouldMarkVerified,
+          verifiedAt: shouldMarkVerified ? Date.now() : null,
+          creator: a.creator, // не трогаем создателя
+          creatorWallet: a.creatorWallet,
+        };
+      });
+
+      const safeAgents = updatedAgents.map((a) => ({
+        ...a,
+        avatar:
+          typeof a.avatar === "string" && a.avatar.trim()
+            ? a.avatar
+            : DEFAULT_AGENT_AVATAR_URL,
+      }));
+      const saved = await saveCloudState("global", "agents", safeAgents, token);
+      if (!saved) {
+        alert("Failed to save agent to cloud. Please try again.");
+        return;
+      }
+
+      setAgents(updatedAgents);
       setCreating(false);
       setEditingAgentId(null);
       return;
@@ -2916,7 +2935,21 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
         };
         
 
-    setAgents(prev => [agent, ...prev]);
+    const nextAgents = [agent, ...agents];
+    const safeAgents = nextAgents.map((a) => ({
+      ...a,
+      avatar:
+        typeof a.avatar === "string" && a.avatar.trim()
+          ? a.avatar
+          : DEFAULT_AGENT_AVATAR_URL,
+    }));
+    const saved = await saveCloudState("global", "agents", safeAgents, token);
+    if (!saved) {
+      alert("Failed to publish agent to cloud. Please try again.");
+      return;
+    }
+
+    setAgents(nextAgents);
     trackAnalyticsEvent("publish_agent", {
       agentId: agent.id,
       engineProvider: agent.engineProvider || "platform",
