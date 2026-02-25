@@ -3696,11 +3696,10 @@ return (
   <div className="min-h-screen w-screen overflow-x-hidden bg-gradient-to-b from-black via-[#0b0b1a] to-black text-white">
     {/* Header */}
     <header className="sticky top-0 z-40 backdrop-blur border-b border-white/10 pointer-events-auto">
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-      <div className="flex items-center justify-between w-full">
+      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-5 flex-shrink-0">
   {/* LEFT: Brand + nav */}
-  <div className="flex items-center gap-6">
+  <div className="flex items-center gap-5">
     {/* Echo brand (не кнопка) */}
     <button
       type="button"
@@ -3718,7 +3717,7 @@ return (
       Echo
     </button>
 
-    <nav className="flex items-center gap-4 text-sm">
+    <nav className="flex items-center gap-3 text-sm">
       <button
         type="button"
         onClick={() => (window.location.hash = "/learn")}
@@ -3746,7 +3745,7 @@ return (
   </div>
 
   {/* RIGHT: secondary actions */}
-  <div className="flex items-center gap-4">
+  <div className="flex items-center gap-3 ml-1">
     <button
       type="button"
       onClick={handleStartCreate}
@@ -3768,10 +3767,8 @@ return (
   </div>
 </div>
 
-</div>
 
-
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           {connected ? (
             <div className="flex items-center gap-2">
               {/* Wallet address – компактный неон */}
@@ -4601,20 +4598,22 @@ return (
           {/* Floating Button */}
           <button
             onClick={() => setShowSessionsPanel(true)}
-            className="fixed right-4 bottom-20 z-40 flex items-center gap-2 px-4 py-3 rounded-full border border-white/25 bg-white/[0.08] backdrop-blur-xl supports-[backdrop-filter]:bg-white/[0.10] text-white/95 font-medium shadow-[0_10px_30px_rgba(6,10,30,0.45)] hover:bg-white/[0.14] hover:border-white/35 transition-all duration-200 group"
+            className="fixed right-4 bottom-20 z-40 flex items-center gap-3 px-4 py-2.5 rounded-full border border-white/30 bg-[linear-gradient(135deg,rgba(255,255,255,0.24),rgba(255,255,255,0.08))] backdrop-blur-2xl text-white font-medium shadow-[0_14px_35px_rgba(4,8,24,0.55)] hover:border-white/45 hover:bg-[linear-gradient(135deg,rgba(255,255,255,0.28),rgba(255,255,255,0.12))] transition-all duration-200 group"
           >
             <span
               aria-hidden
-              className="pointer-events-none absolute inset-0 rounded-full opacity-60 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.22),transparent_48%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,0.10),transparent_45%)]"
+              className="pointer-events-none absolute inset-0 rounded-full opacity-70 bg-[radial-gradient(circle_at_22%_15%,rgba(255,255,255,0.30),transparent_46%),radial-gradient(circle_at_78%_82%,rgba(255,255,255,0.16),transparent_42%)]"
             />
-            <div className="relative">
-              <Bot className="h-5 w-5 text-white/90 relative z-10" />
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-400 rounded-full text-[10px] font-bold text-black flex items-center justify-center animate-pulse shadow-[0_0_12px_rgba(52,211,153,0.9)]">
+            <div className="relative z-10 h-8 w-8 rounded-full border border-white/35 bg-white/12 grid place-items-center shadow-[inset_0_1px_3px_rgba(255,255,255,0.25)]">
+              <Bot className="h-4.5 w-4.5 text-white" />
+              <span className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 px-1 bg-emerald-400 rounded-full text-[10px] font-bold text-black flex items-center justify-center animate-pulse shadow-[0_0_14px_rgba(52,211,153,0.9)]">
                 {activeSessions.length}
               </span>
-              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full border border-emerald-300/70 animate-ping" />
+              <span className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 rounded-full border border-emerald-300/80 animate-ping" />
             </div>
-            <span className="hidden sm:inline relative z-10">Active Sessions</span>
+            <span className="hidden sm:inline relative z-10 text-[1.2rem] leading-none tracking-tight text-white/95 font-semibold">
+              Active Sessions
+            </span>
           </button>
 
           {/* Slide-out Panel */}
