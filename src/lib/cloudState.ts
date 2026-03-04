@@ -5,6 +5,7 @@ export type CloudStateScope =
   | "purchases"
   | "reviews"
   | "sessions"
+  | "active_sessions"
   | "chat_history";
 
 const CLOUD_TOKEN_KEY = "echo:cloud_token:v1";

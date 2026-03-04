@@ -1054,7 +1054,7 @@ const CATEGORY_ITEMS = [
 ];
 
 
-// --- Paid sessions (local, per-agent) ---
+// --- Paid sessions (cloud-backed, per-wallet) ---
 type AgentSession = {
   paidAt: number;
   expiresAt: number | null; // null = без ограничения по времени
@@ -1071,71 +1071,58 @@ type AgentReview = {
 };
 
 const SESSION_KEY_PREFIX = "echo_session_";
+type ActiveSessionsMap = Record<string, AgentSession>;
 
 function getSessionKey(agentId: string) {
   return `${SESSION_KEY_PREFIX}${agentId}`;
 }
 
-// получить активную сессию по агенту (учитываем истечение по времени)
-function getActiveSession(agentId: string): AgentSession | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(getSessionKey(agentId));
-    if (!raw) return null;
-    const data = JSON.parse(raw) as AgentSession;
-
-    if (data.expiresAt && Date.now() > data.expiresAt) {
-      // если время вышло — чистим и возвращаем null
-      window.localStorage.removeItem(getSessionKey(agentId));
-      return null;
-    }
-    return data;
-  } catch {
-    return null;
-  }
+function isSessionActive(session?: AgentSession | null) {
+  if (!session) return false;
+  if (!session.expiresAt) return true;
+  return Date.now() < session.expiresAt;
 }
 
-// сохранить новую сессию после оплаты
-function saveSession(agent: Agent, tx?: string) {
-  if (typeof window === "undefined") return;
-  const now = Date.now();
-
-  let expiresAt: number | null = null;
-  if (agent.maxDurationMinutes && agent.maxDurationMinutes > 0) {
-    expiresAt = now + agent.maxDurationMinutes * 60 * 1000;
-  }
-
-  const session: AgentSession = { paidAt: now, expiresAt, tx };
-
-  try {
-    window.localStorage.setItem(getSessionKey(agent.id), JSON.stringify(session));
-  } catch {
-    // игнорим ошибки localStorage
-  }
+function sanitizeActiveSessions(map: ActiveSessionsMap): ActiveSessionsMap {
+  const next: ActiveSessionsMap = {};
+  Object.entries(map || {}).forEach(([agentId, session]) => {
+    if (isSessionActive(session)) next[agentId] = session;
+  });
+  return next;
 }
 
-// очистить сессию (когда покупаем новую)
-function clearSession(agentId: string) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(getSessionKey(agentId));
-  } catch {}
-}
-
-// получить все активные сессии для списка агентов
-function getAllActiveSessions(agents: Agent[]): Array<{ agent: Agent; session: AgentSession }> {
-  if (typeof window === "undefined") return [];
-  
-  const activeSessions: Array<{ agent: Agent; session: AgentSession }> = [];
-  
+// Migration helper: read old localStorage sessions once, then rely on cloud only.
+function readLegacySessions(agents: Agent[]): ActiveSessionsMap {
+  if (typeof window === "undefined") return {};
+  const legacy: ActiveSessionsMap = {};
   for (const agent of agents) {
-    const session = getActiveSession(agent.id);
-    if (session) {
-      activeSessions.push({ agent, session });
+    try {
+      const raw = window.localStorage.getItem(getSessionKey(agent.id));
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as AgentSession;
+      if (isSessionActive(parsed)) {
+        legacy[agent.id] = parsed;
+      } else {
+        window.localStorage.removeItem(getSessionKey(agent.id));
+      }
+    } catch {
+      // ignore invalid legacy entries
     }
   }
-  
-  return activeSessions;
+  return legacy;
+}
+
+function getAllActiveSessions(
+  agents: Agent[],
+  activeSessions: ActiveSessionsMap
+): Array<{ agent: Agent; session: AgentSession }> {
+  const pool = sanitizeActiveSessions(activeSessions);
+  const out: Array<{ agent: Agent; session: AgentSession }> = [];
+  for (const agent of agents) {
+    const session = pool[agent.id];
+    if (session) out.push({ agent, session });
+  }
+  return out;
 }
 
 // ✅ Verify payment via SERVER-SIDE endpoint (secure verification)
@@ -2063,6 +2050,7 @@ function toggleSaved(id: string) {
     // --- Reviews per agent (cloud source of truth) ---
     const [reviews, setReviews] = useState<Record<string, AgentReview[]>>({});
     const [sessionCounters, setSessionCounters] = useState<Record<string, number>>({});
+    const [activeSessions, setActiveSessions] = useState<ActiveSessionsMap>({});
 
 const requestCloudToken = useCallback(async (): Promise<string | null> => {
   if (!connected || !walletPk) return null;
@@ -2141,12 +2129,42 @@ function requireWalletAction(actionLabel: string) {
   return true;
 }
 
+const hasActiveSessionByAgentId = useCallback(
+  (agentId: string) => isSessionActive(activeSessions[agentId]),
+  [activeSessions]
+);
+
+const createOrReplaceSession = useCallback((agent: Agent, tx?: string) => {
+  const now = Date.now();
+  const expiresAt =
+    agent.maxDurationMinutes && agent.maxDurationMinutes > 0
+      ? now + agent.maxDurationMinutes * 60 * 1000
+      : null;
+  const session: AgentSession = { paidAt: now, expiresAt, tx };
+  setActiveSessions((prev) =>
+    sanitizeActiveSessions({
+      ...prev,
+      [agent.id]: session,
+    })
+  );
+}, []);
+
+const removeActiveSession = useCallback((agentId: string) => {
+  setActiveSessions((prev) => {
+    if (!prev[agentId]) return prev;
+    const next = { ...prev };
+    delete next[agentId];
+    return next;
+  });
+}, []);
+
 useEffect(() => {
   if (!connected || !walletPk) {
     setCloudToken(null);
     setCloudTokenState(null);
     setLiked({});
     setSaved({});
+    setActiveSessions({});
     return;
   }
   const existing = getCloudToken();
@@ -2199,16 +2217,17 @@ useEffect(() => {
 
     try {
       const cloudAgents = await loadCloudState<Agent[]>("global", "agents", cloudToken);
-      const [cloudLiked, cloudSaved, cloudPurchases, cloudSessions, globalReviews] =
+      const [cloudLiked, cloudSaved, cloudPurchases, cloudSessions, cloudActiveSessions, globalReviews] =
         walletPk && cloudToken
           ? await Promise.all([
               loadCloudState<Record<string, boolean>>(viewerId, "liked", cloudToken),
               loadCloudState<Record<string, boolean>>(viewerId, "saved", cloudToken),
               loadCloudState<Purchase[]>(viewerId, "purchases", cloudToken),
               loadCloudState<Record<string, number>>(viewerId, "sessions", cloudToken),
+              loadCloudState<ActiveSessionsMap>(viewerId, "active_sessions", cloudToken),
               loadGlobalReviews(),
             ])
-          : [null, null, null, null, await loadGlobalReviews()];
+          : [null, null, null, null, null, await loadGlobalReviews()];
 
       if (cancelled) return;
 
@@ -2248,6 +2267,18 @@ useEffect(() => {
       }
       if (cloudSessions && typeof cloudSessions === "object") {
         setSessionCounters(cloudSessions);
+      }
+      if (cloudActiveSessions && typeof cloudActiveSessions === "object") {
+        setActiveSessions(sanitizeActiveSessions(cloudActiveSessions));
+      } else if (walletPk) {
+        const legacyPool =
+          cloudAgents && Array.isArray(cloudAgents) && cloudAgents.length > 0
+            ? cloudAgents
+            : INITIAL_AGENTS;
+        const legacy = readLegacySessions(legacyPool);
+        if (Object.keys(legacy).length > 0) {
+          setActiveSessions(sanitizeActiveSessions(legacy));
+        }
       }
       if (globalReviews && typeof globalReviews === "object") {
         setReviews(globalReviews);
@@ -2338,8 +2369,25 @@ useEffect(() => {
 
 useEffect(() => {
   if (!cloudHydrated || !isCloudEnabled() || !walletPk || !cloudToken) return;
+  const sanitized = sanitizeActiveSessions(activeSessions);
+  saveCloudState(viewerId, "active_sessions", sanitized, cloudToken);
+}, [activeSessions, cloudHydrated, viewerId, walletPk, cloudToken]);
+
+useEffect(() => {
+  if (!cloudHydrated || !isCloudEnabled() || !walletPk || !cloudToken) return;
   saveCloudState(viewerId, "purchases", purchases, cloudToken);
 }, [purchases, cloudHydrated, viewerId, walletPk, cloudToken]);
+
+useEffect(() => {
+  const id = window.setInterval(() => {
+    setActiveSessions((prev) => {
+      const sanitized = sanitizeActiveSessions(prev);
+      if (Object.keys(sanitized).length === Object.keys(prev).length) return prev;
+      return sanitized;
+    });
+  }, 15000);
+  return () => window.clearInterval(id);
+}, []);
 
   
   
@@ -2626,7 +2674,7 @@ useEffect(() => {
     
     if (isCreator) {
       // Creator gets free access - save session and go to chat
-      saveSession(agent, "creator-free-access");
+      createOrReplaceSession(agent, "creator-free-access");
       trackAnalyticsEvent("start_session", {
         agentId: agent.id,
         source: "creator_free_access",
@@ -2644,8 +2692,7 @@ useEffect(() => {
     }
   
     // 2) If active session exists → go directly to chat (resume), skip modal
-    const activeSession =
-      typeof window !== "undefined" ? getActiveSession(agent.id) : null;
+    const activeSession = hasActiveSessionByAgentId(agent.id);
 
     if (activeSession) {
       trackAnalyticsEvent("start_session", {
@@ -3020,6 +3067,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
           onOpenPay={(ag) => openPay(ag)}
           liked={liked}
           onLike={handleLike}
+          hasActiveSessionByAgentId={hasActiveSessionByAgentId}
           allAgents={agents}
           reviews={reviews}                    // 🔹 добавили
           onAddReview={handleAddReview}        // 🔹 добавили
@@ -3046,6 +3094,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
         selectedAgent={agent}
         walletPk={walletPk}
         cloudToken={cloudToken}
+        onClearSession={removeActiveSession}
         isCreator={isCreator}
         onSaveExample={(agentId, example) => {
           setAgents(prev => prev.map(agent =>
@@ -4527,7 +4576,7 @@ return (
                       
                       {/* Chat / Continue */}
                       {(() => {
-                        const hasActiveSession = typeof window !== "undefined" ? !!getActiveSession(a.id) : false;
+                        const hasActiveSession = hasActiveSessionByAgentId(a.id);
                         return (
                           <Button
                             className="group relative w-full overflow-hidden py-2 text-base gap-2 rounded-xl border border-white/20 bg-white/[0.06] text-white shadow-[0_10px_36px_rgba(79,70,229,0.28)] transition-all duration-300 hover:border-cyan-300/45 hover:bg-white/[0.1] hover:shadow-[0_14px_44px_rgba(34,211,238,0.22)]"
@@ -4575,8 +4624,8 @@ return (
 
     {/* 🔥 Floating Active Sessions Button */}
     {(() => {
-      const activeSessions = getAllActiveSessions(agents);
-      if (activeSessions.length === 0) return null;
+      const runningSessions = getAllActiveSessions(agents, activeSessions);
+      if (runningSessions.length === 0) return null;
 
       return (
         <>
@@ -4592,7 +4641,7 @@ return (
             <div className="relative z-10 h-7 w-7 rounded-full border border-white/25 bg-white/10 grid place-items-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.18)]">
               <MessageCircle className="h-3.5 w-3.5 text-white" />
               <span className="absolute -top-1.5 -right-1.5 min-w-[1.15rem] h-[1.1rem] px-1 bg-emerald-400 rounded-full text-[9px] font-bold text-black flex items-center justify-center animate-pulse shadow-[0_0_12px_rgba(52,211,153,0.9)]">
-                {activeSessions.length}
+                {runningSessions.length}
               </span>
               <span className="absolute -top-1.5 -right-1.5 min-w-[1.15rem] h-[1.1rem] rounded-full border border-emerald-300/80 animate-ping" />
             </div>
@@ -4619,7 +4668,7 @@ return (
                       <Bot className="h-5 w-5 text-white/75" />
                       Active Sessions
                     </h2>
-                    <p className="text-sm text-white/50">{activeSessions.length} conversation{activeSessions.length !== 1 ? 's' : ''} in progress</p>
+                    <p className="text-sm text-white/50">{runningSessions.length} conversation{runningSessions.length !== 1 ? 's' : ''} in progress</p>
                   </div>
                   <button
                     onClick={() => setShowSessionsPanel(false)}
@@ -4631,7 +4680,7 @@ return (
 
                 {/* Sessions List */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {activeSessions.map(({ agent, session }) => {
+                  {runningSessions.map(({ agent, session }) => {
                     const timeLeft = session.expiresAt
                       ? Math.max(0, Math.floor((session.expiresAt - Date.now()) / 60000))
                       : null;
@@ -4874,7 +4923,7 @@ return (
                     }
 
                     // ✅ Payment verified by server — save session
-                    saveSession(selected, sig);
+                    createOrReplaceSession(selected, sig);
                     setPurchases((prev) => [
                       { id: sig, agentId: selected.id, priceUSDC: selected.priceUSDC, ts: Date.now() },
                       ...prev.filter((p) => p.id !== sig),
@@ -4947,7 +4996,7 @@ return (
                       return;
                     }
 
-                    saveSession(selected, sig);
+                    createOrReplaceSession(selected, sig);
                     setPurchases((prev) => [
                       { id: sig, agentId: selected.id, priceUSDC: selected.priceUSDC, ts: Date.now() },
                       ...prev.filter((p) => p.id !== sig),
@@ -6349,7 +6398,7 @@ function MarketplaceRail({
                     <div className="flex-1" />
 
                     {(() => {
-                      const hasActiveSession = typeof window !== "undefined" ? !!getActiveSession(a.id) : false;
+                      const hasActiveSession = hasActiveSessionByAgentId(a.id);
                       return (
                         <button
                           type="button"
@@ -6498,6 +6547,7 @@ function ChatView({
   selectedAgent,
   walletPk,
   cloudToken,
+  onClearSession,
   isCreator = false, // <- Креатор этого агента? Если да — без лимитов
   onSaveExample,
 }: {
@@ -6505,6 +6555,7 @@ function ChatView({
   selectedAgent: Agent | null;
   walletPk: string | null;
   cloudToken: string | null;
+  onClearSession: (agentId: string) => void;
   isCreator?: boolean;
   onSaveExample?: (agentId: string, example: ExampleOutput) => void;
 }) {
@@ -7346,7 +7397,7 @@ function ChatView({
 
     // сессия закончилась по лимитам → очищаем её,
     // чтобы можно было купить новую
-    clearSession(selectedAgent.id);
+    onClearSession(selectedAgent.id);
 
     if (typeof window !== "undefined") {
       window.location.hash = `/agent?id=${encodeURIComponent(
@@ -9726,6 +9777,7 @@ function AgentDetailView({
   onOpenPay,
   liked,
   onLike,
+  hasActiveSessionByAgentId,
   allAgents,
   reviews,
   onAddReview,
@@ -9735,6 +9787,7 @@ function AgentDetailView({
   onOpenPay: (agent: Agent) => void;
   liked: Record<string, boolean>;
   onLike: (id: string) => void;
+  hasActiveSessionByAgentId: (agentId: string) => boolean;
   allAgents: Agent[];
   reviews: Record<string, AgentReview[]>;
   onAddReview: (agentId: string, data: { rating: number; text: string; user?: string }) => void;
@@ -9834,8 +9887,7 @@ function AgentDetailView({
   const MAX_SIMILAR = 10;
 
   // 🔹 есть ли активная сессия (локально)
-  const hasActiveSession =
-    typeof window !== "undefined" ? !!getActiveSession(agent.id) : false;
+  const hasActiveSession = hasActiveSessionByAgentId(agent.id);
 
   
 
