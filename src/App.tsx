@@ -3044,6 +3044,8 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
       <ChatView
         onBack={() => push("/")}
         selectedAgent={agent}
+        walletPk={walletPk}
+        cloudToken={cloudToken}
         isCreator={isCreator}
         onSaveExample={(agentId, example) => {
           setAgents(prev => prev.map(agent =>
@@ -6494,11 +6496,15 @@ type ChatMessage = {
 function ChatView({
   onBack,
   selectedAgent,
+  walletPk,
+  cloudToken,
   isCreator = false, // <- Креатор этого агента? Если да — без лимитов
   onSaveExample,
 }: {
   onBack: () => void;
   selectedAgent: Agent | null;
+  walletPk: string | null;
+  cloudToken: string | null;
   isCreator?: boolean;
   onSaveExample?: (agentId: string, example: ExampleOutput) => void;
 }) {
@@ -6564,6 +6570,48 @@ function ChatView({
     selectedAgent && selectedAgent.id
       ? `echo_chat_${selectedAgent.id}`
       : null;
+  const cloudHistoryRef = useRef<Record<string, ChatMessage[]>>({});
+  const cloudSaveTimerRef = useRef<number | null>(null);
+
+  const sanitizeMessagesForCloud = useCallback((items: ChatMessage[]): ChatMessage[] => {
+    return items.slice(-120).map((item) => ({
+      ...item,
+      audioUrl: item.audioUrl && !item.audioUrl.startsWith("blob:") ? item.audioUrl : undefined,
+      generatedMediaUrl:
+        item.generatedMediaUrl && !item.generatedMediaUrl.startsWith("blob:")
+          ? item.generatedMediaUrl
+          : undefined,
+    }));
+  }, []);
+
+  const queueCloudHistorySave = useCallback(
+    (next: ChatMessage[]) => {
+      if (!selectedAgent?.id || !walletPk || !cloudToken || !isCloudEnabled()) return;
+
+      if (cloudSaveTimerRef.current) {
+        window.clearTimeout(cloudSaveTimerRef.current);
+      }
+
+      cloudSaveTimerRef.current = window.setTimeout(() => {
+        const sanitized = sanitizeMessagesForCloud(next);
+        const payload = {
+          ...cloudHistoryRef.current,
+          [selectedAgent.id]: sanitized,
+        };
+        cloudHistoryRef.current = payload;
+        void saveCloudState(walletPk, "chat_history", payload, cloudToken);
+      }, 300);
+    },
+    [selectedAgent?.id, walletPk, cloudToken, sanitizeMessagesForCloud]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (cloudSaveTimerRef.current) {
+        window.clearTimeout(cloudSaveTimerRef.current);
+      }
+    };
+  }, []);
 
   // 🔹 Keyboard navigation for image preview modal
   useEffect(() => {
@@ -6625,9 +6673,10 @@ function ChatView({
     };
   }, []);
 
-  // 🔹 подгружаем историю из localStorage при смене агента
+  // 🔹 подгружаем историю: сначала localStorage (мгновенно), затем cloud (источник истины)
   useEffect(() => {
     if (!selectedAgent) return;
+    let cancelled = false;
 
     let initial: ChatMessage[] = [
       {
@@ -6654,7 +6703,37 @@ function ChatView({
     setSessionStart(Date.now());
     setElapsedSec(0);
     setPendingFiles([]); // при смене агента чистим незасланные файлы
-  }, [selectedAgent?.id, storageKey, selectedAgent?.name]);
+
+    if (!walletPk || !cloudToken || !isCloudEnabled()) return () => {
+      cancelled = true;
+    };
+
+    void (async () => {
+      const cloudData = await loadCloudState<Record<string, ChatMessage[]>>(
+        walletPk,
+        "chat_history",
+        cloudToken
+      );
+      if (cancelled || !cloudData || typeof cloudData !== "object") return;
+      cloudHistoryRef.current = cloudData;
+
+      const cloudMessages = cloudData[selectedAgent.id];
+      if (!Array.isArray(cloudMessages) || cloudMessages.length === 0) return;
+
+      setMessages(cloudMessages);
+      try {
+        if (storageKey && typeof window !== "undefined") {
+          localStorage.setItem(storageKey, JSON.stringify(cloudMessages));
+        }
+      } catch {
+        // ignore local cache errors
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAgent?.id, storageKey, selectedAgent?.name, walletPk, cloudToken]);
 
   // Cleanup object URLs when component unmounts or files are removed
   useEffect(() => {
@@ -6783,6 +6862,7 @@ function ChatView({
     } catch {
       // молча игнорируем ошибки localStorage
     }
+    queueCloudHistorySave(next);
   };
 
   // 🔹 считаем лимиты

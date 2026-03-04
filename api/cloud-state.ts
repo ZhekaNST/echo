@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { logServerError } from "./_telemetry.js";
 
-type Scope = "agents" | "liked" | "saved" | "purchases" | "reviews" | "sessions";
+type Scope = "agents" | "liked" | "saved" | "purchases" | "reviews" | "sessions" | "chat_history";
 
 const TABLE = "app_state";
 
