@@ -6711,6 +6711,7 @@ function ChatView({
 
   // Track which messages have been saved as examples
   const [savedExampleMessageIds, setSavedExampleMessageIds] = useState<Set<string>>(new Set());
+  const [clearChatNotice, setClearChatNotice] = useState<string | null>(null);
 
   // ключ для localStorage по агенту
   const storageKey =
@@ -7509,7 +7510,9 @@ function ChatView({
       const confirmed =
         typeof window === "undefined"
           ? true
-          : window.confirm("Clear this chat history for current agent?");
+          : window.confirm(
+              "This will clear chat for this agent on this account. This action cannot be undone."
+            );
       if (!confirmed) return;
 
       const next: ChatMessage[] = [
@@ -7532,6 +7535,8 @@ function ChatView({
       }
 
       syncMessages(next);
+      setClearChatNotice("Chat history cleared.");
+      window.setTimeout(() => setClearChatNotice(null), 2200);
 
       if (walletPk && cloudToken && isCloudEnabled()) {
         const payload = {
@@ -7588,7 +7593,7 @@ function ChatView({
                 onClick={handleClearChat}
                 disabled={loading}
               >
-                Clear chat
+                Clear chat history
               </Button>
               <div className="flex flex-col items-end gap-1 text-xs">
                 <div className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-white/5 border border-white/10">
@@ -7630,6 +7635,11 @@ function ChatView({
 
       {/* BODY - Fixed height flex container */}
       <div className="flex-1 min-h-0 max-w-5xl mx-auto w-full px-4 py-3 flex flex-col gap-3">
+        {clearChatNotice && (
+          <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+            {clearChatNotice}
+          </div>
+        )}
                 {/* Chat container + drag-and-drop */}
                 <div
           ref={chatRef}
