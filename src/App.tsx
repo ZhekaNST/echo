@@ -1068,6 +1068,7 @@ type AgentReview = {
   text: string;
   user?: string;        // optional display name
   createdAt: number;    // timestamp
+  wallet?: string;
 };
 
 const SESSION_KEY_PREFIX = "echo_session_";
@@ -1814,10 +1815,11 @@ useEffect(() => {
   
   const [autoPrice, setAutoPrice] = useState(true);
   
-  const [endpointTestStatus, setEndpointTestStatus] = useState<
+const [endpointTestStatus, setEndpointTestStatus] = useState<
   "idle" | "testing" | "ok" | "fail"
 >("idle");
 const [endpointTestMsg, setEndpointTestMsg] = useState<string>("");
+const [creatorFormError, setCreatorFormError] = useState<string | null>(null);
 
 // Scroll to edit form and focus name input when triggered from Profile
 useEffect(() => {
@@ -1845,6 +1847,56 @@ function isValidHttpUrl(s: string) {
   } catch {
     return false;
   }
+}
+
+function isProductionSafeHttpsUrl(s: string) {
+  try {
+    const u = new URL(s);
+    if (u.protocol !== "https:") return false;
+    const host = u.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".local")) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hasUnsafeMarkup(s: string) {
+  const v = (s || "").toLowerCase();
+  return v.includes("<script") || v.includes("javascript:") || v.includes("<iframe");
+}
+
+function validateCreatorAgentInput(a: Agent) {
+  const errors: string[] = [];
+  const name = (a.name || "").trim();
+  const tagline = (a.tagline || "").trim();
+  const desc = (a.description || "").trim();
+  const prompt = (a.promptPreview || "").trim();
+  const endpoint = (a.engineApiUrl || "").trim();
+  const verifyUrl = (a.identityVerifyUrl || "").trim();
+  const appKey = (a.identityAppKey || "").trim();
+  const authMode = a.backendAuthMode || "echo_key";
+
+  if (name.length < 3 || name.length > 60) errors.push("Name must be 3-60 characters.");
+  if (tagline.length < 10 || tagline.length > 140) errors.push("Tagline must be 10-140 characters.");
+  if (desc.length > 3000) errors.push("Description is too long (max 3000).");
+  if (prompt.length < 20 || prompt.length > 4000) errors.push("Agent behavior must be 20-4000 characters.");
+  if (hasUnsafeMarkup(name) || hasUnsafeMarkup(tagline) || hasUnsafeMarkup(desc) || hasUnsafeMarkup(prompt)) {
+    errors.push("Unsafe HTML/JS content detected in text fields.");
+  }
+  if (!endpoint || !isValidHttpUrl(endpoint)) errors.push("Chat endpoint must be a valid URL.");
+  if (!isProductionSafeHttpsUrl(endpoint)) errors.push("Chat endpoint must be HTTPS and publicly reachable.");
+  if (/\/api\/backend-smoke\/?$/i.test(endpoint) || endpoint.includes("postman-echo.com")) {
+    errors.push("Test endpoint is not allowed for published agents.");
+  }
+
+  if (authMode === "verified_identity") {
+    if (!verifyUrl || !isValidHttpUrl(verifyUrl)) errors.push("Verified mode requires valid Identity verify URL.");
+    if (!isProductionSafeHttpsUrl(verifyUrl)) errors.push("Identity verify URL must be HTTPS and publicly reachable.");
+    if (!appKey) errors.push("Verified mode requires Identity app key.");
+  }
+
+  return errors;
 }
 
 async function testChatEndpoint() {
@@ -2392,51 +2444,47 @@ useEffect(() => {
   
   
     // обработчик добавления отзыва (глобально для всех)
-    function handleAddReview(
+    async function handleAddReview(
       agentId: string,
       data: { rating: number; text: string; user?: string }
-    ) {
-      if (!requireWalletAction("add reviews")) return;
-
-      let id: string;
-      try {
-        id = crypto.randomUUID();
-      } catch {
-        id = `${Date.now()}_${Math.random()}`;
+    ): Promise<{ ok: boolean; error?: string }> {
+      if (!requireWalletAction("add reviews")) {
+        return { ok: false, error: "Connect your wallet to add a review." };
       }
 
-      const next: AgentReview = {
-        id,
-        rating: data.rating,
-        text: data.text,
-        user: data.user?.trim() || "Anonymous",
-        createdAt: Date.now(),
-      };
-
-      // optimistic
-      setReviews((prev) => ({
-        ...prev,
-        [agentId]: [...(prev[agentId] || []), next],
-      }));
-
-      void (async () => {
-        try {
-          const token = cloudToken || (await requestCloudToken());
-          if (!token) return;
-          await fetch("/api/reviews", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ agentId, review: next }),
-          });
-          const globalReviews = await loadGlobalReviews();
-          if (globalReviews) setReviews(globalReviews);
-        } catch {
-          // keep optimistic; next load will reconcile
+      try {
+        const token = cloudToken || (await requestCloudToken());
+        if (!token) {
+          return { ok: false, error: "Wallet verification failed. Please try again." };
         }
-      })();
+
+        const resp = await fetch("/api/reviews", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            agentId,
+            review: {
+              rating: data.rating,
+              text: data.text,
+              user: data.user,
+            },
+          }),
+        });
+
+        const body = await resp.json().catch(() => ({} as { error?: string }));
+        if (!resp.ok) {
+          return { ok: false, error: body?.error || `Failed to post review (${resp.status})` };
+        }
+
+        const globalReviews = await loadGlobalReviews();
+        if (globalReviews) setReviews(globalReviews);
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "Network error. Please try again." };
+      }
     }
   
 
@@ -2772,6 +2820,7 @@ useEffect(() => {
   }
   
   function startCreate() {
+    setCreatorFormError(null);
     // режим "создания" — сбрасываем форму
     setEditingAgentId(null);
     setNewAgent({
@@ -2810,6 +2859,7 @@ setCreating(true);
   }
 
   function startEdit(agent: Agent) {
+    setCreatorFormError(null);
     // режим "редактирования" — подставляем данные агента в форму
     setEditingAgentId(agent.id);
     setNewAgent({ ...agent });
@@ -2822,6 +2872,7 @@ setCreating(true);
   }
 
   function cancelCreate() {
+    setCreatorFormError(null);
     setCreating(false);
     setEditingAgentId(null);
     setShouldScrollToForm(false);
@@ -2859,6 +2910,12 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
   }
 
   async function submitCreate() {
+    setCreatorFormError(null);
+    const moderationErrors = validateCreatorAgentInput(newAgent);
+    if (moderationErrors.length > 0) {
+      setCreatorFormError(moderationErrors[0]);
+      return;
+    }
     const categories = deriveCategories(newAgent);
     const priceUSDC = autoPrice
       ? autoPriceFromPrompt(newAgent.promptPreview)
@@ -2871,7 +2928,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
     // 🔹 РЕЖИМ РЕДАКТИРОВАНИЯ
     const token = cloudToken || (await requestCloudToken());
     if (!token) {
-      alert("Approve one-time wallet signature to publish/edit agent in cloud.");
+      setCreatorFormError("Wallet signature is required to publish/edit in cloud.");
       return;
     }
 
@@ -2901,7 +2958,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
       }));
       const saved = await saveCloudState("global", "agents", safeAgents, token);
       if (!saved) {
-        alert("Failed to save agent to cloud. Please try again.");
+        setCreatorFormError("Failed to save agent to cloud. Please try again.");
         return;
       }
 
@@ -2942,7 +2999,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
     }));
     const saved = await saveCloudState("global", "agents", safeAgents, token);
     if (!saved) {
-      alert("Failed to publish agent to cloud. Please try again.");
+      setCreatorFormError("Failed to publish agent to cloud. Please try again.");
       return;
     }
 
@@ -3035,6 +3092,16 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
     return <DocsPage onBack={() => push("/")} />;
   }
 
+  // 🔹 Terms page route
+  if (route.startsWith("/terms")) {
+    return <TermsPage onBack={() => push("/")} />;
+  }
+
+  // 🔹 Refund Policy page route
+  if (route.startsWith("/refund")) {
+    return <RefundPolicyPage onBack={() => push("/")} />;
+  }
+
   // 🔹 Privacy Policy page route
   if (route.startsWith("/privacy")) {
     return <PrivacyPage onBack={() => push("/")} />;
@@ -3067,6 +3134,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
           onOpenPay={(ag) => openPay(ag)}
           liked={liked}
           onLike={handleLike}
+          walletPk={walletPk}
           hasActiveSessionByAgentId={hasActiveSessionByAgentId}
           allAgents={agents}
           reviews={reviews}                    // 🔹 добавили
@@ -3116,6 +3184,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
   const isSmokeEndpoint =
     /\/api\/backend-smoke\/?$/i.test(apiUrlTrimmed) ||
     apiUrlTrimmed.includes("postman-echo.com");
+  const moderationErrors = validateCreatorAgentInput(newAgent);
   const customConfigValid =
     apiUrlTrimmed.length > 0 &&
     isValidHttpUrl(apiUrlTrimmed) &&
@@ -3131,6 +3200,7 @@ const canPublish =
   (typeof newAgent.avatar === "string" ? !!newAgent.avatar.trim() : true) &&
   newAgent.priceUSDC >= 0.05 &&
   customConfigValid &&
+  moderationErrors.length === 0 &&
   !isSmokeEndpoint;
 
 const publishChecks = [
@@ -3139,6 +3209,7 @@ const publishChecks = [
   { label: "Avatar", ok: !!newAgent.avatar && (typeof newAgent.avatar === "string" ? !!newAgent.avatar.trim() : true) },
   { label: "Price >= 0.05 USDC", ok: newAgent.priceUSDC >= 0.05 },
   { label: "Valid backend endpoint", ok: customConfigValid },
+  { label: "Input moderation passed", ok: moderationErrors.length === 0 },
   { label: "Production endpoint (not smoke/test)", ok: !isSmokeEndpoint },
 ];
 const publishReadyCount = publishChecks.filter((c) => c.ok).length;
@@ -3660,6 +3731,16 @@ const publishReadyCount = publishChecks.filter((c) => c.ok).length;
                     </div>
                   ))}
                 </div>
+                {moderationErrors.length > 0 && (
+                  <div className="mt-2 rounded-md border border-amber-300/35 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-100">
+                    {moderationErrors[0]}
+                  </div>
+                )}
+                {creatorFormError && (
+                  <div className="mt-2 rounded-md border border-rose-300/35 bg-rose-500/10 px-2 py-1.5 text-[11px] text-rose-100">
+                    {creatorFormError}
+                  </div>
+                )}
               </div>
             </CardContent>
 
@@ -3681,6 +3762,8 @@ const publishReadyCount = publishChecks.filter((c) => c.ok).length;
       ? ""
       : isSmokeEndpoint
       ? "Publishing is blocked for smoke/test endpoints. Use a real backend URL."
+      : moderationErrors.length > 0
+      ? moderationErrors[0]
       : (newAgent.backendAuthMode || "echo_key") === "verified_identity"
         ? "Provide valid Chat endpoint, Identity verify URL, and Identity app key."
         : "Enter a valid Chat endpoint URL to publish."
@@ -5117,6 +5200,11 @@ return (
                   Privacy Policy
                 </a>
               </li>
+              <li>
+                <a href="#/refund" className="hover:text-white transition">
+                  Refund Policy
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -5142,6 +5230,9 @@ return (
             </a>
             <a href="#/privacy" className="hover:text-white transition">
               Privacy
+            </a>
+            <a href="#/refund" className="hover:text-white transition">
+              Refunds
             </a>
             <a href="#/about" className="hover:text-white transition">
               About
@@ -9308,7 +9399,7 @@ function DocsPage({ onBack }: { onBack: () => void }) {
                 { q: "Do I need an account?", a: "No. A wallet is sufficient." },
                 { q: "Are there subscriptions?", a: "No. All access is session-based." },
                 { q: "Who owns the agents?", a: "Creators retain full ownership." },
-                { q: "Does Echo store my data?", a: "Conversation history is scoped per agent and stored locally in the browser unless otherwise stated." },
+                { q: "Does Echo store my data?", a: "Conversation history, likes, saves, sessions, and reviews are synced to cloud state and scoped to your wallet." },
               ].map((item, i) => (
                 <div key={i} className="p-4 rounded-xl bg-white/[0.02] border border-white/8">
                   <div className="font-medium text-white mb-2">{item.q}</div>
@@ -9336,6 +9427,102 @@ function DocsPage({ onBack }: { onBack: () => void }) {
           </div>
 
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ================= TERMS PAGE =================
+function TermsPage({ onBack }: { onBack: () => void }) {
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
+
+  return (
+    <div className="min-h-screen w-screen bg-gradient-to-b from-black via-[#0b0b1a] to-black text-white">
+      <header className="sticky top-0 z-40 backdrop-blur border-b border-white/10">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
+          <Button variant="secondary" className="bg-white/10 hover:bg-white/20" onClick={onBack}>
+            ← Back
+          </Button>
+          <div className="font-semibold text-lg">Terms of Service</div>
+        </div>
+      </header>
+
+      <div className="max-w-4xl mx-auto px-4 py-10 space-y-6 text-sm text-white/70 leading-relaxed">
+        <h1 className="text-3xl font-bold text-white">Terms of Service</h1>
+        <p className="text-white/40">Last updated: March 5, 2026</p>
+        <p>
+          Echo is a marketplace for AI agents. By using Echo, you agree to these terms.
+          If you do not agree, do not use the platform.
+        </p>
+        <h2 className="text-xl font-semibold text-white">Eligibility</h2>
+        <p>You must be at least 18 years old and legally allowed to use crypto wallets in your jurisdiction.</p>
+        <h2 className="text-xl font-semibold text-white">Wallet & Payments</h2>
+        <ul className="list-disc list-inside space-y-1">
+          <li>All payments are signed by you in your wallet.</li>
+          <li>Payments are settled on-chain and are generally irreversible.</li>
+          <li>Echo is non-custodial and never holds private keys.</li>
+        </ul>
+        <h2 className="text-xl font-semibold text-white">Creators</h2>
+        <p>
+          Creators are responsible for their agent behavior, API uptime, response quality, and legal compliance of published content.
+        </p>
+        <h2 className="text-xl font-semibold text-white">Prohibited Use</h2>
+        <p>
+          You may not use Echo for fraud, abuse, malware distribution, illegal content, or attempts to bypass platform security and payment logic.
+        </p>
+        <h2 className="text-xl font-semibold text-white">Service Availability</h2>
+        <p>
+          Echo is provided “as is”. We may update, limit, or discontinue features at any time, including during MVP.
+        </p>
+        <h2 className="text-xl font-semibold text-white">Liability</h2>
+        <p>
+          To the maximum extent allowed by law, Echo is not liable for indirect losses, wallet/RPC outages, creator backend failures, or blockchain issues beyond our control.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ================= REFUND POLICY PAGE =================
+function RefundPolicyPage({ onBack }: { onBack: () => void }) {
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
+
+  return (
+    <div className="min-h-screen w-screen bg-gradient-to-b from-black via-[#0b0b1a] to-black text-white">
+      <header className="sticky top-0 z-40 backdrop-blur border-b border-white/10">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
+          <Button variant="secondary" className="bg-white/10 hover:bg-white/20" onClick={onBack}>
+            ← Back
+          </Button>
+          <div className="font-semibold text-lg">Refund Policy</div>
+        </div>
+      </header>
+
+      <div className="max-w-4xl mx-auto px-4 py-10 space-y-6 text-sm text-white/70 leading-relaxed">
+        <h1 className="text-3xl font-bold text-white">Refund Policy</h1>
+        <p className="text-white/40">Last updated: March 5, 2026</p>
+        <p>
+          Echo processes session payments on Solana. Because blockchain transactions are final, refunds are not automatic.
+        </p>
+        <h2 className="text-xl font-semibold text-white">When a refund may be considered</h2>
+        <ul className="list-disc list-inside space-y-1">
+          <li>Payment succeeded but session was never unlocked due to a platform-side bug.</li>
+          <li>Duplicate charge caused by a verified platform error.</li>
+        </ul>
+        <h2 className="text-xl font-semibold text-white">When refunds are not provided</h2>
+        <ul className="list-disc list-inside space-y-1">
+          <li>You changed your mind after using the session.</li>
+          <li>Creator response quality did not match expectations.</li>
+          <li>Issues caused by your wallet, internet, or third-party RPC outages.</li>
+        </ul>
+        <h2 className="text-xl font-semibold text-white">How to request a review</h2>
+        <p>
+          Contact support with: wallet address, transaction signature, agent name, and timestamp. We review requests case-by-case.
+        </p>
       </div>
     </div>
   );
@@ -9777,6 +9964,7 @@ function AgentDetailView({
   onOpenPay,
   liked,
   onLike,
+  walletPk,
   hasActiveSessionByAgentId,
   allAgents,
   reviews,
@@ -9787,15 +9975,18 @@ function AgentDetailView({
   onOpenPay: (agent: Agent) => void;
   liked: Record<string, boolean>;
   onLike: (id: string) => void;
+  walletPk: string | null;
   hasActiveSessionByAgentId: (agentId: string) => boolean;
   allAgents: Agent[];
   reviews: Record<string, AgentReview[]>;
-  onAddReview: (agentId: string, data: { rating: number; text: string; user?: string }) => void;
+  onAddReview: (agentId: string, data: { rating: number; text: string; user?: string }) => Promise<{ ok: boolean; error?: string }>;
 }) {
 
   const [reviewName, setReviewName] = useState("");
   const [reviewRating, setReviewRating] = useState<number>(5);
   const [reviewText, setReviewText] = useState("");
+  const [reviewSubmitError, setReviewSubmitError] = useState<string | null>(null);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
   
   // Scroll to top when Agent Detail view opens
   useEffect(() => {
@@ -9858,24 +10049,36 @@ function AgentDetailView({
 
     // --- Reviews for this agent ---
     const agentReviews = reviews[agent.id] || [];
+    const hasReviewedThisAgent = !!walletPk && agentReviews.some((r) => r.wallet === walletPk);
     const averageRating =
       agentReviews.length > 0
         ? agentReviews.reduce((s, r) => s + r.rating, 0) / agentReviews.length
         : 0;
   
-    function handleSubmitReview(e: React.FormEvent) {
+    async function handleSubmitReview(e: React.FormEvent) {
       e.preventDefault();
       if (!reviewText.trim()) return;
+      if (hasReviewedThisAgent) {
+        setReviewSubmitError("You already reviewed this agent from this wallet.");
+        return;
+      }
   
       const agentId = agent?.id;
       if (!agentId) return;
-      
-      onAddReview(agentId, {
+
+      setReviewSubmitError(null);
+      setReviewSubmitting(true);
+      const result = await onAddReview(agentId, {
         rating: reviewRating,
         text: reviewText,
         user: reviewName,
       });
-       
+      setReviewSubmitting(false);
+
+      if (!result.ok) {
+        setReviewSubmitError(result.error || "Failed to submit review.");
+        return;
+      }
   
       setReviewText("");
       // имя и рейтинг можно не сбрасывать, чтобы юзер мог писать несколько отзывов подряд
@@ -10364,7 +10567,7 @@ function AgentDetailView({
               <div className="flex justify-end">
                 <Button
                   type="submit"
-                  disabled={!reviewText.trim()}
+                  disabled={!reviewText.trim() || reviewSubmitting || hasReviewedThisAgent}
                   className="group relative overflow-hidden gap-2 rounded-xl border border-white/20 bg-white/[0.06] px-4 py-2 text-sm text-white shadow-[0_10px_30px_rgba(79,70,229,0.22)] transition-all duration-300 hover:border-cyan-300/45 hover:bg-white/[0.1]"
                 >
                   <span
@@ -10372,9 +10575,19 @@ function AgentDetailView({
                     className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100
                     bg-[radial-gradient(circle_at_18%_50%,rgba(99,102,241,0.26),transparent_45%),radial-gradient(circle_at_86%_50%,rgba(34,211,238,0.20),transparent_45%)]"
                   />
-                  <span className="relative z-10">Submit review</span>
+                  <span className="relative z-10">{reviewSubmitting ? "Submitting..." : "Submit review"}</span>
                 </Button>
               </div>
+              {reviewSubmitError && (
+                <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+                  {reviewSubmitError}
+                </div>
+              )}
+              {hasReviewedThisAgent && (
+                <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                  This wallet already submitted a review for this agent.
+                </div>
+              )}
             </form>
           </div>
         </section>

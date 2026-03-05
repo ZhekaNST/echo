@@ -11,7 +11,53 @@ type AgentReview = {
   text: string;
   user: string;
   createdAt: number;
+  wallet: string;
 };
+
+const REVIEW_COOLDOWN_MS = 30_000;
+const MIN_REVIEW_TEXT = 8;
+const MAX_REVIEW_TEXT = 1200;
+const MAX_REVIEW_USER = 60;
+
+function safeTrim(input: unknown, maxLen: number) {
+  return String(input || "").trim().slice(0, maxLen);
+}
+
+function stripControlChars(value: string) {
+  return value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function validateAndNormalizeReview(input: any, wallet: string): { ok: true; review: AgentReview } | { ok: false; error: string } {
+  const rating = Number(input?.rating);
+  if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+    return { ok: false, error: "Rating must be between 1 and 5" };
+  }
+
+  const text = stripControlChars(safeTrim(input?.text, MAX_REVIEW_TEXT));
+  if (text.length < MIN_REVIEW_TEXT) {
+    return { ok: false, error: `Review text must be at least ${MIN_REVIEW_TEXT} characters` };
+  }
+
+  const userRaw = stripControlChars(safeTrim(input?.user, MAX_REVIEW_USER));
+  const user = userRaw || "Anonymous";
+
+  const id =
+    typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+  return {
+    ok: true,
+    review: {
+      id,
+      rating: Math.round(rating),
+      text,
+      user,
+      createdAt: Date.now(),
+      wallet,
+    },
+  };
+}
 
 function b64urlDecode(s: string) {
   const normalized = s.replace(/-/g, "+").replace(/_/g, "/");
@@ -93,15 +139,40 @@ export default async function handler(req: any, res: any) {
       if (!auth) return res.status(401).json({ error: "Unauthorized" });
 
       const agentId = String(req.body?.agentId || "").trim();
-      const review = req.body?.review as AgentReview | undefined;
-      if (!agentId || !review?.id) {
-        return res.status(400).json({ error: "agentId and review are required" });
+      if (!agentId) {
+        return res.status(400).json({ error: "agentId is required" });
       }
+      if (agentId.length > 120) return res.status(400).json({ error: "Invalid agentId" });
+
+      const normalized = validateAndNormalizeReview(req.body?.review, auth.sub);
+      if (!normalized.ok) return res.status(400).json({ error: normalized.error });
+      const review = normalized.review;
 
       const current = await loadReviews(supa);
       const list = Array.isArray(current[agentId]) ? current[agentId] : [];
-      const exists = list.some((r) => r.id === review.id);
-      const nextList = exists ? list : [...list, review];
+
+      // one review per wallet per agent
+      const existingByWallet = list.find((r) => r.wallet === auth.sub);
+      if (existingByWallet) {
+        return res.status(409).json({ error: "You already left a review for this agent" });
+      }
+
+      // cooldown across all review submissions by this wallet
+      let latestWalletReviewTs = 0;
+      Object.values(current).forEach((agentReviews) => {
+        if (!Array.isArray(agentReviews)) return;
+        agentReviews.forEach((item) => {
+          if (item?.wallet === auth.sub && Number(item?.createdAt) > latestWalletReviewTs) {
+            latestWalletReviewTs = Number(item.createdAt);
+          }
+        });
+      });
+      if (latestWalletReviewTs > 0 && Date.now() - latestWalletReviewTs < REVIEW_COOLDOWN_MS) {
+        const waitSec = Math.ceil((REVIEW_COOLDOWN_MS - (Date.now() - latestWalletReviewTs)) / 1000);
+        return res.status(429).json({ error: `Please wait ${waitSec}s before posting another review` });
+      }
+
+      const nextList = [...list, review];
       const nextData = { ...current, [agentId]: nextList };
 
       const up = await fetch(`${supa.url}/rest/v1/${TABLE}?on_conflict=owner,scope`, {
@@ -115,7 +186,7 @@ export default async function handler(req: any, res: any) {
 
       const text = await up.text();
       if (!up.ok) return res.status(up.status).send(text);
-      return res.status(200).json({ ok: true });
+      return res.status(200).json({ ok: true, review });
     }
 
     return res.status(405).json({ error: "Method not allowed" });
@@ -127,4 +198,3 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: "Reviews handler error" });
   }
 }
-
