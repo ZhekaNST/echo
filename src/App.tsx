@@ -7497,64 +7497,47 @@ function ChatView({
     }
   }
 
-  async function handleClearChat() {
+  function handleClearChat() {
     if (!selectedAgent?.id) return;
 
-    const confirmed =
-      typeof window === "undefined"
-        ? true
-        : window.confirm("Clear this chat history for current agent?");
-    if (!confirmed) return;
+    try {
+      const confirmed =
+        typeof window === "undefined"
+          ? true
+          : window.confirm("Clear this chat history for current agent?");
+      if (!confirmed) return;
 
-    const next: ChatMessage[] = [
-      {
-        role: "assistant",
-        content: `Hi! I'm ${selectedAgent.name}. Ask me anything.`,
-      },
-    ];
+      const next: ChatMessage[] = [
+        {
+          role: "assistant",
+          content: `Hi! I'm ${selectedAgent.name || "your agent"}. Ask me anything.`,
+        },
+      ];
 
-    const attachmentIds = Array.from(
-      new Set([
-        ...messages.flatMap((m) => (m.attachments || []).map((a) => a.id)),
-        ...pendingFiles.map((f) => f.id),
-      ])
-    );
+      setPendingFiles([]);
+      setInput("");
+      setSavedExampleMessageIds(new Set());
+      setPreviewAttachmentId(null);
+      setPreviewAttachmentIds([]);
+      setPreviewIndex(0);
 
-    pendingFiles.forEach((file) => {
-      if (file.tempUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(file.tempUrl);
+      if (cloudSaveTimerRef.current && typeof window !== "undefined") {
+        window.clearTimeout(cloudSaveTimerRef.current);
+        cloudSaveTimerRef.current = null;
       }
-    });
 
-    setPendingFiles([]);
-    setInput("");
-    setSavedExampleMessageIds(new Set());
-    setPreviewAttachmentId(null);
-    setPreviewAttachmentIds([]);
-    setPreviewIndex(0);
+      syncMessages(next);
 
-    if (cloudSaveTimerRef.current) {
-      window.clearTimeout(cloudSaveTimerRef.current);
-      cloudSaveTimerRef.current = null;
-    }
-
-    syncMessages(next);
-
-    if (attachmentIds.length > 0) {
-      try {
-        await deleteAttachments(attachmentIds);
-      } catch (error) {
-        console.error("Failed to delete chat attachments:", error);
+      if (walletPk && cloudToken && isCloudEnabled()) {
+        const payload = {
+          ...cloudHistoryRef.current,
+          [selectedAgent.id]: next,
+        };
+        cloudHistoryRef.current = payload;
+        void saveCloudState(walletPk, "chat_history", payload, cloudToken);
       }
-    }
-
-    if (walletPk && cloudToken && isCloudEnabled()) {
-      const payload = {
-        ...cloudHistoryRef.current,
-        [selectedAgent.id]: next,
-      };
-      cloudHistoryRef.current = payload;
-      await saveCloudState(walletPk, "chat_history", payload, cloudToken);
+    } catch (error) {
+      console.error("Clear chat failed:", error);
     }
   }
 
