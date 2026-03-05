@@ -7497,6 +7497,67 @@ function ChatView({
     }
   }
 
+  async function handleClearChat() {
+    if (!selectedAgent?.id) return;
+
+    const confirmed =
+      typeof window === "undefined"
+        ? true
+        : window.confirm("Clear this chat history for current agent?");
+    if (!confirmed) return;
+
+    const next: ChatMessage[] = [
+      {
+        role: "assistant",
+        content: `Hi! I'm ${selectedAgent.name}. Ask me anything.`,
+      },
+    ];
+
+    const attachmentIds = Array.from(
+      new Set([
+        ...messages.flatMap((m) => (m.attachments || []).map((a) => a.id)),
+        ...pendingFiles.map((f) => f.id),
+      ])
+    );
+
+    pendingFiles.forEach((file) => {
+      if (file.tempUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(file.tempUrl);
+      }
+    });
+
+    setPendingFiles([]);
+    setInput("");
+    setSavedExampleMessageIds(new Set());
+    setPreviewAttachmentId(null);
+    setPreviewAttachmentIds([]);
+    setPreviewIndex(0);
+
+    if (cloudSaveTimerRef.current) {
+      window.clearTimeout(cloudSaveTimerRef.current);
+      cloudSaveTimerRef.current = null;
+    }
+
+    syncMessages(next);
+
+    if (attachmentIds.length > 0) {
+      try {
+        await deleteAttachments(attachmentIds);
+      } catch (error) {
+        console.error("Failed to delete chat attachments:", error);
+      }
+    }
+
+    if (walletPk && cloudToken && isCloudEnabled()) {
+      const payload = {
+        ...cloudHistoryRef.current,
+        [selectedAgent.id]: next,
+      };
+      cloudHistoryRef.current = payload;
+      await saveCloudState(walletPk, "chat_history", payload, cloudToken);
+    }
+  }
+
   return (
     <div className="h-screen w-screen overflow-hidden bg-gradient-to-b from-black via-[#050513] to-black text-white flex flex-col">
       {/* HEADER */}
@@ -7532,37 +7593,47 @@ function ChatView({
 
           {/* 🔹 Таймер + счётчик запросов справа */}
           {selectedAgent && (
-            <div className="flex flex-col items-end gap-1 text-xs">
-              <div className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-white/5 border border-white/10">
-                <span className="text-white/50">
-                  {maxSec != null ? "Time left" : "Time"}
-                </span>
-                <span
-                  className={cx(
-                    "font-mono",
-                    !isCreator && (sessionBlocked || overTime)
-                      ? "text-red-400"
-                      : "text-emerald-300"
-                  )}
-                >
-                  {timeLabel}
-                </span>
-              </div>
-              {maxMsgs != null && (
+            <div className="flex items-start gap-2">
+              <Button
+                variant="secondary"
+                className="bg-white/10 hover:bg-white/20 text-xs"
+                onClick={handleClearChat}
+                disabled={loading}
+              >
+                Clear chat
+              </Button>
+              <div className="flex flex-col items-end gap-1 text-xs">
                 <div className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-white/5 border border-white/10">
-                  <span className="text-white/50">Messages</span>
+                  <span className="text-white/50">
+                    {maxSec != null ? "Time left" : "Time"}
+                  </span>
                   <span
                     className={cx(
                       "font-mono",
-                      !isCreator && (sessionBlocked || overMessages)
+                      !isCreator && (sessionBlocked || overTime)
                         ? "text-red-400"
                         : "text-emerald-300"
                     )}
                   >
-                    {userMsgCount}/{maxMsgs}
+                    {timeLabel}
                   </span>
                 </div>
-              )}
+                {maxMsgs != null && (
+                  <div className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-white/5 border border-white/10">
+                    <span className="text-white/50">Messages</span>
+                    <span
+                      className={cx(
+                        "font-mono",
+                        !isCreator && (sessionBlocked || overMessages)
+                          ? "text-red-400"
+                          : "text-emerald-300"
+                      )}
+                    >
+                      {userMsgCount}/{maxMsgs}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
           
