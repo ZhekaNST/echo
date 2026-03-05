@@ -4176,6 +4176,7 @@ return (
   badge={(a) => (a.sessions > 1000 ? "Hot" : undefined)}
   onOpen={(a) => openAgentView(a.id)}
   onChat={(a) => openPay(a)}
+  hasActiveSessionByAgentId={hasActiveSessionByAgentId}
 />
 
 <MarketplaceRail
@@ -4187,6 +4188,7 @@ return (
   badge={(a) => (a.likes > 1500 ? "Top" : undefined)}
   onOpen={(a) => openAgentView(a.id)}
   onChat={(a) => openPay(a)}
+  hasActiveSessionByAgentId={hasActiveSessionByAgentId}
 />
 
 <MarketplaceRail
@@ -4198,6 +4200,7 @@ return (
   badge={() => "New"}
   onOpen={(a) => openAgentView(a.id)}
   onChat={(a) => openPay(a)}
+  hasActiveSessionByAgentId={hasActiveSessionByAgentId}
 />
  
 
@@ -6238,6 +6241,7 @@ function MarketplaceRail({
   onOpen,
   onChat,
   railId,
+  hasActiveSessionByAgentId = () => false,
 }: {
   kicker?: string;
   title: React.ReactNode;
@@ -6247,6 +6251,7 @@ function MarketplaceRail({
   onOpen: (a: Agent) => void;
   onChat: (a: Agent) => void;
   railId?: string; // unique ID for scroll position persistence
+  hasActiveSessionByAgentId?: (agentId: string) => boolean;
 }) {
   const rowRef = useRef<HTMLDivElement | null>(null);
   const SCROLL = 320;
@@ -10493,6 +10498,7 @@ function AgentDetailView({
       (window.location.hash = `/agent?id=${encodeURIComponent(a.id)}`)
     }
     onChat={(a) => onOpenPay(a)}
+    hasActiveSessionByAgentId={hasActiveSessionByAgentId}
   />
 )}
 
@@ -10510,6 +10516,7 @@ function AgentDetailView({
       (window.location.hash = `/agent?id=${encodeURIComponent(a.id)}`)
     }
     onChat={(a) => onOpenPay(a)}
+    hasActiveSessionByAgentId={hasActiveSessionByAgentId}
   />
 )}
 
