@@ -57,12 +57,21 @@ Required:
 - `ECHO_AUTH_SECRET` (server-only, long random)
 - `VITE_PLATFORM_WALLET`
 - `ECHO_PLATFORM_WALLET`
+- `VITE_SOLANA_NETWORK` (`mainnet-beta` or `devnet`)
+- `SOLANA_NETWORK` (`mainnet-beta` or `devnet`)
 
 Optional:
 - `SOLANA_RPC_URL`
 - `SOLANA_RPC_API_KEY`
+- `VITE_USDC_MINT_MAINNET`
+- `VITE_USDC_MINT_DEVNET`
+- `USDC_MINT_MAINNET`
+- `USDC_MINT_DEVNET`
+- `USDC_MINT` (global server override)
 - `ELEVENLABS_API_KEY`
 - `ELEVENLABS_VOICE_ID`
+- `TTS_RATE_LIMIT_MAX_REQUESTS` (default `8`)
+- `TTS_RATE_LIMIT_WINDOW_MS` (default `60000`)
 - `REPLICATE_API_KEY`
 - `ANALYTICS_WEBHOOK_URL`
 - `TELEMETRY_WEBHOOK_URL`

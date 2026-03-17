@@ -5,7 +5,32 @@
 // For serverless, we need a different approach - verify directly on-chain
 import { logServerError } from "../_telemetry.js";
 
-const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+type SolanaNetwork = "mainnet-beta" | "devnet";
+const DEFAULT_USDC_MINTS: Record<SolanaNetwork, string> = {
+  "mainnet-beta": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  devnet: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+};
+
+function normalizeNetwork(input?: string): SolanaNetwork {
+  return input === "devnet" ? "devnet" : "mainnet-beta";
+}
+
+function isValidSolanaAddress(address: string): boolean {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+}
+
+function resolveUsdcMint(network: SolanaNetwork): string {
+  const envDefault =
+    network === "devnet" ? process.env.USDC_MINT_DEVNET : process.env.USDC_MINT_MAINNET;
+  const candidate = process.env.USDC_MINT || envDefault || DEFAULT_USDC_MINTS[network];
+  if (!candidate || !isValidSolanaAddress(candidate)) {
+    return DEFAULT_USDC_MINTS[network];
+  }
+  return candidate;
+}
+
+const SOLANA_NETWORK: SolanaNetwork = normalizeNetwork(process.env.SOLANA_NETWORK);
+const USDC_MINT = resolveUsdcMint(SOLANA_NETWORK);
 const USDC_DECIMALS = 6;
 const PLATFORM_WALLET = process.env.ECHO_PLATFORM_WALLET || "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ";
 

@@ -606,9 +606,34 @@ function getOrCreateViewerId() {
 
 
 
-const SOLANA_NETWORK = "mainnet-beta" as const;
-// ⚠️ TODO: сюда вставь mint USDC для нужной сети (devnet/mainnet)
-const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+type SolanaNetwork = "mainnet-beta" | "devnet";
+const DEFAULT_USDC_MINTS: Record<SolanaNetwork, string> = {
+  "mainnet-beta": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  devnet: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+};
+
+function normalizeSolanaNetwork(input?: string): SolanaNetwork {
+  return input === "devnet" ? "devnet" : "mainnet-beta";
+}
+
+function isValidSolanaAddress(address: string): boolean {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+}
+
+const SOLANA_NETWORK: SolanaNetwork = normalizeSolanaNetwork(
+  import.meta.env.VITE_SOLANA_NETWORK
+);
+
+const USDC_MINT = (() => {
+  const networkDefault = DEFAULT_USDC_MINTS[SOLANA_NETWORK];
+  const networkSpecific =
+    SOLANA_NETWORK === "devnet"
+      ? import.meta.env.VITE_USDC_MINT_DEVNET
+      : import.meta.env.VITE_USDC_MINT_MAINNET;
+  const candidate =
+    import.meta.env.VITE_USDC_MINT || networkSpecific || networkDefault;
+  return isValidSolanaAddress(candidate) ? candidate : networkDefault;
+})();
 const PLATFORM_FEE_BPS = 2000; // 20%
 const PLATFORM_WALLET =
   import.meta.env.VITE_PLATFORM_WALLET || "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ";

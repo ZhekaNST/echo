@@ -4,6 +4,88 @@
 const DEFAULT_MODEL_ID = "eleven_multilingual_v2";
 const MAX_TEXT_LENGTH = 2000;
 const MIN_TEXT_LENGTH = 1;
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
+const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 8;
+
+type RateLimitEntry = {
+  count: number;
+  resetAt: number;
+};
+
+const ttsRateLimitStore = new Map<string, RateLimitEntry>();
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+const TTS_RATE_LIMIT_WINDOW_MS = parsePositiveInt(
+  process.env.TTS_RATE_LIMIT_WINDOW_MS,
+  DEFAULT_RATE_LIMIT_WINDOW_MS
+);
+const TTS_RATE_LIMIT_MAX_REQUESTS = parsePositiveInt(
+  process.env.TTS_RATE_LIMIT_MAX_REQUESTS,
+  DEFAULT_RATE_LIMIT_MAX_REQUESTS
+);
+
+function getClientIp(req: any): string {
+  const header = req.headers?.["x-forwarded-for"] || req.headers?.["X-Forwarded-For"];
+  if (typeof header === "string" && header.trim()) {
+    return header.split(",")[0].trim();
+  }
+  if (Array.isArray(header) && header.length > 0) {
+    return String(header[0]).split(",")[0].trim();
+  }
+  return String(req.socket?.remoteAddress || "unknown-ip");
+}
+
+function getRateLimitKey(req: any): string {
+  const ip = getClientIp(req);
+  const ua = String(req.headers?.["user-agent"] || req.headers?.["User-Agent"] || "unknown-ua");
+  return `${ip}:${ua.slice(0, 80)}`;
+}
+
+function cleanupRateLimitStore(now: number): void {
+  for (const [key, entry] of ttsRateLimitStore.entries()) {
+    if (entry.resetAt <= now) {
+      ttsRateLimitStore.delete(key);
+    }
+  }
+}
+
+function consumeRateLimit(key: string): { allowed: boolean; remaining: number; retryAfterSec: number } {
+  const now = Date.now();
+  cleanupRateLimitStore(now);
+
+  const existing = ttsRateLimitStore.get(key);
+  if (!existing || existing.resetAt <= now) {
+    ttsRateLimitStore.set(key, {
+      count: 1,
+      resetAt: now + TTS_RATE_LIMIT_WINDOW_MS,
+    });
+    return {
+      allowed: true,
+      remaining: Math.max(0, TTS_RATE_LIMIT_MAX_REQUESTS - 1),
+      retryAfterSec: Math.ceil(TTS_RATE_LIMIT_WINDOW_MS / 1000),
+    };
+  }
+
+  if (existing.count >= TTS_RATE_LIMIT_MAX_REQUESTS) {
+    return {
+      allowed: false,
+      remaining: 0,
+      retryAfterSec: Math.max(1, Math.ceil((existing.resetAt - now) / 1000)),
+    };
+  }
+
+  existing.count += 1;
+  ttsRateLimitStore.set(key, existing);
+  return {
+    allowed: true,
+    remaining: Math.max(0, TTS_RATE_LIMIT_MAX_REQUESTS - existing.count),
+    retryAfterSec: Math.max(1, Math.ceil((existing.resetAt - now) / 1000)),
+  };
+}
 
 interface VoiceSettings {
   stability?: number;
@@ -41,6 +123,20 @@ export default async function handler(
 
   if (req.method !== "POST") {
     return sendError(res, 405, "Method not allowed", "METHOD_NOT_ALLOWED");
+  }
+
+  const rateLimitKey = getRateLimitKey(req);
+  const limit = consumeRateLimit(rateLimitKey);
+  res.setHeader("X-RateLimit-Limit", String(TTS_RATE_LIMIT_MAX_REQUESTS));
+  res.setHeader("X-RateLimit-Remaining", String(limit.remaining));
+  if (!limit.allowed) {
+    res.setHeader("Retry-After", String(limit.retryAfterSec));
+    return sendError(
+      res,
+      429,
+      `Too many TTS requests. Try again in ${limit.retryAfterSec}s.`,
+      "RATE_LIMITED_SERVER"
+    );
   }
 
   // Get API key from environment - NEVER log this
@@ -188,6 +284,3 @@ function sendError(
   };
   res.status(status).json(errorResponse);
 }
-
-// TODO: Add rate limiting (per IP / per user) to prevent abuse
-// Consider using @vercel/kv or upstash for distributed rate limiting
