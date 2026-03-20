@@ -10,6 +10,15 @@ if (typeof window !== "undefined" && typeof (window as any).Buffer === "undefine
 
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Failed to read blob"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 // Example Output Display Component - Shows real chat interactions
 function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
   const [ttsAudioUrl, setTtsAudioUrl] = React.useState<string | null>(null);
@@ -229,10 +238,10 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
 
       case "audio":
         // Preferred path: play exact audio saved from chat message.
-        if (savedAudioUrl) {
+        if (savedAudioUrl || example.exampleResponse.content || ttsAudioUrl) {
           return (
             <AudioResult
-              audioUrl={savedAudioUrl}
+              audioUrl={savedAudioUrl || example.exampleResponse.content || ttsAudioUrl || ""}
               downloadFilename="example-audio"
               isExample={true}
             />
@@ -7979,6 +7988,7 @@ function ChatView({
                             }
 
                             const audioBlob = await audioResp.blob();
+                            const dataUrl = await blobToDataUrl(audioBlob);
                             const id = `example-audio-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
                             await putAttachment({
@@ -7990,6 +8000,7 @@ function ChatView({
                             });
 
                             audioAttachmentId = id;
+                            responseContent = dataUrl;
                           } catch (error) {
                             console.warn("Failed to persist example audio, fallback to regeneration:", error);
                           }
@@ -10126,6 +10137,8 @@ function AgentDetailView({
   const [reviewText, setReviewText] = useState("");
   const [reviewSubmitError, setReviewSubmitError] = useState<string | null>(null);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [exampleIndex, setExampleIndex] = useState(0);
+  const exampleTouchStartX = useRef<number | null>(null);
   
   // Scroll to top when Agent Detail view opens
   useEffect(() => {
@@ -10186,6 +10199,31 @@ function AgentDetailView({
 
   const isLiked = !!liked[agent.id];
   const agentExamples = getAgentExamples(agent);
+  const currentExample = agentExamples[exampleIndex] || null;
+
+  useEffect(() => {
+    setExampleIndex(0);
+  }, [agent?.id]);
+
+  useEffect(() => {
+    if (agentExamples.length === 0) {
+      setExampleIndex(0);
+      return;
+    }
+    if (exampleIndex > agentExamples.length - 1) {
+      setExampleIndex(0);
+    }
+  }, [agentExamples.length, exampleIndex]);
+
+  const goPrevExample = () => {
+    if (agentExamples.length <= 1) return;
+    setExampleIndex((prev) => (prev - 1 + agentExamples.length) % agentExamples.length);
+  };
+
+  const goNextExample = () => {
+    if (agentExamples.length <= 1) return;
+    setExampleIndex((prev) => (prev + 1) % agentExamples.length);
+  };
 
     // --- Reviews for this agent ---
     const agentReviews = reviews[agent.id] || [];
@@ -10307,18 +10345,71 @@ function AgentDetailView({
             </div>
           </div>
           {agentExamples.length > 0 ? (
-            <div className="space-y-3">
-              {agentExamples.map((example, idx) => (
-                <Card key={example.id} className="bg-white/[.02] border-white/5">
-                  <CardContent className="p-6 space-y-3">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-white/35">
-                      Example {idx + 1}
+            <Card className="bg-white/[.02] border-white/5">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-white/35">
+                    Example {exampleIndex + 1}
+                  </div>
+                  {agentExamples.length > 1 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={goPrevExample}
+                        className="h-8 w-8 rounded-full border border-white/20 bg-black/50 text-white/80 hover:bg-white/10 transition"
+                        aria-label="Previous example"
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        onClick={goNextExample}
+                        className="h-8 w-8 rounded-full border border-white/20 bg-black/50 text-white/80 hover:bg-white/10 transition"
+                        aria-label="Next example"
+                      >
+                        ›
+                      </button>
                     </div>
-                    <ExampleOutputDisplay example={example} />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                  )}
+                </div>
+
+                <div
+                  onTouchStart={(e) => {
+                    exampleTouchStartX.current = e.changedTouches[0]?.clientX ?? null;
+                  }}
+                  onTouchEnd={(e) => {
+                    if (agentExamples.length <= 1 || exampleTouchStartX.current == null) return;
+                    const endX = e.changedTouches[0]?.clientX ?? null;
+                    if (endX == null) return;
+                    const delta = endX - exampleTouchStartX.current;
+                    if (Math.abs(delta) < 40) return;
+                    if (delta < 0) {
+                      goNextExample();
+                    } else {
+                      goPrevExample();
+                    }
+                  }}
+                >
+                  {currentExample && <ExampleOutputDisplay example={currentExample} />}
+                </div>
+
+                {agentExamples.length > 1 && (
+                  <div className="flex items-center justify-center gap-1.5">
+                    {agentExamples.map((ex, idx) => (
+                      <button
+                        key={ex.id}
+                        type="button"
+                        onClick={() => setExampleIndex(idx)}
+                        className={`h-1.5 rounded-full transition-all ${
+                          idx === exampleIndex ? "w-5 bg-cyan-300/80" : "w-2 bg-white/25 hover:bg-white/40"
+                        }`}
+                        aria-label={`Go to example ${idx + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           ) : (
             <Card className="bg-white/[.02] border-white/5 border-dashed">
               <CardContent className="p-6 text-center">
