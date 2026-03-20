@@ -963,6 +963,8 @@ type ExampleOutput = {
   isPrimary: boolean; // only one primary example per agent
 };
 
+const MAX_EXAMPLES_PER_AGENT = 5;
+
 type Agent = {
   id: string;
   name: string;
@@ -979,7 +981,9 @@ lastActiveAt?: number;      // последнее взаимодействие (
 sessions24h?: number;       // демо-счётчик
 likes24h?: number;          // демо-счётчик
 
-  // Example Output - real chat interaction saved as demo
+  // Example Outputs - real chat interactions saved as demo
+  exampleOutputs?: ExampleOutput[];
+  // Legacy single example (kept for backward compatibility with older cloud payloads)
   exampleOutput?: ExampleOutput;
 
   // creator / payments
@@ -1006,6 +1010,20 @@ likes24h?: number;          // демо-счётчик
   maxMessagesPerSession?: number | null;
   maxDurationMinutes?: number | null;
 };
+
+function getAgentExamples(agent: Agent | null | undefined): ExampleOutput[] {
+  if (!agent) return [];
+  const raw = Array.isArray(agent.exampleOutputs)
+    ? agent.exampleOutputs
+    : agent.exampleOutput
+      ? [agent.exampleOutput]
+      : [];
+
+  return raw
+    .filter((item): item is ExampleOutput => !!item && typeof item.id === "string")
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+    .slice(0, MAX_EXAMPLES_PER_AGENT);
+}
 
 function renderAgentAvatar(avatar: React.ReactNode, className: string = "w-6 h-6") {
   if (typeof avatar === "string" && avatar.trim()) {
@@ -1294,16 +1312,18 @@ const INITIAL_AGENTS: Agent[] = [
     lastActiveAt: Date.now() - 1000 * 60 * 30,
     sessions24h: 156,
     likes24h: 42,
-    exampleOutput: {
-      id: "voice-example-1",
-      examplePrompt: "Convert this text to speech: Hello, welcome to our AI marketplace.",
-      exampleResponse: {
-        type: "audio",
-        content: "https://example.com/sample-voice.mp3"
+    exampleOutputs: [
+      {
+        id: "voice-example-1",
+        examplePrompt: "Convert this text to speech: Hello, welcome to our AI marketplace.",
+        exampleResponse: {
+          type: "audio",
+          content: "https://example.com/sample-voice.mp3"
+        },
+        createdAt: Date.now() - 86400000, // 1 day ago
+        isPrimary: true
       },
-      createdAt: Date.now() - 86400000, // 1 day ago
-      isPrimary: true
-    }
+    ]
   },
   // 🎨 Image Generator (Replicate)
   {
@@ -2311,6 +2331,8 @@ useEffect(() => {
       if (cloudAgents && Array.isArray(cloudAgents) && cloudAgents.length > 0) {
         const normalized = cloudAgents.map((a) => ({
           ...a,
+          exampleOutputs: getAgentExamples(a),
+          exampleOutput: undefined,
           avatar:
             typeof a.avatar === "string" && a.avatar.trim()
               ? a.avatar
@@ -2324,6 +2346,8 @@ useEffect(() => {
             if (!local) return cloudAgent;
             return {
               ...cloudAgent,
+              exampleOutputs: getAgentExamples(cloudAgent),
+              exampleOutput: undefined,
               likes: Math.max(cloudAgent.likes || 0, local.likes || 0),
               sessions: Math.max(cloudAgent.sessions || 0, local.sessions || 0),
               likes24h: Math.max(cloudAgent.likes24h || 0, local.likes24h || 0),
@@ -3192,7 +3216,11 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
         onSaveExample={(agentId, example) => {
           setAgents(prev => prev.map(agent =>
             agent.id === agentId
-              ? { ...agent, exampleOutput: example }
+              ? {
+                  ...agent,
+                  exampleOutputs: [example, ...getAgentExamples(agent)].slice(0, MAX_EXAMPLES_PER_AGENT),
+                  exampleOutput: undefined,
+                }
               : agent
           ));
         }}
@@ -7913,6 +7941,10 @@ function ChatView({
                 <div className="flex justify-start mt-1 ml-4">
                   {(() => {
                     const isSavedExample = savedExampleMessageIds.has(messageId);
+                    const existingExamplesCount = selectedAgent
+                      ? getAgentExamples(selectedAgent).length
+                      : 0;
+                    const canSaveMore = isSavedExample || existingExamplesCount < MAX_EXAMPLES_PER_AGENT;
                     return (
                   <button
                     type="button"
@@ -7924,6 +7956,9 @@ function ChatView({
                         : null;
 
                       if (userMessage && selectedAgent && onSaveExample) {
+                        if (!canSaveMore) {
+                          return;
+                        }
                         let responseType: ExampleOutputType = "text";
                         let responseContent = m.content;
                         let responseAttachments = m.attachments;
@@ -8050,14 +8085,24 @@ function ChatView({
                           hasAttachments: !!responseAttachments?.length,
                         });
 
-                        // Clear all previously saved messages and mark only this one as saved
-                        setSavedExampleMessageIds(new Set([messageId]));
+                        // Keep saved marks up to MAX_EXAMPLES_PER_AGENT
+                        setSavedExampleMessageIds((prev) => {
+                          if (prev.has(messageId)) return prev;
+                          const ordered = [...prev, messageId];
+                          while (ordered.length > MAX_EXAMPLES_PER_AGENT) {
+                            ordered.shift();
+                          }
+                          return new Set(ordered);
+                        });
                       }
                     }}
+                    disabled={!canSaveMore}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
                       isSavedExample
                         ? 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300'
-                        : 'bg-white/10 border border-white/20 text-white/60 hover:bg-emerald-500/20 hover:border-emerald-400/40 hover:text-emerald-300'
+                        : canSaveMore
+                          ? 'bg-white/10 border border-white/20 text-white/60 hover:bg-emerald-500/20 hover:border-emerald-400/40 hover:text-emerald-300'
+                          : 'bg-white/5 border border-white/10 text-white/30 cursor-not-allowed'
                     }`}
                   >
                     {isSavedExample && (
@@ -8070,7 +8115,7 @@ function ChatView({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     )}
-                    {isSavedExample ? "Saved as example" : "Save as example"}
+                    {isSavedExample ? "Saved as example" : canSaveMore ? "Save as example" : "Limit reached (5)"}
                   </button>
                     );
                   })()}
@@ -10140,6 +10185,7 @@ function AgentDetailView({
   }
 
   const isLiked = !!liked[agent.id];
+  const agentExamples = getAgentExamples(agent);
 
     // --- Reviews for this agent ---
     const agentReviews = reviews[agent.id] || [];
@@ -10252,15 +10298,27 @@ function AgentDetailView({
       {/* Example Output Section */}
       <div className="max-w-5xl mx-auto px-4 py-6">
         <div className="space-y-4">
-          <div className="text-sm uppercase tracking-[0.18em] text-white/40">
-            Example Output
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm uppercase tracking-[0.18em] text-white/40">
+              Example Output
+            </div>
+            <div className="text-xs text-white/45">
+              {agentExamples.length}/{MAX_EXAMPLES_PER_AGENT} examples
+            </div>
           </div>
-          {agent.exampleOutput ? (
-            <Card className="bg-white/[.02] border-white/5">
-              <CardContent className="p-6">
-                <ExampleOutputDisplay example={agent.exampleOutput} />
-              </CardContent>
-            </Card>
+          {agentExamples.length > 0 ? (
+            <div className="space-y-3">
+              {agentExamples.map((example, idx) => (
+                <Card key={example.id} className="bg-white/[.02] border-white/5">
+                  <CardContent className="p-6 space-y-3">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-white/35">
+                      Example {idx + 1}
+                    </div>
+                    <ExampleOutputDisplay example={example} />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           ) : (
             <Card className="bg-white/[.02] border-white/5 border-dashed">
               <CardContent className="p-6 text-center">
@@ -10273,7 +10331,7 @@ function AgentDetailView({
                   No example available yet
                 </div>
                 <div className="text-xs text-white/30 mt-1">
-                  Creators can save real chat interactions as examples
+                  Creators can save up to {MAX_EXAMPLES_PER_AGENT} real chat interactions as examples
                 </div>
               </CardContent>
             </Card>
