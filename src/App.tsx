@@ -7979,7 +7979,7 @@ function ChatView({
                         if (m.audioUrl) {
                           // For TTS examples, persist the exact generated audio from chat.
                           responseType = "audio";
-                          responseContent = "";
+                          responseContent = m.audioUrl;
 
                           try {
                             const audioResp = await fetch(m.audioUrl);
@@ -8002,7 +8002,7 @@ function ChatView({
                             audioAttachmentId = id;
                             responseContent = dataUrl;
                           } catch (error) {
-                            console.warn("Failed to persist example audio, fallback to regeneration:", error);
+                            console.warn("Failed to persist example audio, fallback to direct content:", error);
                           }
 
                           // Fallback path for old behavior if stored audio is unavailable.
@@ -8039,7 +8039,6 @@ function ChatView({
                             });
 
                             contentAttachmentId = id;
-                            responseContent = "";
                           } catch (error) {
                             console.warn("Failed to persist example video, fallback to URL:", error);
                           }
@@ -8066,7 +8065,6 @@ function ChatView({
                             });
 
                             contentAttachmentId = id;
-                            responseContent = "";
                           } catch (error) {
                             console.warn("Failed to persist example image, fallback to URL:", error);
                           }
