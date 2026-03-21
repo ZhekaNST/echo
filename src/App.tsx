@@ -3255,7 +3255,17 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
                   ? a.avatar
                   : DEFAULT_AGENT_AVATAR_URL,
             }));
-            const saved = await saveCloudState("global", "agents", safeAgents, token);
+            let saved = await saveCloudState("global", "agents", safeAgents, token);
+            if (!saved) {
+              // Token can expire while still existing in local storage.
+              // Force re-auth and retry once to avoid false failure alerts.
+              setCloudToken(null);
+              setCloudTokenState(null);
+              const freshToken = await requestCloudToken();
+              if (freshToken) {
+                saved = await saveCloudState("global", "agents", safeAgents, freshToken);
+              }
+            }
             if (!saved) {
               alert("Failed to sync example to cloud. Please try again.");
               return;
