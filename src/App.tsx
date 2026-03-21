@@ -10,15 +10,6 @@ if (typeof window !== "undefined" && typeof (window as any).Buffer === "undefine
 
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 
-async function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error || new Error("Failed to read blob"));
-    reader.readAsDataURL(blob);
-  });
-}
-
 // Example Output Display Component - Shows real chat interactions
 function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
   const [ttsAudioUrl, setTtsAudioUrl] = React.useState<string | null>(null);
@@ -27,6 +18,14 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
   const [isLoadingSavedAudio, setIsLoadingSavedAudio] = React.useState(false);
   const [savedContentUrl, setSavedContentUrl] = React.useState<string | null>(null);
   const [isLoadingSavedContent, setIsLoadingSavedContent] = React.useState(false);
+  const [autoGenerateAttempted, setAutoGenerateAttempted] = React.useState(false);
+
+  const inlineAudioContent =
+    typeof example.exampleResponse.content === "string" &&
+    (example.exampleResponse.content.startsWith("http") ||
+      example.exampleResponse.content.startsWith("data:audio"))
+      ? example.exampleResponse.content
+      : null;
 
   // Load previously saved example audio (exact chat output) from IndexedDB.
   useEffect(() => {
@@ -126,6 +125,10 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
     };
   }, [ttsAudioUrl, savedAudioUrl, savedContentUrl]);
 
+  useEffect(() => {
+    setAutoGenerateAttempted(false);
+  }, [example.id]);
+
   // Generate TTS audio for examples
   const generateTtsAudio = async () => {
     if (!example.exampleResponse.ttsParams || isGeneratingAudio) return;
@@ -165,6 +168,24 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
       setIsGeneratingAudio(false);
     }
   };
+
+  useEffect(() => {
+    if (example.exampleResponse.type !== "audio") return;
+    if (!example.exampleResponse.ttsParams) return;
+    if (savedAudioUrl || inlineAudioContent || ttsAudioUrl) return;
+    if (autoGenerateAttempted || isGeneratingAudio) return;
+    setAutoGenerateAttempted(true);
+    void generateTtsAudio();
+  }, [
+    example.id,
+    example.exampleResponse.type,
+    example.exampleResponse.ttsParams,
+    savedAudioUrl,
+    inlineAudioContent,
+    ttsAudioUrl,
+    autoGenerateAttempted,
+    isGeneratingAudio,
+  ]);
 
   const renderTextWithLinks = (text: string) => {
     const splitRegex = /(https?:\/\/[^\s]+)/g;
@@ -238,10 +259,10 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
 
       case "audio":
         // Preferred path: play exact audio saved from chat message.
-        if (savedAudioUrl || example.exampleResponse.content || ttsAudioUrl) {
+        if (savedAudioUrl || inlineAudioContent || ttsAudioUrl) {
           return (
             <AudioResult
-              audioUrl={savedAudioUrl || example.exampleResponse.content || ttsAudioUrl || ""}
+              audioUrl={savedAudioUrl || inlineAudioContent || ttsAudioUrl || ""}
               downloadFilename="example-audio"
               isExample={true}
             />
@@ -258,7 +279,7 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
           );
         }
 
-        // If we have TTS params, show full TTS interface
+        // If we have TTS params but no media URL, auto-generate once for viewer.
         if (example.exampleResponse.ttsParams) {
           const voiceName =
             TTS_VOICES.find((v) => v.id === example.exampleResponse.ttsParams?.voiceId)?.name ||
@@ -280,7 +301,7 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
             );
           }
 
-          // Otherwise, show generate button
+          // Fallback UI while auto-generation is in progress.
           return (
             <div className="w-full max-w-md">
               <div className="bg-white/[0.02] border border-white/10 rounded-xl overflow-hidden">
@@ -290,23 +311,10 @@ function ExampleOutputDisplay({ example }: { example: ExampleOutput }) {
                   </div>
                 </div>
                 <div className="px-4 py-3">
-                  <button
-                    onClick={generateTtsAudio}
-                    disabled={isGeneratingAudio}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/40 rounded-lg text-blue-300 text-xs transition-colors disabled:opacity-50"
-                  >
-                    {isGeneratingAudio ? (
-                      <>
-                        <div className="w-3 h-3 border border-blue-300 border-t-transparent rounded-full animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <span>▶️</span>
-                        Play Audio
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 border border-blue-400/40 rounded-lg text-blue-300 text-xs">
+                    <div className="w-3 h-3 border border-blue-300 border-t-transparent rounded-full animate-spin" />
+                    Preparing audio...
+                  </div>
                 </div>
                 <div className="px-4 py-2 border-t border-white/5 flex items-center justify-between">
                   <span className="text-xs text-white/30">Example</span>
@@ -3223,15 +3231,38 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
         onClearSession={removeActiveSession}
         isCreator={isCreator}
         onSaveExample={(agentId, example) => {
-          setAgents(prev => prev.map(agent =>
-            agent.id === agentId
-              ? {
-                  ...agent,
-                  exampleOutputs: [example, ...getAgentExamples(agent)].slice(0, MAX_EXAMPLES_PER_AGENT),
-                  exampleOutput: undefined,
-                }
-              : agent
-          ));
+          void (async () => {
+            const updatedAgents = agents.map((agent) =>
+              agent.id === agentId
+                ? {
+                    ...agent,
+                    exampleOutputs: [example, ...getAgentExamples(agent)].slice(0, MAX_EXAMPLES_PER_AGENT),
+                    exampleOutput: undefined,
+                  }
+                : agent
+            );
+
+            const token = cloudToken || (await requestCloudToken());
+            if (!token) {
+              alert("Wallet signature is required to save examples for all users.");
+              return;
+            }
+
+            const safeAgents = updatedAgents.map((a) => ({
+              ...a,
+              avatar:
+                typeof a.avatar === "string" && a.avatar.trim()
+                  ? a.avatar
+                  : DEFAULT_AGENT_AVATAR_URL,
+            }));
+            const saved = await saveCloudState("global", "agents", safeAgents, token);
+            if (!saved) {
+              alert("Failed to sync example to cloud. Please try again.");
+              return;
+            }
+
+            setAgents(updatedAgents);
+          })();
         }}
       />
     );
@@ -7979,7 +8010,7 @@ function ChatView({
                         if (m.audioUrl) {
                           // For TTS examples, persist the exact generated audio from chat.
                           responseType = "audio";
-                          responseContent = m.audioUrl;
+                          responseContent = "";
 
                           try {
                             const audioResp = await fetch(m.audioUrl);
@@ -7988,7 +8019,6 @@ function ChatView({
                             }
 
                             const audioBlob = await audioResp.blob();
-                            const dataUrl = await blobToDataUrl(audioBlob);
                             const id = `example-audio-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
                             await putAttachment({
@@ -8000,9 +8030,8 @@ function ChatView({
                             });
 
                             audioAttachmentId = id;
-                            responseContent = dataUrl;
                           } catch (error) {
-                            console.warn("Failed to persist example audio, fallback to direct content:", error);
+                            console.warn("Failed to persist example audio, fallback to TTS params:", error);
                           }
 
                           // Fallback path for old behavior if stored audio is unavailable.
