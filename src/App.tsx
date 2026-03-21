@@ -1041,6 +1041,35 @@ function getAgentExamples(agent: Agent | null | undefined): ExampleOutput[] {
     .slice(0, MAX_EXAMPLES_PER_AGENT);
 }
 
+function normalizeExampleText(value: string | undefined | null): string {
+  return (value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function buildExampleSignatureFromExample(example: ExampleOutput): string {
+  const type = example.exampleResponse.type;
+  const prompt = normalizeExampleText(example.examplePrompt);
+  const ttsText = normalizeExampleText(example.exampleResponse.ttsParams?.text);
+  const content = normalizeExampleText(example.exampleResponse.content);
+  const identity = type === "audio" ? (ttsText || content) : content;
+  return `${type}::${prompt}::${identity}`;
+}
+
+function buildExampleSignatureFromMessage(userPrompt: string, message: ChatMessage): string {
+  const type: ExampleOutputType = message.audioUrl
+    ? "audio"
+    : message.generatedMediaUrl && message.generatedMediaType === "video"
+      ? "video"
+      : message.generatedMediaUrl && message.generatedMediaType === "image"
+        ? "image"
+        : "text";
+
+  const prompt = normalizeExampleText(userPrompt);
+  const identity = type === "audio"
+    ? normalizeExampleText(message.originalTtsText || message.content)
+    : normalizeExampleText(message.generatedMediaUrl || message.content);
+  return `${type}::${prompt}::${identity}`;
+}
+
 function renderAgentAvatar(avatar: React.ReactNode, className: string = "w-6 h-6") {
   if (typeof avatar === "string" && avatar.trim()) {
     return <img src={avatar} alt="Agent avatar" className={`${className} rounded-lg object-cover`} />;
@@ -3257,6 +3286,49 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
             }
             if (!saved) {
               alert("Failed to sync example to cloud. Please try again.");
+              return;
+            }
+
+            setAgents(updatedAgents);
+          })();
+        }}
+        onRemoveExample={(agentId, exampleId) => {
+          void (async () => {
+            const updatedAgents = agents.map((agent) =>
+              agent.id === agentId
+                ? {
+                    ...agent,
+                    exampleOutputs: getAgentExamples(agent).filter((item) => item.id !== exampleId),
+                    exampleOutput: undefined,
+                  }
+                : agent
+            );
+
+            const token = cloudToken || (await requestCloudToken());
+            if (!token) {
+              alert("Wallet signature is required to update examples for all users.");
+              return;
+            }
+
+            const safeAgents = updatedAgents.map((a) => ({
+              ...a,
+              avatar:
+                typeof a.avatar === "string" && a.avatar.trim()
+                  ? a.avatar
+                  : DEFAULT_AGENT_AVATAR_URL,
+            }));
+
+            let saved = await saveCloudState("global", "agents", safeAgents, token);
+            if (!saved) {
+              setCloudToken(null);
+              setCloudTokenState(null);
+              const freshToken = await requestCloudToken();
+              if (freshToken) {
+                saved = await saveCloudState("global", "agents", safeAgents, freshToken);
+              }
+            }
+            if (!saved) {
+              alert("Failed to sync examples to cloud. Please try again.");
               return;
             }
 
@@ -6738,6 +6810,7 @@ function ChatView({
   onClearSession,
   isCreator = false, // <- Креатор этого агента? Если да — без лимитов
   onSaveExample,
+  onRemoveExample,
 }: {
   onBack: () => void;
   selectedAgent: Agent | null;
@@ -6746,6 +6819,7 @@ function ChatView({
   onClearSession: (agentId: string) => void;
   isCreator?: boolean;
   onSaveExample?: (agentId: string, example: ExampleOutput) => void;
+  onRemoveExample?: (agentId: string, exampleId: string) => void;
 }) {
   // 🔊 TTS Voice selection state
   const [selectedVoice, setSelectedVoice] = useState(TTS_VOICES[0]);
@@ -6801,8 +6875,6 @@ function ChatView({
   const [sessionStart, setSessionStart] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
 
-  // Track which messages have been saved as examples
-  const [savedExampleMessageIds, setSavedExampleMessageIds] = useState<Set<string>>(new Set());
   const [clearChatNotice, setClearChatNotice] = useState<string | null>(null);
 
   // ключ для localStorage по агенту
@@ -7616,7 +7688,6 @@ function ChatView({
 
       setPendingFiles([]);
       setInput("");
-      setSavedExampleMessageIds(new Set());
       setPreviewAttachmentId(null);
       setPreviewAttachmentIds([]);
       setPreviewIndex(0);
@@ -7763,7 +7834,6 @@ function ChatView({
 
           {messages.map((m, i) => {
             const isUser = m.role === "user";
-            const messageId = `msg-${i}-${m.content?.slice(0, 10) || 'empty'}-${m.role}`;
 
             // Check if message is image-only (no text, only image attachments)
             const images = m.attachments?.filter(att => att.kind === "image") || [];
@@ -7979,25 +8049,46 @@ function ChatView({
               {isCreator && !isUser && (
                 <div className="flex justify-start mt-1 ml-4">
                   {(() => {
-                    const isSavedExample = savedExampleMessageIds.has(messageId);
-                    const existingExamplesCount = selectedAgent
-                      ? getAgentExamples(selectedAgent).length
-                      : 0;
-                    const canSaveMore = isSavedExample || existingExamplesCount < MAX_EXAMPLES_PER_AGENT;
+                    const userMessageIndex = i - 1;
+                    const userMessage =
+                      userMessageIndex >= 0 && messages[userMessageIndex].role === "user"
+                        ? messages[userMessageIndex]
+                        : null;
+                    const agentExamples = selectedAgent ? getAgentExamples(selectedAgent) : [];
+                    const signature = userMessage
+                      ? buildExampleSignatureFromMessage(userMessage.content, m)
+                      : null;
+                    const existingExampleIndex =
+                      signature == null
+                        ? -1
+                        : agentExamples.findIndex(
+                            (exampleItem) => buildExampleSignatureFromExample(exampleItem) === signature
+                          );
+                    const existingExample =
+                      existingExampleIndex >= 0 ? agentExamples[existingExampleIndex] : null;
+                    const isSavedExample = existingExampleIndex >= 0;
+                    const nextSlotNumber = Math.min(agentExamples.length + 1, MAX_EXAMPLES_PER_AGENT);
+                    const canSaveMore = isSavedExample || agentExamples.length < MAX_EXAMPLES_PER_AGENT;
+                    const canToggle = !!selectedAgent && !!userMessage && (isSavedExample || canSaveMore);
+
                     return (
                   <button
                     type="button"
                     onClick={async () => {
-                      // Find the corresponding user message (previous message)
-                      const userMessageIndex = i - 1;
-                      const userMessage = userMessageIndex >= 0 && messages[userMessageIndex].role === "user"
-                        ? messages[userMessageIndex]
-                        : null;
+                      if (!selectedAgent || !userMessage) return;
 
-                      if (userMessage && selectedAgent && onSaveExample) {
-                        if (!canSaveMore) {
-                          return;
-                        }
+                      if (isSavedExample && existingExample && onRemoveExample) {
+                        onRemoveExample(selectedAgent.id, existingExample.id);
+                        trackAnalyticsEvent("save_example", {
+                          agentId: selectedAgent.id,
+                          action: "remove",
+                          slot: existingExampleIndex + 1,
+                        });
+                        return;
+                      }
+
+                      if (onSaveExample) {
+                        if (!canSaveMore) return;
                         let responseType: ExampleOutputType = "text";
                         let responseContent = m.content;
                         let responseAttachments = m.attachments;
@@ -8119,40 +8210,36 @@ function ChatView({
                         trackAnalyticsEvent("save_example", {
                           agentId: selectedAgent.id,
                           responseType,
+                          action: "add",
+                          slot: nextSlotNumber,
                           hasAttachments: !!responseAttachments?.length,
-                        });
-
-                        // Keep saved marks up to MAX_EXAMPLES_PER_AGENT
-                        setSavedExampleMessageIds((prev) => {
-                          if (prev.has(messageId)) return prev;
-                          const ordered = [...prev, messageId];
-                          while (ordered.length > MAX_EXAMPLES_PER_AGENT) {
-                            ordered.shift();
-                          }
-                          return new Set(ordered);
                         });
                       }
                     }}
-                    disabled={!canSaveMore}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
+                    disabled={!canToggle}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
                       isSavedExample
-                        ? 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300'
-                        : canSaveMore
-                          ? 'bg-white/10 border border-white/20 text-white/60 hover:bg-emerald-500/20 hover:border-emerald-400/40 hover:text-emerald-300'
+                        ? 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 hover:bg-red-500/20 hover:border-red-400/40 hover:text-red-200'
+                        : canToggle
+                          ? 'bg-white/10 border border-white/20 text-white/70 hover:bg-cyan-500/20 hover:border-cyan-400/40 hover:text-cyan-200'
                           : 'bg-white/5 border border-white/10 text-white/30 cursor-not-allowed'
                     }`}
                   >
-                    {isSavedExample && (
-                      <svg
-                        className="w-3.5 h-3.5 text-emerald-400"
-                        fill="currentColor"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                    {isSavedExample ? "Saved as example" : canSaveMore ? "Save as example" : "Limit reached (5)"}
+                    <span
+                      className={`inline-flex items-center rounded-md px-1.5 py-0.5 border text-[10px] font-semibold tracking-wide ${
+                        isSavedExample
+                          ? "border-emerald-300/40 bg-emerald-400/20 text-emerald-100"
+                          : "border-cyan-300/30 bg-cyan-400/15 text-cyan-100"
+                      }`}
+                    >
+                      #{isSavedExample ? existingExampleIndex + 1 : nextSlotNumber}
+                    </span>
+                    {isSavedExample
+                      ? `Example ${existingExampleIndex + 1} saved`
+                      : canSaveMore
+                        ? `Save as Example ${nextSlotNumber}`
+                        : `Limit reached (${MAX_EXAMPLES_PER_AGENT})`}
+                    {isSavedExample && <span className="text-[10px] opacity-80">(click to remove)</span>}
                   </button>
                     );
                   })()}
