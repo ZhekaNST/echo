@@ -606,7 +606,6 @@ async function loadGlobalReviews(): Promise<Record<string, AgentReview[]> | null
 
 const CLOUD_VIEWER_ID_KEY = "echo:viewer_id:v1";
 const WALLET_AUTOCONNECT_KEY = "echo:wallet:auto-connect:v1";
-const CLOUD_AUTH_ATTEMPT_PREFIX = "echo:cloud_auth_attempted:";
 
 function getOrCreateViewerId() {
   if (typeof window === "undefined") return "anon-server";
@@ -2286,21 +2285,8 @@ useEffect(() => {
   setCloudTokenState(existing || null);
 }, [connected, walletPk]);
 
-// Startup-grade behavior: authorize cloud once after wallet connect
-// (not on every like/save action), so cloud remains source-of-truth.
-useEffect(() => {
-  if (!connected || !walletPk) return;
-  if (cloudToken) return;
-
-  const attemptKey = `${CLOUD_AUTH_ATTEMPT_PREFIX}${walletPk}`;
-  if (safeSessionGet(attemptKey) === "1") return;
-  safeSessionSet(attemptKey, "1");
-
-  requestCloudToken().catch(() => {
-    // User can reject signature; app keeps local optimistic state.
-    // Next explicit reconnect/new tab can re-attempt auth.
-  });
-}, [connected, walletPk, cloudToken, requestCloudToken]);
+// Cloud auth is now lazy: we request Phantom signature only
+// when user performs an action that needs cloud write access.
 
 useEffect(() => {
   if (!connected || !walletPk) return;
