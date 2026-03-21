@@ -6832,6 +6832,10 @@ function ChatView({
   const [voiceSettings, setVoiceSettings] = useState(DEFAULT_VOICE_SETTINGS);
   const [showVoiceSelector, setShowVoiceSelector] = useState(false);
   const [showTtsSettings, setShowTtsSettings] = useState(false);
+  const [voicePreviewUrls, setVoicePreviewUrls] = useState<Record<string, string>>({});
+  const [voicePreviewLoadingId, setVoicePreviewLoadingId] = useState<string | null>(null);
+  const [voicePreviewPlayingId, setVoicePreviewPlayingId] = useState<string | null>(null);
+  const voicePreviewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // 🎨 Image model selection state
   const [selectedImageModel, setSelectedImageModel] = useState(IMAGE_MODELS[0]);
@@ -6881,6 +6885,104 @@ function ChatView({
   const [elapsedSec, setElapsedSec] = useState(0);
 
   const [clearChatNotice, setClearChatNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (voicePreviewAudioRef.current) {
+        voicePreviewAudioRef.current.pause();
+        voicePreviewAudioRef.current.src = "";
+      }
+      Object.values(voicePreviewUrls).forEach((url) => {
+        if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+      });
+    };
+  }, [voicePreviewUrls]);
+
+  const handlePreviewVoice = useCallback(
+    async (voiceId: string) => {
+      if (selectedAgent?.engineProvider !== "tts") return;
+
+      // Toggle stop if same voice is currently playing
+      if (voicePreviewPlayingId === voiceId && voicePreviewAudioRef.current) {
+        voicePreviewAudioRef.current.pause();
+        voicePreviewAudioRef.current.currentTime = 0;
+        setVoicePreviewPlayingId(null);
+        return;
+      }
+
+      const previewText = "Hello! This is a quick preview of this voice on Echo.";
+      let url = voicePreviewUrls[voiceId];
+
+      if (!url) {
+        setVoicePreviewLoadingId(voiceId);
+        try {
+          const ttsResponse = await fetch("/api/tts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: previewText,
+              voiceId,
+              modelId: selectedModel.id,
+              voiceSettings: {
+                stability: voiceSettings.stability,
+                similarity_boost: voiceSettings.similarityBoost,
+                style: voiceSettings.style,
+                use_speaker_boost: voiceSettings.speakerBoost,
+              },
+            }),
+          });
+
+          if (!ttsResponse.ok) {
+            throw new Error(`Preview failed: ${ttsResponse.status}`);
+          }
+
+          const audioBlob = await ttsResponse.blob();
+          url = URL.createObjectURL(audioBlob);
+          setVoicePreviewUrls((prev) => ({ ...prev, [voiceId]: url! }));
+        } catch (error) {
+          console.error("Voice preview error:", error);
+          alert("Failed to generate voice preview. Please try again.");
+          return;
+        } finally {
+          setVoicePreviewLoadingId(null);
+        }
+      }
+
+      if (!url) return;
+
+      if (!voicePreviewAudioRef.current) {
+        const audio = new Audio();
+        audio.onended = () => setVoicePreviewPlayingId(null);
+        audio.onpause = () => {
+          if (audio.currentTime === 0 || audio.ended) setVoicePreviewPlayingId(null);
+        };
+        voicePreviewAudioRef.current = audio;
+      }
+
+      const audio = voicePreviewAudioRef.current;
+      audio.pause();
+      audio.src = url;
+      audio.currentTime = 0;
+
+      try {
+        await audio.play();
+        setVoicePreviewPlayingId(voiceId);
+      } catch (error) {
+        console.error("Voice preview play blocked:", error);
+        setVoicePreviewPlayingId(null);
+      }
+    },
+    [
+      selectedAgent?.engineProvider,
+      selectedModel.id,
+      voicePreviewUrls,
+      voicePreviewPlayingId,
+      voiceSettings.similarityBoost,
+      voiceSettings.speakerBoost,
+      voiceSettings.stability,
+      voiceSettings.style,
+    ]
+  );
 
   // ключ для localStorage по агенту
   const storageKey =
@@ -8387,26 +8489,54 @@ function ChatView({
                       <div className="p-2 border-b border-white/10 text-xs text-white/50 uppercase tracking-wide">
                         Select Voice
                       </div>
-                      {TTS_VOICES.map((voice) => (
-                        <button
-                          key={voice.id}
-                          onClick={() => {
-                            setSelectedVoice(voice);
-                            setShowVoiceSelector(false);
-                          }}
-                          className={`w-full px-3 py-2 text-left hover:bg-white/5 transition-colors flex items-center justify-between ${
-                            selectedVoice.id === voice.id ? 'bg-purple-500/20 text-purple-300' : 'text-white/80'
-                          }`}
-                        >
-                          <div>
-                            <div className="font-medium">{voice.name}</div>
-                            <div className="text-xs text-white/50">{voice.description} • {voice.language}</div>
+                      {TTS_VOICES.map((voice) => {
+                        const isSelected = selectedVoice.id === voice.id;
+                        const isPlaying = voicePreviewPlayingId === voice.id;
+                        const isLoading = voicePreviewLoadingId === voice.id;
+
+                        return (
+                          <div
+                            key={voice.id}
+                            className={`w-full px-3 py-2 hover:bg-white/5 transition-colors flex items-center justify-between gap-2 ${
+                              isSelected ? "bg-purple-500/20 text-purple-300" : "text-white/80"
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedVoice(voice);
+                                setShowVoiceSelector(false);
+                              }}
+                              className="min-w-0 flex-1 text-left"
+                            >
+                              <div className="font-medium truncate">{voice.name}</div>
+                              <div className="text-xs text-white/50 truncate">
+                                {voice.description} • {voice.language}
+                              </div>
+                            </button>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {isSelected && <span className="text-purple-400 text-sm">✓</span>}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handlePreviewVoice(voice.id);
+                                }}
+                                disabled={isLoading}
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                                  isPlaying
+                                    ? "border-emerald-300/40 bg-emerald-500/20 text-emerald-200"
+                                    : "border-white/20 bg-white/5 text-white/80 hover:bg-white/10"
+                                } ${isLoading ? "opacity-60 cursor-not-allowed" : ""}`}
+                                title={isPlaying ? "Stop preview" : "Play preview"}
+                              >
+                                {isLoading ? "..." : isPlaying ? "Stop" : "Play"}
+                              </button>
+                            </div>
                           </div>
-                          {selectedVoice.id === voice.id && (
-                            <span className="text-purple-400">✓</span>
-                          )}
-                        </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
