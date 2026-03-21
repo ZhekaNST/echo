@@ -980,6 +980,7 @@ type ExampleOutput = {
 };
 
 const MAX_EXAMPLES_PER_AGENT = 5;
+const SHOW_HOME_MARKETPLACE_RAILS = false;
 
 type Agent = {
   id: string;
@@ -4331,41 +4332,45 @@ return (
 
   <div className="max-w-7xl mx-auto px-4 py-16 space-y-14">
 
-<MarketplaceRail
-  railId="trending"
-  kicker="Marketplace"
-  title="Trending now"
-  subtitle="Agents people are actively chatting with right now."
-  items={trendingAgents}
-  badge={(a) => (a.sessions > 1000 ? "Hot" : undefined)}
-  onOpen={(a) => openAgentView(a.id)}
-  onChat={(a) => openPay(a)}
-  hasActiveSessionByAgentId={hasActiveSessionByAgentId}
-/>
+{SHOW_HOME_MARKETPLACE_RAILS && (
+  <>
+    <MarketplaceRail
+      railId="trending"
+      kicker="Marketplace"
+      title="Trending now"
+      subtitle="Agents people are actively chatting with right now."
+      items={trendingAgents}
+      badge={(a) => (a.sessions > 1000 ? "Hot" : undefined)}
+      onOpen={(a) => openAgentView(a.id)}
+      onChat={(a) => openPay(a)}
+      hasActiveSessionByAgentId={hasActiveSessionByAgentId}
+    />
 
-<MarketplaceRail
-  railId="toprated"
-  kicker="Community"
-  title="Top rated"
-  subtitle="Highest liked agents across the marketplace."
-  items={topRatedAgents}
-  badge={(a) => (a.likes > 1500 ? "Top" : undefined)}
-  onOpen={(a) => openAgentView(a.id)}
-  onChat={(a) => openPay(a)}
-  hasActiveSessionByAgentId={hasActiveSessionByAgentId}
-/>
+    <MarketplaceRail
+      railId="toprated"
+      kicker="Community"
+      title="Top rated"
+      subtitle="Highest liked agents across the marketplace."
+      items={topRatedAgents}
+      badge={(a) => (a.likes > 1500 ? "Top" : undefined)}
+      onOpen={(a) => openAgentView(a.id)}
+      onChat={(a) => openPay(a)}
+      hasActiveSessionByAgentId={hasActiveSessionByAgentId}
+    />
 
-<MarketplaceRail
-  railId="new"
-  kicker="Explore"
-  title="New agents"
-  subtitle="Recently published agents you can try first."
-  items={newAgents}
-  badge={() => "New"}
-  onOpen={(a) => openAgentView(a.id)}
-  onChat={(a) => openPay(a)}
-  hasActiveSessionByAgentId={hasActiveSessionByAgentId}
-/>
+    <MarketplaceRail
+      railId="new"
+      kicker="Explore"
+      title="New agents"
+      subtitle="Recently published agents you can try first."
+      items={newAgents}
+      badge={() => "New"}
+      onOpen={(a) => openAgentView(a.id)}
+      onChat={(a) => openPay(a)}
+      hasActiveSessionByAgentId={hasActiveSessionByAgentId}
+    />
+  </>
+)}
  
 
   </div>
