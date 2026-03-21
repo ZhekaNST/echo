@@ -2274,8 +2274,9 @@ const removeActiveSession = useCallback((agentId: string) => {
 
 useEffect(() => {
   if (!connected || !walletPk) {
-    setCloudToken(null);
-    setCloudTokenState(null);
+    // Keep cloud token across reloads to avoid repeated Phantom signature prompts.
+    // Token is cleared on explicit user disconnect.
+    setCloudTokenState(getCloudToken());
     setLiked({});
     setSaved({});
     setActiveSessions({});
@@ -2694,6 +2695,8 @@ useEffect(() => {
   function handleConnect() { connectPhantom(setConnected, setAddress, setWalletPk); }
   function handleDisconnect() {
     safeLocalRemove(WALLET_AUTOCONNECT_KEY);
+    setCloudToken(null);
+    setCloudTokenState(null);
     disconnectPhantom(setConnected, setAddress, setWalletPk);
   }
   
