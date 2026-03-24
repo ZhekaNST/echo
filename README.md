@@ -57,6 +57,7 @@ Required:
 - `ECHO_AUTH_SECRET` (server-only, long random)
 - `VITE_PLATFORM_WALLET`
 - `ECHO_PLATFORM_WALLET`
+- `VITE_ANALYTICS_OWNER_WALLET` (wallet allowed to open `#/analytics`)
 - `VITE_SOLANA_NETWORK` (`mainnet-beta` or `devnet`)
 - `SOLANA_NETWORK` (`mainnet-beta` or `devnet`)
 

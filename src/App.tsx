@@ -653,6 +653,8 @@ const USDC_MINT = (() => {
 const PLATFORM_FEE_BPS = 2000; // 20%
 const PLATFORM_WALLET =
   import.meta.env.VITE_PLATFORM_WALLET || "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ";
+const ANALYTICS_OWNER_WALLET =
+  import.meta.env.VITE_ANALYTICS_OWNER_WALLET || PLATFORM_WALLET;
 
 // RPC endpoints with fallback strategy
 const RPC_ENDPOINTS = [
@@ -1076,6 +1078,11 @@ function renderAgentAvatar(avatar: React.ReactNode, className: string = "w-6 h-6
     return <img src={avatar} alt="Agent avatar" className={`${className} rounded-lg object-cover`} />;
   }
   return avatar;
+}
+
+function isOwnerWallet(currentWallet: string | null | undefined, ownerWallet: string | null | undefined): boolean {
+  if (!currentWallet || !ownerWallet) return false;
+  return currentWallet.trim() === ownerWallet.trim();
 }
 
 type ExploreTab = "all" | "trending" | "top" | "new" | "category";
@@ -3118,6 +3125,31 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
 
     // --- Views ---
   if (route.startsWith("/analytics")) {
+    const canViewAnalytics = isOwnerWallet(walletPk, ANALYTICS_OWNER_WALLET);
+    if (!canViewAnalytics) {
+      return (
+        <main className="min-h-screen bg-[#05070f] text-white">
+          <div className="mx-auto max-w-3xl px-5 py-12 md:px-8">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Restricted</p>
+              <h1 className="mt-2 text-2xl font-semibold md:text-3xl">Analytics access is private</h1>
+              <p className="mt-3 text-white/65">
+                This dashboard is available only for the owner wallet.
+              </p>
+              <div className="mt-5">
+                <button
+                  type="button"
+                  onClick={() => push("/")}
+                  className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-white/85 hover:bg-white/[0.08]"
+                >
+                  Back to marketplace
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      );
+    }
     return <AnalyticsView onBack={() => push("/")} purchases={purchases} />;
   }
 
@@ -4140,6 +4172,7 @@ return (
               handleDisconnect();
               push("/");
             }}
+            showAnalytics={isOwnerWallet(walletPk, ANALYTICS_OWNER_WALLET)}
           />
         </div>
       </div>
@@ -6086,9 +6119,11 @@ function AnalyticsView({
 function ProfileButton({
   onNavigate,
   onSignOut,
+  showAnalytics,
 }: {
   onNavigate: (path: string) => void;
   onSignOut: () => void;
+  showAnalytics: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -6162,13 +6197,15 @@ function ProfileButton({
                 setOpen(false);
               }}
             />
-            <ProfileItem
-              label="Analytics"
-              onClick={() => {
-                onNavigate("/analytics");
-                setOpen(false);
-              }}
-            />
+            {showAnalytics && (
+              <ProfileItem
+                label="Analytics"
+                onClick={() => {
+                  onNavigate("/analytics");
+                  setOpen(false);
+                }}
+              />
+            )}
             <ProfileItem
               label="Creator Stats"
               onClick={() => {
