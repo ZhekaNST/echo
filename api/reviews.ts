@@ -24,7 +24,13 @@ function safeTrim(input: unknown, maxLen: number) {
 }
 
 function stripControlChars(value: string) {
-  return value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  let out = "";
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    const isControl = (code >= 0 && code <= 31) || code === 127;
+    out += isControl ? " " : value[i];
+  }
+  return out.replace(/\s+/g, " ").trim();
 }
 
 function validateAndNormalizeReview(input: any, wallet: string): { ok: true; review: AgentReview } | { ok: false; error: string } {
@@ -66,10 +72,12 @@ function b64urlDecode(s: string) {
 }
 
 function getAuthSecret() {
-  return process.env.ECHO_AUTH_SECRET || process.env.ECHO_AGENT_IDENTITY_SECRET || "dev_unsafe_echo_secret";
+  return process.env.ECHO_AUTH_SECRET || process.env.ECHO_AGENT_IDENTITY_SECRET || null;
 }
 
 function verifyToken(authHeader?: string) {
+  const secret = getAuthSecret();
+  if (!secret) return null;
   if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
   const token = authHeader.slice("Bearer ".length).trim();
   const parts = token.split(".");
@@ -77,7 +85,7 @@ function verifyToken(authHeader?: string) {
 
   const [headerB64, payloadB64, signature] = parts;
   const input = `${headerB64}.${payloadB64}`;
-  const expected = crypto.createHmac("sha256", getAuthSecret()).update(input).digest("base64")
+  const expected = crypto.createHmac("sha256", secret).update(input).digest("base64")
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
   if (expected !== signature) return null;
 
@@ -126,6 +134,9 @@ export default async function handler(req: any, res: any) {
   const supa = serviceHeaders();
   if (!supa) {
     return res.status(500).json({ error: "Supabase service configuration missing" });
+  }
+  if (!getAuthSecret()) {
+    return res.status(500).json({ error: "Auth secret is missing" });
   }
 
   try {

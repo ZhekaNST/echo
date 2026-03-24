@@ -12,10 +12,12 @@ function b64urlDecode(s: string) {
 }
 
 function getAuthSecret() {
-  return process.env.ECHO_AUTH_SECRET || process.env.ECHO_AGENT_IDENTITY_SECRET || "dev_unsafe_echo_secret";
+  return process.env.ECHO_AUTH_SECRET || process.env.ECHO_AGENT_IDENTITY_SECRET || null;
 }
 
 function verifyToken(authHeader?: string) {
+  const secret = getAuthSecret();
+  if (!secret) return null;
   if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
   const token = authHeader.slice("Bearer ".length).trim();
   const parts = token.split(".");
@@ -23,7 +25,7 @@ function verifyToken(authHeader?: string) {
 
   const [headerB64, payloadB64, signature] = parts;
   const input = `${headerB64}.${payloadB64}`;
-  const expected = crypto.createHmac("sha256", getAuthSecret()).update(input).digest("base64")
+  const expected = crypto.createHmac("sha256", secret).update(input).digest("base64")
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
   if (expected !== signature) return null;
 
@@ -63,6 +65,9 @@ export default async function handler(req: any, res: any) {
   const supa = serviceHeaders();
   if (!supa) {
     return res.status(500).json({ error: "Supabase service configuration missing" });
+  }
+  if (!getAuthSecret()) {
+    return res.status(500).json({ error: "Auth secret is missing" });
   }
 
   const auth = verifyToken(req.headers?.authorization || req.headers?.Authorization);

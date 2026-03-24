@@ -22,7 +22,7 @@ function cleanupChallenges() {
 }
 
 function getAuthSecret() {
-  return process.env.ECHO_AUTH_SECRET || process.env.ECHO_AGENT_IDENTITY_SECRET || "dev_unsafe_echo_secret";
+  return process.env.ECHO_AUTH_SECRET || process.env.ECHO_AGENT_IDENTITY_SECRET || null;
 }
 
 function b64url(input: string | Buffer) {
@@ -31,11 +31,15 @@ function b64url(input: string | Buffer) {
 }
 
 function signToken(payload: Record<string, unknown>) {
+  const secret = getAuthSecret();
+  if (!secret) {
+    throw new Error("Auth secret is missing");
+  }
   const header = { alg: "HS256", typ: "JWT" };
   const encodedHeader = b64url(JSON.stringify(header));
   const encodedPayload = b64url(JSON.stringify(payload));
   const input = `${encodedHeader}.${encodedPayload}`;
-  const sig = crypto.createHmac("sha256", getAuthSecret()).update(input).digest("base64")
+  const sig = crypto.createHmac("sha256", secret).update(input).digest("base64")
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
   return `${input}.${sig}`;
 }
@@ -63,6 +67,7 @@ export default async function handler(req: any, res: any) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (!getAuthSecret()) return res.status(500).json({ error: "Auth secret is missing" });
 
   try {
     cleanupChallenges();

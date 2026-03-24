@@ -860,7 +860,7 @@ async function disconnectPhantom(
   setWalletPk: (s: string | null) => void
 ) {
   const provider = getPhantomProvider();
-  try { await provider?.disconnect?.(); } catch {}
+  try { await provider?.disconnect?.(); } catch { /* ignore disconnect errors */ }
   setConnected(false);
   setAddress(null);
   setWalletPk(null);
@@ -5496,13 +5496,13 @@ function PhantomPayButton({
 
     try {
       setLoading(true);
-      onProcessing && onProcessing();
+      onProcessing?.();
 
       const anyWin = window as any;
       const provider = anyWin?.solana;
       if (!provider || !provider.isPhantom) {
         alert("Phantom wallet not found. Please install Phantom.");
-        onError && onError();
+        onError?.();
         setLoading(false);
         return;
       }
@@ -5516,7 +5516,7 @@ function PhantomPayButton({
         } catch (connectError: any) {
           if (connectError.code === 4001) {
             // User rejected connection
-            onError && onError();
+            onError?.();
             setLoading(false);
             return;
           }
@@ -5527,7 +5527,7 @@ function PhantomPayButton({
       // Validate recipient
       if (!recipient) {
         alert("This agent has no payout wallet configured. Payment is disabled.");
-        onError && onError();
+        onError?.();
         setLoading(false);
         return;
       }
@@ -5622,7 +5622,7 @@ function PhantomPayButton({
             signError.message?.includes("User rejected") ||
             signError.message?.includes("User cancelled")) {
           // User rejected - don't show error, just reset
-          onError && onError();
+          onError?.();
           setLoading(false);
           return;
         }
@@ -5647,14 +5647,14 @@ function PhantomPayButton({
       }
 
       // Success - call onSuccess callback
-      onSuccess && onSuccess(signature);
+      onSuccess?.(signature);
     } catch (e: any) {
       console.error("Payment error:", e);
       
       const errorMsg = e?.message || "Unknown error";
       
       // Always call onError to reset modal state from "processing" to "error"
-      onError && onError();
+      onError?.();
       
       // Handle specific error cases
       if (errorMsg.includes("User rejected") || errorMsg.includes("User cancelled") || errorMsg.includes("4001")) {
@@ -7227,7 +7227,7 @@ function ChatView({
             const len = next.length;
             try {
               node.setSelectionRange(len, len);
-            } catch {}
+            } catch { /* ignore selection errors */ }
           });
   
           return next;
@@ -7249,7 +7249,7 @@ function ChatView({
             const len = next.length;
             try {
               node.setSelectionRange(len, len);
-            } catch {}
+            } catch { /* ignore selection errors */ }
           });
   
           return next;
@@ -10418,7 +10418,24 @@ function AgentDetailView({
       })
       .slice(0, 10);
   }, [agent, allAgents]);
-  
+
+  const agentExamples = useMemo(() => getAgentExamples(agent), [agent]);
+  const currentExample = agentExamples[exampleIndex] || null;
+
+  useEffect(() => {
+    setExampleIndex(0);
+  }, [agent?.id]);
+
+  useEffect(() => {
+    if (agentExamples.length === 0) {
+      setExampleIndex(0);
+      return;
+    }
+    if (exampleIndex > agentExamples.length - 1) {
+      setExampleIndex(0);
+    }
+  }, [agentExamples.length, exampleIndex]);
+
   if (!agent) {
     return (
       <div className="min-h-screen w-screen overflow-x-hidden bg-gradient-to-b from-black via-[#0b0b1a] to-black text-white">
@@ -10446,22 +10463,6 @@ function AgentDetailView({
   }
 
   const isLiked = !!liked[agent.id];
-  const agentExamples = getAgentExamples(agent);
-  const currentExample = agentExamples[exampleIndex] || null;
-
-  useEffect(() => {
-    setExampleIndex(0);
-  }, [agent?.id]);
-
-  useEffect(() => {
-    if (agentExamples.length === 0) {
-      setExampleIndex(0);
-      return;
-    }
-    if (exampleIndex > agentExamples.length - 1) {
-      setExampleIndex(0);
-    }
-  }, [agentExamples.length, exampleIndex]);
 
   const goPrevExample = () => {
     if (agentExamples.length <= 1) return;
