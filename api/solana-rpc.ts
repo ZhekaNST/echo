@@ -18,8 +18,14 @@ export default async function handler(
 
   try {
     // Get RPC endpoint from environment variable
-    // Priority: Custom RPC URL with API key > Public endpoints
-    const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    // Priority: Custom RPC URL with API key > network default endpoint
+    const network =
+      process.env.SOLANA_NETWORK === 'devnet' ? 'devnet' : 'mainnet-beta';
+    const defaultRpcUrl =
+      network === 'devnet'
+        ? 'https://api.devnet.solana.com'
+        : 'https://api.mainnet-beta.solana.com';
+    const rpcUrl = process.env.SOLANA_RPC_URL || defaultRpcUrl;
     const rpcApiKey = process.env.SOLANA_RPC_API_KEY;
 
     // Get the JSON-RPC request from the client

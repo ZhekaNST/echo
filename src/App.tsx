@@ -656,13 +656,23 @@ const PLATFORM_WALLET =
 const ANALYTICS_OWNER_WALLET =
   import.meta.env.VITE_ANALYTICS_OWNER_WALLET || PLATFORM_WALLET;
 
+const DEFAULT_RPC_ENDPOINTS: Record<SolanaNetwork, string[]> = {
+  "mainnet-beta": [
+    "https://api.mainnet-beta.solana.com",
+    "https://solana-api.projectserum.com",
+    "https://rpc.ankr.com/solana",
+  ],
+  devnet: ["https://api.devnet.solana.com"],
+};
+
+const PRIMARY_RPC_ENDPOINT =
+  import.meta.env.VITE_SOLANA_RPC_URL ||
+  DEFAULT_RPC_ENDPOINTS[SOLANA_NETWORK][0];
+
 // RPC endpoints with fallback strategy
-const RPC_ENDPOINTS = [
-  "https://api.mainnet-beta.solana.com",
-  "https://solana-api.projectserum.com",
-  "https://rpc.ankr.com/solana",
-  "https://api.mainnet-beta.solana.com",
-];
+const RPC_ENDPOINTS = Array.from(
+  new Set([PRIMARY_RPC_ENDPOINT, ...DEFAULT_RPC_ENDPOINTS[SOLANA_NETWORK]])
+);
 
 let solanaDepsPromise: Promise<{
   Connection: any;
@@ -762,7 +772,7 @@ async function getSolanaConnection(): Promise<any> {
   if (isProduction) {
     // In production, use a connection but we'll override getLatestBlockhash calls
     // We'll handle this in the payment flow
-    return new Connection("https://api.mainnet-beta.solana.com", "confirmed");
+    return new Connection(PRIMARY_RPC_ENDPOINT, "confirmed");
   }
 
   // In dev, try direct endpoints first
@@ -1751,6 +1761,33 @@ useEffect(() => {
   }
 
   let cancelled = false;
+  const isProduction =
+    typeof window !== "undefined" &&
+    (window.location.hostname.includes("vercel.app") ||
+      window.location.hostname.includes("vercel.com") ||
+      import.meta.env.PROD);
+
+  async function loadBalancesViaProxy(ownerAddress: string) {
+    const [solResult, tokenResult] = await Promise.all([
+      proxyRpcRequest("getBalance", [ownerAddress, { commitment: "confirmed" }]),
+      proxyRpcRequest("getTokenAccountsByOwner", [
+        ownerAddress,
+        { mint: USDC_MINT },
+        { encoding: "jsonParsed", commitment: "confirmed" },
+      ]),
+    ]);
+
+    const lamports = Number(solResult?.value ?? 0);
+    const tokenAccount = tokenResult?.value?.[0];
+    const uiAmount = Number(
+      tokenAccount?.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0
+    );
+
+    if (!cancelled) {
+      setSolBalance(Number.isFinite(lamports) ? lamports / 1_000_000_000 : 0);
+      setUsdcBalance(Number.isFinite(uiAmount) ? uiAmount : 0);
+    }
+  }
 
   async function loadBalances() {
     try {
@@ -1759,8 +1796,19 @@ useEffect(() => {
       const { PublicKey, LAMPORTS_PER_SOL, getAssociatedTokenAddress } = await getSolanaDeps();
       const connection = await getSolanaConnection();
       if (!walletPk) return;
+      const ownerAddress = walletPk;
       const owner = new PublicKey(walletPk);
       const mint = new PublicKey(USDC_MINT);
+
+      // In production, prefer proxy first to avoid browser RPC 403/rate-limits.
+      if (isProduction) {
+        try {
+          await loadBalancesViaProxy(ownerAddress);
+          return;
+        } catch (proxyErr: any) {
+          console.warn("Proxy balance load failed, falling back to direct RPC:", proxyErr?.message);
+        }
+      }
 
       // --- USDC ---
       try {
@@ -1789,7 +1837,14 @@ useEffect(() => {
       }
     } catch (e: any) {
       console.error("Balance loading error:", e);
-      // Don't reset balances on error - keep previous values
+      // Last chance fallback via proxy if direct RPC path failed.
+      if (walletPk) {
+        try {
+          await loadBalancesViaProxy(walletPk);
+        } catch (proxyErr: any) {
+          console.error("Proxy balance fallback failed:", proxyErr);
+        }
+      }
     } finally {
       if (!cancelled) setUsdcLoading(false);
     }
