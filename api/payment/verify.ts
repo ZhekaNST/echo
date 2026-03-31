@@ -1,9 +1,9 @@
-// Vercel serverless function - Verify payment on Solana mainnet
+// Vercel serverless function - Verify payment on Solana
 // CRITICAL: This is the security gate - payment verification happens SERVER-SIDE only
 
-// Import payment intent store (Note: in production, use shared KV storage)
-// For serverless, we need a different approach - verify directly on-chain
 import { logServerError } from "../_telemetry.js";
+import { verifyToken } from "../_auth.js";
+import { serviceHeaders } from "../_supabase.js";
 
 type SolanaNetwork = "mainnet-beta" | "devnet";
 const DEFAULT_USDC_MINTS: Record<SolanaNetwork, string> = {
@@ -47,15 +47,9 @@ async function getWorkingRpc(): Promise<string> {
       const response = await fetch(rpc, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "getHealth",
-        }),
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getHealth" }),
       });
-      if (response.ok) {
-        return rpc;
-      }
+      if (response.ok) return rpc;
     } catch {
       continue;
     }
@@ -65,29 +59,20 @@ async function getWorkingRpc(): Promise<string> {
 
 async function rpcCall(method: string, params: any[]): Promise<any> {
   const rpcUrl = await getWorkingRpc();
-  
+
   const response = await fetch(rpcUrl, {
     method: "POST",
-    headers: { 
+    headers: {
       "Content-Type": "application/json",
       ...(process.env.SOLANA_RPC_API_KEY ? {
         "Authorization": `Bearer ${process.env.SOLANA_RPC_API_KEY}`
       } : {})
     },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method,
-      params,
-    }),
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
   });
 
   const data = await response.json();
-  
-  if (data.error) {
-    throw new Error(data.error.message || "RPC error");
-  }
-  
+  if (data.error) throw new Error(data.error.message || "RPC error");
   return data.result;
 }
 
@@ -97,7 +82,6 @@ interface VerificationResult {
   signature?: string;
   amount?: number;
   receiver?: string;
-  agentId?: string;
   verifiedAt?: number;
 }
 
@@ -107,36 +91,25 @@ async function verifyTransactionOnChain(
   expectedAmount: number,
   expectedPlatformReceiver?: string,
   expectedPlatformAmount?: number,
-  expectedBuyer?: string
 ): Promise<VerificationResult> {
   try {
-    // Get transaction with full details
     const tx = await rpcCall("getTransaction", [
       signature,
-      {
-        encoding: "jsonParsed",
-        maxSupportedTransactionVersion: 0,
-        commitment: "confirmed",
-      },
+      { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" },
     ]);
 
     if (!tx) {
       return { valid: false, reason: "Transaction not found. Please wait for confirmation." };
     }
-
     if (!tx.meta) {
       return { valid: false, reason: "Transaction metadata not available" };
     }
-
     if (tx.meta.err) {
-      return { valid: false, reason: `Transaction failed on-chain: ${JSON.stringify(tx.meta.err)}` };
+      return { valid: false, reason: "Transaction failed on-chain" };
     }
 
-    // Check token balances
     const preBalances = tx.meta.preTokenBalances || [];
     const postBalances = tx.meta.postTokenBalances || [];
-
-    // Expected raw amount
     const expectedRaw = Math.round(expectedAmount * 10 ** USDC_DECIMALS);
 
     function receivedAmountForOwner(owner: string) {
@@ -156,47 +129,31 @@ async function verifyTransactionOnChain(
 
     const actualAmount = receivedAmountForOwner(expectedReceiver);
     if (actualAmount <= 0) {
-      return { 
-        valid: false, 
-        reason: `No USDC transfer found to ${expectedReceiver.slice(0, 8)}...` 
+      return {
+        valid: false,
+        reason: `No USDC transfer found to ${expectedReceiver.slice(0, 8)}...`
       };
     }
 
     // Verify amount (allow small rounding - 0.01 USDC tolerance)
     const actualRaw = Math.round(actualAmount * 10 ** USDC_DECIMALS);
-    const amountDiff = Math.abs(actualRaw - expectedRaw);
-    
-    if (amountDiff > 10000) { // 0.01 USDC tolerance
+    if (Math.abs(actualRaw - expectedRaw) > 10000) {
       return {
         valid: false,
         reason: `Amount mismatch: expected ${expectedAmount} USDC, received ${actualAmount.toFixed(6)} USDC`,
       };
     }
 
-    // Optional: verify platform fee transfer in same tx
+    // Optional: verify platform fee transfer
     if (expectedPlatformReceiver && typeof expectedPlatformAmount === "number" && expectedPlatformAmount > 0) {
       const platformRawExpected = Math.round(expectedPlatformAmount * 10 ** USDC_DECIMALS);
       const platformActual = receivedAmountForOwner(expectedPlatformReceiver);
       const platformRawActual = Math.round(platformActual * 10 ** USDC_DECIMALS);
-      const platformDiff = Math.abs(platformRawActual - platformRawExpected);
-
-      if (platformDiff > 10000) {
+      if (Math.abs(platformRawActual - platformRawExpected) > 10000) {
         return {
           valid: false,
           reason: `Platform fee mismatch: expected ${expectedPlatformAmount} USDC, received ${platformActual.toFixed(6)} USDC`,
         };
-      }
-    }
-
-    // Optional: verify sender if provided
-    if (expectedBuyer) {
-      // Check that the transaction was initiated by the expected buyer
-      const accountKeys = tx.transaction?.message?.accountKeys || [];
-      const feePayer = accountKeys[0]?.pubkey || accountKeys[0];
-      
-      if (feePayer && feePayer !== expectedBuyer) {
-        // This is just a warning, not a rejection (user might use different signing account)
-        console.log(`Note: Fee payer ${feePayer} differs from expected buyer ${expectedBuyer}`);
       }
     }
 
@@ -210,18 +167,53 @@ async function verifyTransactionOnChain(
 
   } catch (error: any) {
     console.error("Verification error:", error);
-    return { 
-      valid: false, 
-      reason: error?.message || "Failed to verify transaction" 
+    return {
+      valid: false,
+      reason: error?.message || "Failed to verify transaction"
     };
   }
 }
 
+// Check if this signature was already verified (idempotency)
+async function isAlreadyVerified(signature: string): Promise<boolean> {
+  const supa = serviceHeaders();
+  if (!supa) return false;
+  try {
+    const scope = `verified_tx:${signature}`;
+    const r = await fetch(
+      `${supa.url}/rest/v1/app_state?owner=eq.global&scope=eq.${encodeURIComponent(scope)}&select=owner`,
+      { headers: supa.headers }
+    );
+    const rows = await r.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+// Record verified transaction for idempotency
+async function recordVerification(signature: string, data: Record<string, any>) {
+  const supa = serviceHeaders();
+  if (!supa) return;
+  try {
+    await fetch(`${supa.url}/rest/v1/app_state`, {
+      method: "POST",
+      headers: { ...supa.headers, Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({
+        owner: "global",
+        scope: `verified_tx:${signature}`,
+        data,
+      }),
+    });
+  } catch {
+    // Non-critical - verification still succeeded
+  }
+}
+
 export default async function handler(req: any, res: any) {
-  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -231,69 +223,68 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  // Require JWT auth
+  const user = verifyToken(req.headers?.authorization);
+  if (!user) {
+    return res.status(401).json({ verified: false, error: "Authentication required" });
+  }
+
   try {
     const { signature, receiver, amount, platformReceiver, platformAmount, buyer, agentId } = req.body;
 
-    // Validate inputs
     if (!signature || typeof signature !== "string") {
-      return res.status(400).json({ 
-        verified: false, 
-        error: "Transaction signature is required" 
-      });
+      return res.status(400).json({ verified: false, error: "Transaction signature is required" });
     }
 
     if (!receiver || typeof receiver !== "string") {
-      return res.status(400).json({ 
-        verified: false, 
-        error: "Receiver address is required" 
-      });
+      return res.status(400).json({ verified: false, error: "Receiver address is required" });
     }
 
     if (typeof amount !== "number" || amount <= 0) {
-      return res.status(400).json({ 
-        verified: false, 
-        error: "Valid amount is required" 
-      });
-    }
-
-    if (platformReceiver && typeof platformReceiver !== "string") {
-      return res.status(400).json({
-        verified: false,
-        error: "platformReceiver must be a valid wallet string",
-      });
-    }
-    if (platformAmount !== undefined && (typeof platformAmount !== "number" || platformAmount < 0)) {
-      return res.status(400).json({
-        verified: false,
-        error: "platformAmount must be a non-negative number",
-      });
+      return res.status(400).json({ verified: false, error: "Valid amount is required" });
     }
 
     // Validate signature format (base58, 87-88 chars)
     if (!/^[1-9A-HJ-NP-Za-km-z]{87,88}$/.test(signature)) {
-      return res.status(400).json({ 
-        verified: false, 
-        error: "Invalid transaction signature format" 
+      return res.status(400).json({ verified: false, error: "Invalid transaction signature format" });
+    }
+
+    // Idempotency: if already verified, return success without re-checking on-chain
+    if (await isAlreadyVerified(signature)) {
+      console.log(`[Payment Verify] Already verified: ${signature.slice(0, 16)}...`);
+      return res.status(200).json({
+        verified: true,
+        signature,
+        amount,
+        receiver,
+        agentId,
+        alreadyVerified: true,
       });
     }
 
-    // Log verification attempt (without sensitive data)
     console.log(`[Payment Verify] Checking signature: ${signature.slice(0, 16)}...`);
     console.log(`[Payment Verify] Expected: ${amount} USDC to ${receiver.slice(0, 8)}...`);
 
-    // Perform on-chain verification
     const result = await verifyTransactionOnChain(
       signature,
       receiver,
       amount,
       platformReceiver || PLATFORM_WALLET,
       typeof platformAmount === "number" ? platformAmount : 0,
-      buyer
     );
 
     if (result.valid) {
-      console.log(`[Payment Verify] ✅ VERIFIED: ${signature.slice(0, 16)}...`);
-      
+      console.log(`[Payment Verify] VERIFIED: ${signature.slice(0, 16)}...`);
+
+      // Record for idempotency
+      await recordVerification(signature, {
+        amount: result.amount,
+        receiver: result.receiver,
+        agentId,
+        buyer: buyer || user.sub,
+        verifiedAt: result.verifiedAt,
+      });
+
       return res.status(200).json({
         verified: true,
         signature,
@@ -303,8 +294,7 @@ export default async function handler(req: any, res: any) {
         verifiedAt: result.verifiedAt,
       });
     } else {
-      console.log(`[Payment Verify] ❌ REJECTED: ${result.reason}`);
-      
+      console.log(`[Payment Verify] REJECTED: ${result.reason}`);
       return res.status(400).json({
         verified: false,
         error: result.reason,
@@ -319,10 +309,9 @@ export default async function handler(req: any, res: any) {
       receiver: req?.body?.receiver,
       agentId: req?.body?.agentId,
     });
-    return res.status(500).json({ 
+    return res.status(500).json({
       verified: false,
       error: "Server error during verification",
-      message: error?.message 
     });
   }
 }

@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import tailwindcss from "@tailwindcss/vite";
 
 function apiRoutes() {
   return {
@@ -658,7 +659,7 @@ function apiRoutes() {
 }
 
 export default defineConfig({
-  plugins: [apiRoutes()],
+  plugins: [tailwindcss(), apiRoutes()],
   build: {
     chunkSizeWarningLimit: 700,
   },

@@ -1,4 +1,5 @@
 import { createHmac, randomUUID } from "node:crypto";
+import { URL } from "node:url";
 import { logServerError } from "./_telemetry.js";
 
 type BackendAuthMode = "echo_key" | "verified_identity";
@@ -61,6 +62,43 @@ function buildIdentityToken(agentId: string): string {
   return `${signingInput}.${signature}`;
 }
 
+// Block requests to private/internal IP ranges (SSRF protection)
+function isPrivateUrl(urlString: string): boolean {
+  try {
+    const parsed = new URL(urlString);
+    const hostname = parsed.hostname.toLowerCase();
+
+    // Block localhost variants
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]") {
+      return true;
+    }
+
+    // Block 0.0.0.0
+    if (hostname === "0.0.0.0") return true;
+
+    // Block private IP ranges
+    const parts = hostname.split(".").map(Number);
+    if (parts.length === 4 && parts.every((p) => !isNaN(p))) {
+      // 10.0.0.0/8
+      if (parts[0] === 10) return true;
+      // 172.16.0.0/12
+      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+      // 192.168.0.0/16
+      if (parts[0] === 192 && parts[1] === 168) return true;
+      // 169.254.0.0/16 (link-local)
+      if (parts[0] === 169 && parts[1] === 254) return true;
+    }
+
+    // Block metadata endpoints (cloud providers)
+    if (hostname === "metadata.google.internal") return true;
+    if (hostname === "169.254.169.254") return true;
+
+    return false;
+  } catch {
+    return true; // If we can't parse it, block it
+  }
+}
+
 function normalizeHeaderName(raw?: string | null): string {
   const fallback = "x-echo-identity";
   if (!raw) return fallback;
@@ -99,6 +137,10 @@ export default async function handler(req: any, res: any) {
 
     if (!/^https?:\/\//i.test(targetUrl)) {
       return res.status(400).json({ reply: "targetUrl must be a valid http(s) URL" });
+    }
+
+    if (isPrivateUrl(targetUrl)) {
+      return res.status(403).json({ reply: "Requests to private/internal addresses are not allowed" });
     }
 
     const headers: Record<string, string> = {

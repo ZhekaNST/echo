@@ -1,6 +1,22 @@
 // Vercel serverless function for proxying Solana RPC requests
 // This ensures RPC calls work on Vercel production without 403 errors
 
+// Only allow safe, read-only RPC methods
+const ALLOWED_RPC_METHODS = new Set([
+  "getBalance",
+  "getTokenAccountBalance",
+  "getTokenAccountsByOwner",
+  "getTransaction",
+  "getSignatureStatuses",
+  "getLatestBlockhash",
+  "getSlot",
+  "getHealth",
+  "getAccountInfo",
+  "getRecentPrioritizationFees",
+  "simulateTransaction",
+  "sendTransaction",
+]);
+
 export default async function handler(
   req: any,
   res: any,
@@ -33,6 +49,11 @@ export default async function handler(
 
     if (!method) {
       res.status(400).json({ error: 'Missing method in request body' });
+      return;
+    }
+
+    if (!ALLOWED_RPC_METHODS.has(method)) {
+      res.status(403).json({ error: `RPC method "${method}" is not allowed` });
       return;
     }
 

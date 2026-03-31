@@ -44,44 +44,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Echo" />
     
-    <!-- Tailwind CSS -->
-    <script>
-      window.__tailwindLoaded = false;
-    </script>
-    <script
-      src="https://cdn.tailwindcss.com"
-      onload="window.__tailwindLoaded=true;document.documentElement.setAttribute('data-tailwind','ok')"
-      onerror="document.documentElement.setAttribute('data-tailwind','missing')"
-    ></script>
-    <script>
-      setTimeout(function () {
-        if (!window.__tailwindLoaded) {
-          document.documentElement.setAttribute('data-tailwind', 'missing');
-        }
-      }, 1400);
-    </script>
-    <style>
-      html[data-tailwind="missing"] body {
-        background: #020617 !important;
-        color: #e5e7eb !important;
-        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      }
-      html[data-tailwind="missing"] #root {
-        min-height: 100vh;
-        padding: 16px;
-      }
-      html[data-tailwind="missing"] * {
-        color: inherit !important;
-      }
-      html[data-tailwind="missing"] button,
-      html[data-tailwind="missing"] input,
-      html[data-tailwind="missing"] textarea,
-      html[data-tailwind="missing"] select {
-        background: rgba(255, 255, 255, 0.06) !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-        border-radius: 8px !important;
-      }
-    </style>
+    <!-- Tailwind CSS is bundled via Vite plugin -->
   </head>
   <body>
     <noscript>You need to enable JavaScript to run Echo.</noscript>

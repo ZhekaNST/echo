@@ -1241,14 +1241,18 @@ async function verifyPaymentOnServer(
   expectedPlatformRecipient: string,
   expectedPlatformAmount: number,
   buyerPubkey: string,
-  agentId?: string
+  agentId?: string,
+  authToken?: string | null
 ): Promise<{ verified: boolean; error?: string }> {
   try {
     console.log("[Payment] Verifying on server:", signature.slice(0, 16) + "...");
-    
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+
     const response = await fetch("/api/payment/verify", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         signature,
         receiver: expectedRecipient,
@@ -5247,7 +5251,8 @@ return (
                       PLATFORM_WALLET,
                       platformAmount,
                       walletPk,
-                      selected.id
+                      selected.id,
+                      cloudToken
                     );
 
                     if (!verification.verified) {
@@ -5321,7 +5326,8 @@ return (
                       PLATFORM_WALLET,
                       platformAmount,
                       walletPk,
-                      selected.id
+                      selected.id,
+                      cloudToken
                     );
 
                     if (!verification.verified) {
