@@ -6947,13 +6947,13 @@ function ChatView({
     {
       role: "assistant",
       content: selectedAgent?.engineProvider === "tts"
-        ? `🔊 Welcome to Voice Generator!\n\nI convert text to natural-sounding speech using AI. Just type or paste any text (up to 2000 characters) and I'll generate audio for you.\n\n**Current voice: ${TTS_VOICES[0].name}** (${TTS_VOICES[0].description})\n\nClick the 🎤 button to change voices. Try it now — send me something to say!`
+        ? `Welcome to Voice Generator.\n\nType or paste any text (up to 2000 characters) and I'll generate audio for you.\n\nCurrent voice: ${TTS_VOICES[0].name} (${TTS_VOICES[0].description})`
         : selectedAgent?.engineProvider === "replicate_image"
-        ? `🎨 Welcome to Image Generator!\n\nI create stunning **images** from your text descriptions using AI in various artistic styles.\n\n**Current model: ${IMAGE_MODELS[0].name}** (${IMAGE_MODELS[0].description})\n\nClick the 🎨 button to change models. Try it now!\n\n**Tips for best results:**\n• Be descriptive: "A majestic lion with golden mane at sunset"\n• Include style: "in watercolor style" or "photorealistic"\n• Specify details: lighting, mood, composition\n\n**Examples:**\n• "A cozy cabin in snowy mountains, warm light in windows"\n• "Cyberpunk city street at night, neon signs, rain"\n• "Watercolor painting of cherry blossoms in spring"\n\nWhat would you like me to create?`
+        ? `Welcome to Image Generator.\n\nDescribe what you'd like me to create.\n\nCurrent model: ${IMAGE_MODELS[0].name} (${IMAGE_MODELS[0].description})`
         : selectedAgent?.engineProvider === "replicate_video"
-        ? `🎬 Welcome to Video Generator!\n\nI create animated **videos** from your text descriptions using AI.\n\n**Current model: ${VIDEO_MODELS[0].name}** (${VIDEO_MODELS[0].description})\n\nClick the 🎬 button to change models. Try it now!\n\n**Tips for best results:**\n• Be descriptive about motion: "waves gently crashing"\n• Include scene details: lighting, colors, atmosphere\n• Think about what should move in the scene\n\n**Examples:**\n• "Abstract flowing colors, purple and cyan, gentle waves"\n• "Butterfly emerging from cocoon, time-lapse"\n• "Northern lights dancing in the night sky"\n\nWhat animated scene would you like me to create?`
-        : `Hi! ${
-            selectedAgent ? `I'm ${selectedAgent.name}` : "I'm your agent"
+        ? `Welcome to Video Generator.\n\nDescribe the animation you'd like me to create.\n\nCurrent model: ${VIDEO_MODELS[0].name} (${VIDEO_MODELS[0].description})`
+        : `Hi, I'm ${
+            selectedAgent ? selectedAgent.name : "your agent"
           }. Ask me anything.`,
     },
   ]);
@@ -7679,8 +7679,8 @@ function ChatView({
           {
             role: "assistant",
             content: isVideoAgent
-              ? "🎬 Generating your video... This may take 20-60 seconds."
-              : "🎨 Generating your image... This may take 10-30 seconds.",
+              ? "Generating your video... This may take 20-60 seconds."
+              : "Generating your image... This may take 10-30 seconds.",
           },
         ];
         syncMessages(generatingMsg);
@@ -7716,8 +7716,8 @@ function ChatView({
               {
                 role: "assistant",
                 content: isVideo 
-                  ? `🎬 Here's your generated video:\n\n"${text.length > 80 ? text.slice(0, 80) + '...' : text}"`
-                  : `🎨 Here's your generated image:\n\n"${text.length > 80 ? text.slice(0, 80) + '...' : text}"`,
+                  ? `Here's your generated video: "${text.length > 80 ? text.slice(0, 80) + '...' : text}"`
+                  : `Here's your generated image: "${text.length > 80 ? text.slice(0, 80) + '...' : text}"`,
                 generatedMediaUrl: mediaUrl,
                 generatedMediaType: isVideo ? "video" : "image",
               },
@@ -7923,7 +7923,7 @@ function ChatView({
     <div className="h-screen w-screen overflow-hidden bg-gradient-to-b from-black via-[#050513] to-black text-white flex flex-col">
       {/* HEADER */}
       <header className="shrink-0 z-40 backdrop-blur border-b border-white/10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="mx-auto px-6 md:px-10 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
               variant="secondary"
@@ -7934,67 +7934,47 @@ function ChatView({
             </Button>
 
             {selectedAgent ? (
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-xl bg-white/10 grid place-items-center text-lg">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-lg bg-white/8 grid place-items-center text-base">
                   {renderAgentAvatar(selectedAgent.avatar)}
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">
-                    {selectedAgent.name}
-                  </span>
-                  <span className="text-[11px] text-white/50 line-clamp-1">
-                    {selectedAgent.tagline}
-                  </span>
-                </div>
+                <span className="text-sm font-medium text-white/90">
+                  {selectedAgent.name}
+                </span>
               </div>
             ) : (
-              <div className="font-semibold">Chat</div>
+              <span className="text-sm font-medium">Chat</span>
             )}
           </div>
 
-          {/* 🔹 Таймер + счётчик запросов справа */}
           {selectedAgent && (
-            <div className="flex items-start gap-2">
-              <Button
-                variant="secondary"
-                className="bg-white/10 hover:bg-white/20 text-xs"
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                className="text-xs text-white/40 hover:text-white/70 transition"
                 onClick={handleClearChat}
                 disabled={loading}
               >
-                Clear chat history
-              </Button>
-              <div className="flex flex-col items-end gap-1 text-xs">
-                <div className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-white/5 border border-white/10">
-                  <span className="text-white/50">
-                    {maxSec != null ? "Time left" : "Time"}
-                  </span>
-                  <span
-                    className={cx(
-                      "font-mono",
-                      !isCreator && (sessionBlocked || overTime)
-                        ? "text-red-400"
-                        : "text-emerald-300"
-                    )}
-                  >
-                    {timeLabel}
-                  </span>
-                </div>
-                {maxMsgs != null && (
-                  <div className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-white/5 border border-white/10">
-                    <span className="text-white/50">Messages</span>
-                    <span
-                      className={cx(
-                        "font-mono",
-                        !isCreator && (sessionBlocked || overMessages)
-                          ? "text-red-400"
-                          : "text-emerald-300"
-                      )}
-                    >
-                      {userMsgCount}/{maxMsgs}
-                    </span>
-                  </div>
+                Clear
+              </button>
+              <span
+                className={cx(
+                  "text-xs font-mono tabular-nums",
+                  !isCreator && (sessionBlocked || overTime) ? "text-red-400" : "text-white/40"
                 )}
-              </div>
+              >
+                {timeLabel}
+              </span>
+              {maxMsgs != null && (
+                <span
+                  className={cx(
+                    "text-xs font-mono tabular-nums",
+                    !isCreator && (sessionBlocked || overMessages) ? "text-red-400" : "text-white/40"
+                  )}
+                >
+                  {userMsgCount}/{maxMsgs}
+                </span>
+              )}
             </div>
           )}
           
@@ -8002,7 +7982,7 @@ function ChatView({
       </header>
 
       {/* BODY - Fixed height flex container */}
-      <div className="flex-1 min-h-0 max-w-5xl mx-auto w-full px-4 py-3 flex flex-col gap-3">
+      <div className="flex-1 min-h-0 mx-auto w-full px-6 md:px-10 py-3 flex flex-col gap-3">
         {clearChatNotice && (
           <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
             {clearChatNotice}
@@ -8015,8 +7995,8 @@ function ChatView({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={cx(
-            "flex-1 min-h-0 overflow-auto rounded-2xl bg-gradient-to-b from-white/[0.04] via-white/[0.02] to-transparent p-4 border transition-colors",
-            isDragging ? "border-cyan-400/70 bg-cyan-500/5" : "border-white/10"
+            "flex-1 min-h-0 overflow-auto p-4 transition-colors",
+            isDragging ? "bg-white/[0.02]" : ""
           )}
         >
 
@@ -8114,10 +8094,10 @@ function ChatView({
                 >
                 <div
                   className={cx(
-                    "max-w-[78%] rounded-2xl px-3 py-2 text-sm leading-relaxed",
+                    "max-w-[85%] lg:max-w-[70%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
                     isUser
-                      ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-br-sm"
-                      : "bg-white/8 border border-white/10 text-white rounded-bl-sm"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-white/6 text-white/90"
                   )}
                 >
                   {/* текст сообщения */}
@@ -8139,7 +8119,7 @@ function ChatView({
                   {m.generatedMediaUrl && (
                     <div className="mt-3">
                       {m.generatedMediaType === "video" ? (
-                        <div className="rounded-xl overflow-hidden border border-cyan-500/30 bg-black/40">
+                        <div className="rounded-xl overflow-hidden">
                           <video
                             controls
                             autoPlay
@@ -8147,37 +8127,37 @@ function ChatView({
                             muted
                             playsInline
                             src={m.generatedMediaUrl}
-                            className="w-full max-w-md rounded-xl"
+                            className="w-full max-w-lg rounded-xl"
                           />
-                          <div className="p-2 flex items-center justify-between bg-gradient-to-r from-cyan-600/20 to-purple-600/20">
-                            <span className="text-xs text-white/60">🎬 Generated Video</span>
+                          <div className="py-1.5 flex items-center justify-between">
+                            <span className="text-xs text-white/40">Generated Video</span>
                             <a
                               href={m.generatedMediaUrl}
                               download={`generated-video-${Date.now()}.mp4`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[11px] text-cyan-300 hover:text-cyan-200 underline transition"
+                              className="text-xs text-white/50 hover:text-white/70 transition"
                             >
                               Download
                             </a>
                           </div>
                         </div>
                       ) : (
-                        <div className="rounded-xl overflow-hidden border border-emerald-500/30">
+                        <div className="rounded-xl overflow-hidden">
                           <img
                             src={m.generatedMediaUrl}
                             alt="Generated image"
-                            className="w-full max-w-md rounded-t-xl cursor-pointer hover:opacity-90 transition"
+                            className="w-full max-w-lg rounded-xl cursor-pointer hover:opacity-90 transition"
                             onClick={() => window.open(m.generatedMediaUrl, '_blank')}
                           />
-                          <div className="p-2 flex items-center justify-between bg-gradient-to-r from-emerald-600/20 to-cyan-600/20">
-                            <span className="text-xs text-white/60">🎨 Generated Image</span>
+                          <div className="py-1.5 flex items-center justify-between">
+                            <span className="text-xs text-white/40">Generated Image</span>
                             <a
                               href={m.generatedMediaUrl}
                               download={`generated-image-${Date.now()}.webp`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[11px] text-emerald-300 hover:text-emerald-200 underline transition"
+                              className="text-xs text-white/50 hover:text-white/70 transition"
                             >
                               Download
                             </a>
@@ -8457,11 +8437,10 @@ function ChatView({
           {/* индикатор "печатает" */}
           {loading && (
             <div className="flex justify-start mt-1">
-              <div className="inline-flex items-center gap-1 rounded-2xl bg-white/10 border border-white/10 px-3 py-1 text-xs text-white/60">
-                <span className="h-1.5 w-1.5 rounded-full bg-white/60 animate-pulse" />
-                <span className="h-1.5 w-1.5 rounded-full bg-white/40 animate-pulse [animation-delay:150ms]" />
-                <span className="h-1.5 w-1.5 rounded-full bg-white/30 animate-pulse [animation-delay:300ms]" />
-                <span className="ml-1">Agent is thinking…</span>
+              <div className="inline-flex items-center gap-1.5 px-4 py-2 text-xs text-white/40">
+                <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
+                <span className="h-1 w-1 rounded-full bg-white/30 animate-pulse [animation-delay:150ms]" />
+                <span className="h-1 w-1 rounded-full bg-white/20 animate-pulse [animation-delay:300ms]" />
               </div>
             </div>
           )}
@@ -8575,7 +8554,6 @@ function ChatView({
                     onClick={() => { setShowVoiceSelector(!showVoiceSelector); setShowTtsSettings(false); }}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30 text-purple-300 hover:bg-purple-500/30 transition-colors text-sm"
                   >
-                    <span>🎤</span>
                     <span>Voice: <strong>{selectedVoice.name}</strong></span>
                     <svg className={`w-4 h-4 transition-transform ${showVoiceSelector ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -8937,11 +8915,8 @@ function ChatView({
           />
         </div>
 
-        <div className="text-[11px] text-white/50">
-          Session limits (time & messages) are enforced locally for
-          regular users. Creators can use their own agents without limits.  
-          Your conversation is stored per-agent in your browser.  
-          File uploads are handled in the browser for preview.
+        <div className="text-[10px] text-white/30 text-center">
+          Session limits are enforced locally. Conversation is stored in your browser.
         </div>
       </div>
        {/* Image Lightbox/Viewer Modal */}
