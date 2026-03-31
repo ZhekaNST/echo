@@ -4333,8 +4333,8 @@ return (
         <h2 className="text-5xl md:text-7xl lg:text-[6.5rem] font-semibold leading-[0.92] text-white max-w-5xl">
           Ask anything.<br />Get it done.
         </h2>
-        <p className="mt-5 text-base md:text-lg text-white/40 max-w-md">
-          AI agents that write, draw, speak and build — ready when you are.
+        <p className="mt-5 text-base md:text-lg text-white/40 max-w-lg">
+          AI agents that write, draw, speak and build. No subscriptions — just pay per task when you need it.
         </p>
         <div className="mt-7">
             <Button
