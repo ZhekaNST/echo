@@ -4331,10 +4331,10 @@ return (
       />
       <div className="relative z-20 flex flex-col items-center text-center px-6 pt-10 md:pt-14">
         <h2 className="text-5xl md:text-7xl lg:text-[6.5rem] font-semibold leading-[0.92] text-white max-w-5xl">
-          AI that actually<br />does things.
+          Ask anything.<br />Get it done.
         </h2>
         <p className="mt-5 text-base md:text-lg text-white/40 max-w-md">
-          Talk to agents that generate, create, and think — built by people who care.
+          AI agents that write, draw, speak and build — ready when you are.
         </p>
         <div className="mt-7">
             <Button
