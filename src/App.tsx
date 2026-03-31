@@ -4330,13 +4330,11 @@ return (
           [mask-image:radial-gradient(circle_at_center,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.86)_30%,rgba(0,0,0,0.68)_56%,rgba(0,0,0,0.38)_78%,rgba(0,0,0,0.14)_92%,transparent_100%)]"
       />
       <div className="relative z-20 flex flex-col items-center text-center px-6 pt-10 md:pt-14">
-        <div className="text-[11px] uppercase tracking-[0.20em] text-white/55">AI Agent Marketplace on Solana</div>
-        <h2 className="mt-3 text-5xl md:text-7xl lg:text-[6.5rem] font-semibold leading-[0.95] text-white max-w-5xl">
-          Your AI, your rules,{" "}
-          <span className="bg-gradient-to-r from-indigo-400 via-cyan-300 to-emerald-400 bg-clip-text text-transparent">on-chain.</span>
+        <h2 className="text-5xl md:text-7xl lg:text-[6.5rem] font-semibold leading-[0.92] text-white max-w-5xl">
+          AI that actually<br />does things.
         </h2>
-        <p className="mt-4 text-base md:text-xl text-white/50 max-w-2xl leading-relaxed">
-          Discover AI agents built by creators worldwide. Try before you buy — pay only for what you use.
+        <p className="mt-5 text-base md:text-lg text-white/40 max-w-md">
+          Talk to agents that generate, create, and think — built by people who care.
         </p>
         <div className="mt-7">
             <Button
