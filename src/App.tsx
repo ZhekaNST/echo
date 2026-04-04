@@ -4318,9 +4318,9 @@ return (
       <div
         aria-hidden
         className="absolute inset-0
-          [background-image:radial-gradient(circle,rgba(255,255,255,0.22)_1px,transparent_1px)]
+          [background-image:radial-gradient(circle_2px,rgba(255,255,255,0.35)_0%,rgba(255,255,255,0.10)_60%,transparent_100%)]
           [background-size:48px_48px]
-          [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,rgba(0,0,0,0.8)_0%,rgba(0,0,0,0.5)_40%,transparent_70%)]"
+          [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,rgba(0,0,0,0.9)_0%,rgba(0,0,0,0.5)_40%,transparent_70%)]"
       />
       <div className="relative z-20 flex flex-col items-center text-center px-6 pt-10 md:pt-14">
         <h2 className="text-5xl md:text-7xl lg:text-[6.5rem] font-semibold leading-[0.92] text-white max-w-5xl">
