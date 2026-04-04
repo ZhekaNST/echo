@@ -4310,24 +4310,10 @@ return (
     <div className="relative overflow-hidden bg-black min-h-[480px] md:min-h-[560px]">
       <div
         aria-hidden
-        className="absolute inset-0 opacity-90
-          bg-[radial-gradient(circle_at_20%_20%,rgba(8,145,178,0.28),transparent_42%),
-              radial-gradient(circle_at_68%_34%,rgba(15,23,42,0.86),transparent_50%),
-              radial-gradient(circle_at_86%_78%,rgba(79,70,229,0.30),transparent_40%)]"
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0 opacity-24
-          [background-image:linear-gradient(to_right,rgba(255,255,255,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.07)_1px,transparent_1px)]
-          [background-size:34px_34px]
-          [mask-image:radial-gradient(circle_at_center,rgba(0,0,0,0.98)_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.74)_52%,rgba(0,0,0,0.46)_74%,rgba(0,0,0,0.18)_90%,transparent_100%)]"
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0 opacity-12
-          [background-image:radial-gradient(rgba(56,189,248,0.24)_1px,transparent_1px)]
-          [background-size:44px_44px]
-          [mask-image:radial-gradient(circle_at_center,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.86)_30%,rgba(0,0,0,0.68)_56%,rgba(0,0,0,0.38)_78%,rgba(0,0,0,0.14)_92%,transparent_100%)]"
+        className="absolute inset-0
+          [background-image:linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)]
+          [background-size:48px_48px]
+          [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,rgba(0,0,0,0.7)_0%,rgba(0,0,0,0.4)_40%,transparent_70%)]"
       />
       <div className="relative z-20 flex flex-col items-center text-center px-6 pt-10 md:pt-14">
         <h2 className="text-5xl md:text-7xl lg:text-[6.5rem] font-semibold leading-[0.92] text-white max-w-5xl">
