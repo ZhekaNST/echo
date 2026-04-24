@@ -8607,16 +8607,26 @@ function ChatView({
                     title={
                       isSavedExample
                         ? "Saved as example (click to remove)"
-                        : "Save as example"
+                        : "Save as example (shown on your agent's page)"
                     }
-                    className={`inline-flex items-center justify-center w-5 h-5 rounded-full transition ${
+                    className={`inline-flex items-center gap-1 rounded-full transition ${
                       isSavedExample
-                        ? "text-emerald-400/90 hover:text-red-300"
-                        : "text-white/20 hover:text-white/70"
+                        ? "px-1.5 py-0.5 text-emerald-400/90 hover:text-red-300"
+                        : agentExamples.length === 0
+                          ? "px-2 py-0.5 text-xs text-white/45 hover:text-white/80 bg-white/5 hover:bg-white/10 ring-1 ring-white/10"
+                          : "w-5 h-5 justify-center text-white/25 hover:text-white/70"
                     }`}
                   >
                     {isSavedExample ? (
-                      <Check size={13} strokeWidth={2.5} />
+                      <>
+                        <Check size={13} strokeWidth={2.5} />
+                        <span className="text-xs">Saved</span>
+                      </>
+                    ) : agentExamples.length === 0 ? (
+                      <>
+                        <Plus size={12} strokeWidth={2.2} />
+                        <span>Save as example</span>
+                      </>
                     ) : (
                       <Plus size={12} strokeWidth={2} />
                     )}
