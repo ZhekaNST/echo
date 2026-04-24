@@ -497,7 +497,8 @@ import {
   Film,
   ArrowUp,
   PenTool,
-  Building2
+  Building2,
+  Check
 } from "lucide-react";
 
 import type { PublicKey } from "@solana/web3.js";
@@ -7071,6 +7072,17 @@ type ChatMessage = {
   generatedMediaUrl?: string; // For Replicate image/video generation
   generatedMediaType?: "image" | "video"; // Type of generated media
   originalTtsText?: string; // Original text used for TTS generation
+  // Voice/model params captured AT GENERATION TIME (immutable once set).
+  // This ensures switching voice later doesn't change existing messages,
+  // and saving as example preserves the exact original generation params.
+  ttsVoiceId?: string;
+  ttsModelId?: string;
+  ttsVoiceSettings?: {
+    stability?: number;
+    similarity_boost?: number;
+    style?: number;
+    use_speaker_boost?: boolean;
+  };
 };
 
 function ChatView({
@@ -7799,6 +7811,16 @@ function ChatView({
               content: "", // No text content needed - audio speaks for itself
               audioUrl,
               originalTtsText: text, // Store the original text used for TTS
+              // Capture the voice/model params used for THIS generation.
+              // Locked in so the message stays identical if voice is switched later.
+              ttsVoiceId: selectedVoice.id,
+              ttsModelId: selectedModel.id,
+              ttsVoiceSettings: {
+                stability: voiceSettings.stability,
+                similarity_boost: voiceSettings.similarityBoost,
+                style: voiceSettings.style,
+                use_speaker_boost: voiceSettings.speakerBoost,
+              },
             },
           ];
           syncMessages(next);
@@ -8271,13 +8293,19 @@ function ChatView({
                   {/* текст сообщения */}
                   {hasText && <div>{m.content}</div>}
 
-                  {/* 🔊 Audio player for TTS agent responses */}
+                  {/* Audio player for TTS agent responses (locked to generation voice/model) */}
                   {m.audioUrl && (
                     <div className="mt-3">
                       <AudioResult
                         audioUrl={m.audioUrl}
-                        voiceName={selectedVoice?.name}
-                        modelName={selectedModel?.name}
+                        voiceName={
+                          (m.ttsVoiceId && TTS_VOICES.find((v) => v.id === m.ttsVoiceId)?.name) ||
+                          selectedVoice?.name
+                        }
+                        modelName={
+                          (m.ttsModelId && TTS_MODELS.find((md) => md.id === m.ttsModelId)?.name) ||
+                          selectedModel?.name
+                        }
                         downloadFilename="tts-audio"
                       />
                     </div>
@@ -8398,10 +8426,8 @@ function ChatView({
                 </div>
                 </div>
 
-                {/* Save as Example Button - Below the message, outside alignment */}
-              {isCreator && !isUser && (
-                <div className="flex justify-start mt-1 ml-4">
-                  {(() => {
+                {/* Save as Example — minimal icon under assistant messages (creator only) */}
+              {isCreator && !isUser && (() => {
                     const userMessageIndex = i - 1;
                     const userMessage =
                       userMessageIndex >= 0 && messages[userMessageIndex].role === "user"
@@ -8424,7 +8450,12 @@ function ChatView({
                     const canSaveMore = isSavedExample || agentExamples.length < MAX_EXAMPLES_PER_AGENT;
                     const canToggle = !!selectedAgent && !!userMessage && (isSavedExample || canSaveMore);
 
+                    // Hide entirely when there's nothing actionable (limit reached + not already saved, or no user msg)
+                    if (!userMessage) return null;
+                    if (!isSavedExample && !canSaveMore) return null;
+
                     return (
+                      <div className="flex justify-start mt-0.5 ml-4">
                   <button
                     type="button"
                     onClick={async () => {
@@ -8478,11 +8509,14 @@ function ChatView({
                           }
 
                           // Fallback path for old behavior if stored audio is unavailable.
+                          // CRITICAL: use the voice/model params captured AT GENERATION TIME,
+                          // not the currently selected voice. This way, if you generated with
+                          // voice A and later switched to voice B, the example stays as voice A.
                           ttsParams = {
                             text: m.originalTtsText || m.content,
-                            voiceId: selectedVoice.id,
-                            modelId: selectedModel.id,
-                            voiceSettings: {
+                            voiceId: m.ttsVoiceId || selectedVoice.id,
+                            modelId: m.ttsModelId || selectedModel.id,
+                            voiceSettings: m.ttsVoiceSettings || {
                               stability: voiceSettings.stability,
                               similarity_boost: voiceSettings.similarityBoost,
                               style: voiceSettings.style,
@@ -8570,34 +8604,26 @@ function ChatView({
                       }
                     }}
                     disabled={!canToggle}
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
+                    title={
                       isSavedExample
-                        ? 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 hover:bg-red-500/20 hover:border-red-400/40 hover:text-red-200'
-                        : canToggle
-                          ? 'bg-white/10 border border-white/20 text-white/70 hover:bg-cyan-500/20 hover:border-cyan-400/40 hover:text-cyan-200'
-                          : 'bg-white/5 border border-white/10 text-white/30 cursor-not-allowed'
+                        ? "Saved as example (click to remove)"
+                        : "Save as example"
+                    }
+                    className={`inline-flex items-center justify-center w-5 h-5 rounded-full transition ${
+                      isSavedExample
+                        ? "text-emerald-400/90 hover:text-red-300"
+                        : "text-white/20 hover:text-white/70"
                     }`}
                   >
-                    <span
-                      className={`inline-flex items-center rounded-md px-1.5 py-0.5 border text-[10px] font-semibold tracking-wide ${
-                        isSavedExample
-                          ? "border-emerald-300/40 bg-emerald-400/20 text-emerald-100"
-                          : "border-cyan-300/30 bg-cyan-400/15 text-cyan-100"
-                      }`}
-                    >
-                      #{isSavedExample ? existingExampleIndex + 1 : nextSlotNumber}
-                    </span>
-                    {isSavedExample
-                      ? `Example ${existingExampleIndex + 1} saved`
-                      : canSaveMore
-                        ? `Save as Example ${nextSlotNumber}`
-                        : `Limit reached (${MAX_EXAMPLES_PER_AGENT})`}
-                    {isSavedExample && <span className="text-[10px] opacity-80">(click to remove)</span>}
+                    {isSavedExample ? (
+                      <Check size={13} strokeWidth={2.5} />
+                    ) : (
+                      <Plus size={12} strokeWidth={2} />
+                    )}
                   </button>
+                      </div>
                     );
                   })()}
-                </div>
-              )}
               </React.Fragment>
             );
           })}
