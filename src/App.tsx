@@ -1038,6 +1038,7 @@ likes24h?: number;          // демо-счётчик
   // session limits
   maxMessagesPerSession?: number | null;
   maxDurationMinutes?: number | null;
+  isHidden?: boolean;
 };
 
 function getAgentExamples(agent: Agent | null | undefined): ExampleOutput[] {
@@ -2237,6 +2238,27 @@ function toggleSaved(id: string) {
   });
 }
 
+  async function handleRemoveAgent(agentId: string) {
+    if (!walletPk || walletPk !== PLATFORM_WALLET) return;
+    if (!confirm("Remove this agent from the marketplace?")) return;
+    const token = cloudToken || await requestCloudToken();
+    if (!token) return;
+    setAgents(prev => prev.map(a => a.id === agentId ? { ...a, isHidden: true } : a));
+    try {
+      await fetch("/api/cloud-state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          owner: "global",
+          scope: "agents",
+          data: agents.map(a => a.id === agentId ? { ...a, isHidden: true } : a),
+        }),
+      });
+    } catch (e) {
+      console.warn("Failed to persist agent removal:", e);
+    }
+  }
+
   useEffect(() => {
     if (!route.startsWith("/explore")) return;
   
@@ -2590,8 +2612,43 @@ useEffect(() => {
   return () => window.clearInterval(id);
 }, []);
 
-  
-  
+// SEO: update page title and Open Graph meta tags on route / agent changes
+useEffect(() => {
+  if (typeof document === "undefined") return;
+
+  let title = "Echo — AI Agents, Pay Per Task";
+  let description = "AI agents that write, draw, speak and build. No subscriptions — just pay per task when you need it.";
+
+  const setMeta = (selector: string, attr: string, value: string) => {
+    const el = document.querySelector(selector);
+    if (el) el.setAttribute(attr, value);
+  };
+
+  if (route.startsWith("/agent") || route.startsWith("/chat")) {
+    try {
+      const hash = typeof window !== "undefined" ? window.location.hash : "";
+      const search = new URLSearchParams(hash.split("?")[1] || "");
+      const id = search.get("id");
+      const agent = agents.find((a) => a.id === id);
+      if (agent) {
+        title = `${agent.name} — Echo`;
+        description = agent.tagline || agent.description || description;
+      }
+    } catch { /* ignore */ }
+  }
+
+  document.title = title;
+  setMeta('meta[name="description"]', "content", description);
+  setMeta('meta[property="og:title"]', "content", title);
+  setMeta('meta[property="og:description"]', "content", description);
+  setMeta('meta[property="twitter:title"]', "content", title);
+  setMeta('meta[property="twitter:description"]', "content", description);
+  if (typeof window !== "undefined") {
+    setMeta('meta[property="og:url"]', "content", window.location.href);
+    setMeta('meta[property="twitter:url"]', "content", window.location.href);
+  }
+}, [route, agents]);
+
     // обработчик добавления отзыва (глобально для всех)
     async function handleAddReview(
       agentId: string,
@@ -2657,6 +2714,7 @@ useEffect(() => {
   const exploreTabFromUrl = (hashParams.get("tab") as ExploreTab) || "all";  
   const filtered = useMemo(() => {
     return agents.filter(a => {
+      if (a.isHidden && walletPk !== PLATFORM_WALLET) return false;
       const q = query.trim().toLowerCase();
       const collectionQuery = (selectedCollection?.query || "").toLowerCase();
       const searchHay = `${a.name} ${a.tagline} ${a.categories.join(" ")} ${a.promptPreview || ""} ${a.description || ""}`.toLowerCase();
@@ -3209,7 +3267,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
         </main>
       );
     }
-    return <AnalyticsView onBack={() => push("/")} purchases={purchases} />;
+    return <AnalyticsView onBack={() => push("/")} purchases={purchases} walletPk={walletPk} cloudToken={cloudToken} />;
   }
 
   // Profile routes
@@ -3315,6 +3373,7 @@ avatar: DEFAULT_AGENT_AVATAR_URL,
           allAgents={agents}
           reviews={reviews}                    // 🔹 добавили
           onAddReview={handleAddReview}        // 🔹 добавили
+          onRemoveAgent={handleRemoveAgent}
         />
       );
     }
@@ -5889,14 +5948,51 @@ function TopNavItem({
 }
 
 
+type GlobalAnalyticsSummary = {
+  totalCounts: Record<string, number>;
+  totalRevenue: number;
+  revenueByAgent: Record<string, number>;
+  dailyChart: { date: string; events: number; revenue: number }[];
+  daysAvailable: number;
+};
+
 function AnalyticsView({
   onBack,
   purchases,
+  walletPk,
+  cloudToken,
 }: {
   onBack: () => void;
   purchases: { id: string; agentId: string; priceUSDC: number; ts: number }[];
+  walletPk?: string | null;
+  cloudToken?: string | null;
 }) {
   const [events, setEvents] = useState<LocalAnalyticsEvent[]>([]);
+  const [globalStats, setGlobalStats] = useState<GlobalAnalyticsSummary | null>(null);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [globalError, setGlobalError] = useState<string | null>(null);
+  const isAdmin = !!walletPk && walletPk === PLATFORM_WALLET;
+
+  const loadGlobalStats = useCallback(async () => {
+    if (!isAdmin || !cloudToken) return;
+    setGlobalLoading(true);
+    setGlobalError(null);
+    try {
+      const resp = await fetch("/api/analytics-summary", {
+        headers: { Authorization: `Bearer ${cloudToken}` },
+      });
+      if (!resp.ok) {
+        setGlobalError(`Failed to load global stats (${resp.status})`);
+        return;
+      }
+      const data = await resp.json();
+      setGlobalStats(data);
+    } catch (e: any) {
+      setGlobalError(e?.message || "Network error");
+    } finally {
+      setGlobalLoading(false);
+    }
+  }, [isAdmin, cloudToken]);
 
   const loadEvents = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -5911,7 +6007,8 @@ function AnalyticsView({
 
   useEffect(() => {
     loadEvents();
-  }, [loadEvents]);
+    if (isAdmin && cloudToken) loadGlobalStats();
+  }, [loadEvents, loadGlobalStats, isAdmin, cloudToken]);
 
   const stats = useMemo(() => {
     const counts: Record<AnalyticsEventName, number> = {
@@ -6016,7 +6113,7 @@ function AnalyticsView({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={loadEvents}
+              onClick={() => { loadEvents(); if (isAdmin && cloudToken) loadGlobalStats(); }}
               className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-white/85 hover:bg-white/[0.08]"
             >
               Refresh
@@ -6032,9 +6129,88 @@ function AnalyticsView({
         </div>
 
         <div className="mb-6">
-          <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Creator analytics</p>
-          <h1 className="mt-2 text-3xl font-semibold md:text-4xl">MVP dashboard</h1>
-          <p className="mt-2 text-white/60">Events are stored in this browser and sent to `/api/analytics-event`.</p>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Analytics</p>
+          <h1 className="mt-2 text-3xl font-semibold md:text-4xl">Dashboard</h1>
+        </div>
+
+        {/* ── Global stats (admin only) ── */}
+        {isAdmin && (
+          <section className="mb-8">
+            <div className="mb-3 flex items-center gap-2">
+              <h2 className="text-lg font-semibold">Global — all users</h2>
+              {globalLoading && <span className="text-xs text-white/50">Loading…</span>}
+              {globalError && <span className="text-xs text-red-300">{globalError}</span>}
+            </div>
+            {globalStats ? (
+              <>
+                <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {[
+                    { label: "Total revenue", value: `${globalStats.totalRevenue.toFixed(2)} USDC` },
+                    { label: "Payments", value: (globalStats.totalCounts["pay_success"] || 0).toLocaleString() },
+                    { label: "Sessions", value: (globalStats.totalCounts["start_session"] || 0).toLocaleString() },
+                    { label: "Agent views", value: (globalStats.totalCounts["view_agent"] || 0).toLocaleString() },
+                  ].map(c => (
+                    <div key={c.label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                      <div className="text-xs text-white/55">{c.label}</div>
+                      <div className="mt-2 text-xl font-semibold">{c.value}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Revenue by agent */}
+                {Object.keys(globalStats.revenueByAgent).length > 0 && (
+                  <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                    <h3 className="mb-3 text-sm font-semibold">Revenue by agent (last 30 days)</h3>
+                    <div className="space-y-2">
+                      {Object.entries(globalStats.revenueByAgent)
+                        .sort(([, a], [, b]) => b - a)
+                        .slice(0, 10)
+                        .map(([agentId, rev]) => (
+                          <div key={agentId} className="flex items-center justify-between text-sm">
+                            <span className="font-mono text-xs text-white/60 truncate max-w-[60%]">{agentId}</span>
+                            <span className="text-emerald-300 font-semibold">{rev.toFixed(2)} USDC</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                {/* Daily activity chart */}
+                {globalStats.dailyChart.length > 0 && (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                    <h3 className="mb-1 text-sm font-semibold">Daily activity (last 30 days)</h3>
+                    <p className="mb-4 text-xs text-white/50">{globalStats.daysAvailable} days with data</p>
+                    <div className="flex h-32 items-end gap-1">
+                      {globalStats.dailyChart.slice(-30).map((d) => {
+                        const maxVal = Math.max(1, ...globalStats.dailyChart.map(x => x.events));
+                        const h = `${Math.max(4, (d.events / maxVal) * 100)}%`;
+                        return (
+                          <div key={d.date} className="group relative flex flex-1 flex-col items-center">
+                            <div
+                              className="w-full rounded-t bg-gradient-to-t from-cyan-400/60 to-violet-400/70 transition-opacity hover:opacity-80"
+                              style={{ height: h }}
+                              title={`${d.date}: ${d.events} events, ${d.revenue.toFixed(2)} USDC`}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-2 flex justify-between text-[10px] text-white/40">
+                      <span>{globalStats.dailyChart[0]?.date}</span>
+                      <span>{globalStats.dailyChart[globalStats.dailyChart.length - 1]?.date}</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : !globalLoading && (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/50">
+                No global data yet. Events will appear here as users interact with the platform.
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── Local (this browser) section ── */}
+        <div className="mb-4">
+          <p className="text-xs text-white/40 uppercase tracking-widest">This browser</p>
         </div>
 
         <section className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
@@ -10432,6 +10608,7 @@ function AgentDetailView({
   allAgents,
   reviews,
   onAddReview,
+  onRemoveAgent,
 }: {
   agent: Agent | null;
   onBack: () => void;
@@ -10443,6 +10620,7 @@ function AgentDetailView({
   allAgents: Agent[];
   reviews: Record<string, AgentReview[]>;
   onAddReview: (agentId: string, data: { rating: number; text: string; user?: string }) => Promise<{ ok: boolean; error?: string }>;
+  onRemoveAgent?: (id: string) => void;
 }) {
 
   const [reviewName, setReviewName] = useState("");
@@ -10643,6 +10821,15 @@ function AgentDetailView({
               ← Back
             </Button>
             <div className="font-semibold">Agent • {agent.name}</div>
+            {walletPk === PLATFORM_WALLET && agent && !agent.isHidden && (
+              <button
+                type="button"
+                onClick={() => onRemoveAgent?.(agent.id)}
+                className="text-xs text-red-400/70 hover:text-red-300 border border-red-400/20 rounded px-2 py-1"
+              >
+                Remove from marketplace
+              </button>
+            )}
           </div>
         </div>
       </header>
