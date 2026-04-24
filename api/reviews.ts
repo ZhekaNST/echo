@@ -156,7 +156,7 @@ export default async function handler(req: any, res: any) {
       if (agentId.length > 120) return res.status(400).json({ error: "Invalid agentId" });
 
       const normalized = validateAndNormalizeReview(req.body?.review, auth.sub);
-      if (!normalized.ok) return res.status(400).json({ error: normalized.error });
+      if ("error" in normalized) return res.status(400).json({ error: normalized.error });
       const review = normalized.review;
 
       const current = await loadReviews(supa);
