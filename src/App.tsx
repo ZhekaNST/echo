@@ -2520,9 +2520,12 @@ useEffect(() => {
               : DEFAULT_AGENT_AVATAR_URL,
         }));
         // Merge cloud snapshot with local dynamic counters to prevent UI rollback after refresh.
+        // Also fold in any new seed agents from INITIAL_AGENTS that aren't yet in
+        // the cloud snapshot — keeps returning users in sync with new built-in agents.
         setAgents((prev) => {
           const localById = new Map(prev.map((agent) => [agent.id, agent]));
-          return normalized.map((cloudAgent) => {
+          const cloudIds = new Set(normalized.map((c) => c.id));
+          const merged = normalized.map((cloudAgent) => {
             const local = localById.get(cloudAgent.id);
             if (!local) return cloudAgent;
             return {
@@ -2536,6 +2539,8 @@ useEffect(() => {
               lastActiveAt: Math.max(cloudAgent.lastActiveAt || 0, local.lastActiveAt || 0) || undefined,
             };
           });
+          const missingSeeds = INITIAL_AGENTS.filter((seed) => !cloudIds.has(seed.id));
+          return missingSeeds.length > 0 ? [...merged, ...missingSeeds] : merged;
         });
       }
       if (cloudLiked && typeof cloudLiked === "object") {
