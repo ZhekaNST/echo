@@ -1021,7 +1021,7 @@ likes24h?: number;          // демо-счётчик
   creatorWallet?: string;
 
   // engine / RAG
-  engineProvider?: "platform" | "creator_backend" | "tts" | "replicate" | "replicate_image" | "replicate_video";
+  engineProvider?: "platform" | "creator_backend" | "tts" | "replicate" | "replicate_image" | "replicate_video" | "deepl";
   engineApiUrl?: string | null;
   ragEndpointUrl?: string | null;
   ragDescription?: string | null;
@@ -1127,6 +1127,44 @@ const VIDEO_MODELS = [
   { id: "video_cog", name: "Video Cog", description: "High-quality video animations", speed: "Medium", type: "animation" },
   { id: "stable_video", name: "Stable Video", description: "Consistent video generation", speed: "Medium", type: "stable" },
   { id: "video_luma", name: "Luma Video", description: "Creative and dynamic videos", speed: "Slow", type: "creative" },
+];
+
+// 🌐 DeepL target languages — full set supported by api/_vendors/deepl.ts.
+// `code` is sent to DeepL as `target_lang`; emoji is for UI affordance only.
+const DEEPL_LANGUAGES = [
+  { code: "EN-US", name: "English (US)", flag: "🇺🇸" },
+  { code: "EN-GB", name: "English (UK)", flag: "🇬🇧" },
+  { code: "ES",    name: "Spanish",      flag: "🇪🇸" },
+  { code: "FR",    name: "French",       flag: "🇫🇷" },
+  { code: "DE",    name: "German",       flag: "🇩🇪" },
+  { code: "IT",    name: "Italian",      flag: "🇮🇹" },
+  { code: "PT-BR", name: "Portuguese (BR)", flag: "🇧🇷" },
+  { code: "PT-PT", name: "Portuguese (PT)", flag: "🇵🇹" },
+  { code: "NL",    name: "Dutch",        flag: "🇳🇱" },
+  { code: "PL",    name: "Polish",       flag: "🇵🇱" },
+  { code: "RU",    name: "Russian",      flag: "🇷🇺" },
+  { code: "UK",    name: "Ukrainian",    flag: "🇺🇦" },
+  { code: "JA",    name: "Japanese",     flag: "🇯🇵" },
+  { code: "KO",    name: "Korean",       flag: "🇰🇷" },
+  { code: "ZH-HANS", name: "Chinese (Simplified)", flag: "🇨🇳" },
+  { code: "ZH-HANT", name: "Chinese (Traditional)", flag: "🇹🇼" },
+  { code: "AR",    name: "Arabic",       flag: "🇸🇦" },
+  { code: "TR",    name: "Turkish",      flag: "🇹🇷" },
+  { code: "SV",    name: "Swedish",      flag: "🇸🇪" },
+  { code: "NB",    name: "Norwegian",    flag: "🇳🇴" },
+  { code: "DA",    name: "Danish",       flag: "🇩🇰" },
+  { code: "FI",    name: "Finnish",      flag: "🇫🇮" },
+  { code: "CS",    name: "Czech",        flag: "🇨🇿" },
+  { code: "EL",    name: "Greek",        flag: "🇬🇷" },
+  { code: "RO",    name: "Romanian",     flag: "🇷🇴" },
+  { code: "HU",    name: "Hungarian",    flag: "🇭🇺" },
+  { code: "ID",    name: "Indonesian",   flag: "🇮🇩" },
+  { code: "BG",    name: "Bulgarian",    flag: "🇧🇬" },
+  { code: "SK",    name: "Slovak",       flag: "🇸🇰" },
+  { code: "SL",    name: "Slovenian",    flag: "🇸🇮" },
+  { code: "ET",    name: "Estonian",     flag: "🇪🇪" },
+  { code: "LV",    name: "Latvian",      flag: "🇱🇻" },
+  { code: "LT",    name: "Lithuanian",   flag: "🇱🇹" },
 ];
 
 // 🔊 TTS Models (ElevenLabs)
@@ -1323,7 +1361,7 @@ function trackAnalyticsEvent(
     // non-blocking analytics
   }
   try {
-    fetch("/api/analytics-event", {
+    fetch("/api/analytics", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -1433,6 +1471,26 @@ const INITIAL_AGENTS: Agent[] = [
     lastActiveAt: Date.now() - 1000 * 60 * 10,
     sessions24h: 145,
     likes24h: 38,
+  },
+  // 🌐 DeepL Translator — pro translation, no subscription needed
+  {
+    id: "deepl-translator",
+    name: "DeepL Translator",
+    priceUSDC: 0.10,
+    tagline: "Pro translation in 30+ languages — pay per text.",
+    avatar: "/agent-avatars/wave.svg",
+    categories: ["tools", "research"],
+    likes: 1280,
+    sessions: 2410,
+    promptPreview: "I translate your text using DeepL — the gold standard for nuanced, formatting-preserving translation.",
+    description: "DeepL Translator delivers professional-grade translations across 30+ languages, used by enterprises that need accuracy beyond Google Translate.\n\nWhy use this agent:\n• No €7.49/mo Pro subscription needed\n• Pay only per translation\n• Source language auto-detected\n• Preserves tone and formality\n\nPerfect for:\n• Translating one document or message\n• Localizing marketing copy\n• Reading foreign-language emails\n• Cross-border communication\n\nJust paste your text and pick a target language.",
+    engineProvider: "deepl",
+    creator: "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ",
+    creatorWallet: "BRDtaRBzDb9TPoRWha3xD8SCta9U75zDsiupz2rNniaZ",
+    createdAt: Date.now() - 7 * 24 * 60 * 60 * 1000,
+    lastActiveAt: Date.now() - 1000 * 60 * 5,
+    sessions24h: 88,
+    likes24h: 21,
   },
   {
     id: "a1",
@@ -5979,7 +6037,7 @@ function AnalyticsView({
     setGlobalLoading(true);
     setGlobalError(null);
     try {
-      const resp = await fetch("/api/analytics-summary", {
+      const resp = await fetch("/api/analytics", {
         headers: { Authorization: `Bearer ${cloudToken}` },
       });
       if (!resp.ok) {
@@ -7123,6 +7181,10 @@ function ChatView({
   const [selectedVideoModel, setSelectedVideoModel] = useState(VIDEO_MODELS[0]);
   const [showVideoModelSelector, setShowVideoModelSelector] = useState(false);
 
+  // 🌐 DeepL target language state (defaults to English (US))
+  const [selectedDeepLLang, setSelectedDeepLLang] = useState(DEEPL_LANGUAGES[0]);
+  const [showDeepLLangSelector, setShowDeepLLangSelector] = useState(false);
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
@@ -7132,6 +7194,8 @@ function ChatView({
         ? `Welcome to Image Generator.\n\nDescribe what you'd like me to create.\n\nCurrent model: ${IMAGE_MODELS[0].name} (${IMAGE_MODELS[0].description})`
         : selectedAgent?.engineProvider === "replicate_video"
         ? `Welcome to Video Generator.\n\nDescribe the animation you'd like me to create.\n\nCurrent model: ${VIDEO_MODELS[0].name} (${VIDEO_MODELS[0].description})`
+        : selectedAgent?.engineProvider === "deepl"
+        ? `Welcome to DeepL Translator.\n\nPaste any text (up to 5000 characters) and I'll translate it. The source language is auto-detected.\n\nTarget language: ${DEEPL_LANGUAGES[0].flag} ${DEEPL_LANGUAGES[0].name} — change it from the selector above the input.`
         : `Hi, I'm ${
             selectedAgent ? selectedAgent.name : "your agent"
           }. Ask me anything.`,
@@ -7838,6 +7902,71 @@ function ChatView({
             {
               role: "assistant",
               content: `Sorry, I couldn't generate the audio. ${ttsError?.message || "Please try again."}`,
+            },
+          ];
+          syncMessages(next);
+        }
+
+        setLoading(false);
+        return;
+      }
+
+      // 🌐 DeepL Translator - text-to-text translation
+      if (selectedAgent.engineProvider === "deepl") {
+        if (!text) {
+          const next: ChatMessage[] = [
+            ...history,
+            {
+              role: "assistant",
+              content: "Paste any text you'd like translated. The source language is auto-detected — just choose the target language above the input.",
+            },
+          ];
+          syncMessages(next);
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const resp = await fetch("/api/vendor", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              vendor: "deepl",
+              payload: {
+                text: text.slice(0, 5000),
+                targetLang: selectedDeepLLang.code,
+              },
+            }),
+          });
+
+          const data = await resp.json().catch(() => null);
+          if (!resp.ok || !data?.ok) {
+            throw new Error(data?.error || `Translation failed: ${resp.status}`);
+          }
+
+          const translated = String(data.result?.translatedText || "").trim();
+          const detected = String(data.result?.detectedSourceLang || "").toUpperCase();
+          const header = detected
+            ? `${detected} → ${selectedDeepLLang.flag} ${selectedDeepLLang.name}`
+            : `→ ${selectedDeepLLang.flag} ${selectedDeepLLang.name}`;
+
+          const next: ChatMessage[] = [
+            ...history,
+            {
+              role: "assistant",
+              content: translated
+                ? `**${header}**\n\n${translated}`
+                : "DeepL returned an empty translation. Try a different target language.",
+            },
+          ];
+          syncMessages(next);
+        } catch (err: any) {
+          console.error("DeepL Error:", err);
+          const next: ChatMessage[] = [
+            ...history,
+            {
+              role: "assistant",
+              content: `Sorry, I couldn't translate that. ${err?.message || "Please try again."}`,
             },
           ];
           syncMessages(next);
@@ -9044,6 +9173,57 @@ function ChatView({
                           </div>
                           {selectedVideoModel.id === model.id && (
                             <span className="text-blue-400">✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 🌐 DeepL Target Language Selector */}
+          {selectedAgent?.engineProvider === "deepl" && (
+            <div className="mb-3 space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowDeepLLangSelector(!showDeepLLangSelector)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/30 transition-colors text-sm"
+                  >
+                    <span className="text-base leading-none">{selectedDeepLLang.flag}</span>
+                    <span>Translate to: <strong>{selectedDeepLLang.name}</strong></span>
+                    <svg className={`w-4 h-4 transition-transform ${showDeepLLangSelector ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {showDeepLLangSelector && (
+                    <div className="absolute bottom-full left-0 mb-2 w-72 max-h-72 overflow-y-auto rounded-xl bg-[#1a1a2e] border border-white/10 shadow-xl z-50">
+                      <div className="p-2 border-b border-white/10 text-xs text-white/50 uppercase tracking-wide">
+                        Target Language
+                      </div>
+                      {DEEPL_LANGUAGES.map((lang) => (
+                        <button
+                          key={lang.code}
+                          onClick={() => {
+                            setSelectedDeepLLang(lang);
+                            setShowDeepLLangSelector(false);
+                          }}
+                          className={`w-full px-3 py-2 text-left hover:bg-white/5 transition-colors flex items-center justify-between ${
+                            selectedDeepLLang.code === lang.code ? 'bg-cyan-500/20 text-cyan-300' : 'text-white/80'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-base leading-none">{lang.flag}</span>
+                            <div>
+                              <div className="font-medium">{lang.name}</div>
+                              <div className="text-xs text-white/50">{lang.code}</div>
+                            </div>
+                          </div>
+                          {selectedDeepLLang.code === lang.code && (
+                            <span className="text-cyan-400">✓</span>
                           )}
                         </button>
                       ))}
